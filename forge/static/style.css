@@ -240,6 +240,42 @@ header .status.running {
     border: none;
 }
 
+/* ── Model Selector ──────────────────────────────────── */
+.model-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.model-control label {
+    color: var(--dim);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+#model-select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 8px;
+    color: var(--text);
+    font-size: 12px;
+    font-family: 'Cascadia Code', 'Consolas', monospace;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+
+#model-select:focus {
+    border-color: var(--accent);
+}
+
+#model-select option {
+    background: var(--bg2);
+    color: var(--text);
+}
+
 /* ── Main Layout ──────────────────────────────────────── */
 main {
     flex: 1;

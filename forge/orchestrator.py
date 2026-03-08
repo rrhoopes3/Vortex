@@ -26,6 +26,7 @@ class Orchestrator:
         direct_mode: bool = False,
         agent_count: int = 16,
         cancel_event: threading.Event | None = None,
+        executor_model: str = "",
     ):
         self.client = Client(api_key=XAI_API_KEY)
         self.registry = create_registry()
@@ -33,8 +34,10 @@ class Orchestrator:
         self.direct_mode = direct_mode
         self.agent_count = max(4, min(16, agent_count))  # clamp 4-16
         self.cancel_event = cancel_event or threading.Event()
-        log.info("Forge initialized. Tools: %s | Sandbox: %s | Direct: %s | Agents: %d",
-                 self.registry.list_tools(), sandbox_path or "OFF", direct_mode, self.agent_count)
+        self.executor_model = executor_model  # empty string = use default from config
+        log.info("Forge initialized. Tools: %s | Sandbox: %s | Direct: %s | Agents: %d | Model: %s",
+                 self.registry.list_tools(), sandbox_path or "OFF", direct_mode, self.agent_count,
+                 executor_model or "default")
 
     def run(self, task: str) -> Generator[dict, None, TaskResult]:
         """
@@ -67,6 +70,7 @@ class Orchestrator:
             context="",
             sandbox_path=self.sandbox_path,
             cancel_event=self.cancel_event,
+            model=self.executor_model,
         )
 
         try:
@@ -163,6 +167,7 @@ class Orchestrator:
                 context=context_so_far,
                 sandbox_path=self.sandbox_path,
                 cancel_event=self.cancel_event,
+                model=self.executor_model,
             )
 
             try:

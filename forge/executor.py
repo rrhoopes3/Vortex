@@ -42,6 +42,7 @@ def execute_step(
     context: str = "",
     sandbox_path: str = "",
     cancel_event: threading.Event | None = None,
+    model: str = "",
 ) -> Generator[dict, None, str]:
     """
     Execute a single plan step using the reasoning model + client-side tools.
@@ -49,8 +50,11 @@ def execute_step(
     Yields SSE-style dicts: {"type": "...", ...}
     Returns the final text output.
     """
+    use_model = model if model else EXECUTOR_MODEL
+    log.info("Using executor model: %s", use_model)
+
     chat = client.chat.create(
-        model=EXECUTOR_MODEL,
+        model=use_model,
         tools=registry.get_definitions(),
         use_encrypted_content=True,
     )

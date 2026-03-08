@@ -42,7 +42,8 @@ task_cancel_events: dict[str, threading.Event] = {}
 
 
 def run_task(task_id: str, task: str, q: Queue, cancel_event: threading.Event,
-             sandbox_path: str = "", direct_mode: bool = False, agent_count: int = 16):
+             sandbox_path: str = "", direct_mode: bool = False, agent_count: int = 16,
+             executor_model: str = ""):
     """Background thread that runs the orchestrator and pushes messages to a queue."""
     try:
         orch = Orchestrator(
@@ -50,6 +51,7 @@ def run_task(task_id: str, task: str, q: Queue, cancel_event: threading.Event,
             direct_mode=direct_mode,
             agent_count=agent_count,
             cancel_event=cancel_event,
+            executor_model=executor_model,
         )
         gen = orch.run(task)
         result = None
@@ -90,6 +92,7 @@ def submit_task():
     sandbox_path = data.get("sandbox_path", "").strip() if sandbox_mode else ""
     direct_mode = data.get("direct_mode", False)
     agent_count = data.get("agent_count", 16)
+    executor_model = data.get("executor_model", "").strip()
 
     task_id = str(uuid.uuid4())[:8]
     q = Queue()
@@ -104,6 +107,7 @@ def submit_task():
             "sandbox_path": sandbox_path,
             "direct_mode": direct_mode,
             "agent_count": agent_count,
+            "executor_model": executor_model,
         },
         daemon=True,
     )

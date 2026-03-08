@@ -10,6 +10,7 @@ const directToggle = document.getElementById("direct-toggle");
 const agentSlider = document.getElementById("agent-slider");
 const agentCountEl = document.getElementById("agent-count");
 const agentControl = document.getElementById("agent-control");
+const modelSelect = document.getElementById("model-select");
 
 let isRunning = false;
 let currentTaskId = null;
@@ -48,8 +49,10 @@ function initSettingsControls() {
     // Restore from localStorage
     const savedDirect = localStorage.getItem("forge_direct_mode");
     const savedAgents = localStorage.getItem("forge_agent_count");
+    const savedModel = localStorage.getItem("forge_executor_model");
     if (savedDirect !== null) directToggle.checked = savedDirect === "true";
     if (savedAgents !== null) agentSlider.value = savedAgents;
+    if (savedModel !== null) modelSelect.value = savedModel;
     agentCountEl.textContent = agentSlider.value;
     updateSettingsUI();
 
@@ -61,6 +64,9 @@ function initSettingsControls() {
     agentSlider.addEventListener("input", () => {
         agentCountEl.textContent = agentSlider.value;
         localStorage.setItem("forge_agent_count", agentSlider.value);
+    });
+    modelSelect.addEventListener("change", () => {
+        localStorage.setItem("forge_executor_model", modelSelect.value);
     });
 }
 
@@ -92,6 +98,7 @@ async function submitTask() {
                 sandbox_path: sandboxPathInput.value.trim(),
                 direct_mode: directToggle.checked,
                 agent_count: parseInt(agentSlider.value, 10),
+                executor_model: modelSelect.value,
             }),
         });
         const { task_id, error } = await res.json();
