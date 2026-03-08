@@ -31,6 +31,12 @@ The executor agent has these tools available:
 - list_directory(path) — list directory contents
 - delete_file(path) — delete a file
 - run_command(command) — run a shell command
+- browser_navigate(url) — open a URL in a headless browser
+- browser_screenshot(filename) — take a screenshot of the current page
+- browser_click(selector) — click an element by CSS selector
+- browser_type(selector, text) — type text into an input field
+- browser_extract_text(selector) — extract visible text from a page/element
+- browser_info() — get current page URL, title, and element counts
 
 Format your plan EXACTLY as follows (this will be parsed):
 
