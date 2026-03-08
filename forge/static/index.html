@@ -38,8 +38,38 @@
                 <option value="grok-4.20-experimental-beta-0304-reasoning">4.20 Reasoning  $2/$6</option>
                 <option value="grok-4-1-fast-reasoning">4.1 Fast Reasoning  $0.20/$0.50</option>
                 <option value="grok-4-1-fast-non-reasoning">4.1 Fast  $0.20/$0.50</option>
-                <option value="grok-code-fast-1">Code Fast  $0.20/$1.50</option>
             </select>
+        </div>
+        <button id="arena-btn" class="arena-btn" title="Launch BattleBot Arena — two AI teams deathmatch!">ARENA</button>
+    </div>
+    <!-- Arena model pickers (hidden until arena button clicked) -->
+    <div class="arena-setup hidden" id="arena-setup">
+        <div class="arena-setup-inner">
+            <span class="arena-setup-title">ARENA SETUP</span>
+            <div class="arena-team-pick">
+                <label class="team-red">RED</label>
+                <select id="red-model">
+                    <option value="grok-4-1-fast-reasoning">4.1 Fast Reasoning</option>
+                    <option value="grok-4.20-experimental-beta-0304-reasoning">4.20 Reasoning</option>
+                    <option value="grok-4-1-fast-non-reasoning">4.1 Fast</option>
+                </select>
+            </div>
+            <span class="arena-vs">VS</span>
+            <div class="arena-team-pick">
+                <label class="team-blue">BLUE</label>
+                <select id="blue-model">
+                    <option value="grok-4-1-fast-reasoning">4.1 Fast Reasoning</option>
+                    <option value="grok-4.20-experimental-beta-0304-reasoning">4.20 Reasoning</option>
+                    <option value="grok-4-1-fast-non-reasoning">4.1 Fast</option>
+                </select>
+            </div>
+            <label class="tts-toggle" title="Arena Master commentary read aloud">
+                <input type="checkbox" id="tts-toggle">
+                <span class="toggle-slider"></span>
+                <span class="toggle-label">TTS</span>
+            </label>
+            <button id="arena-go-btn" class="arena-go-btn">FIGHT!</button>
+            <button id="arena-cancel-btn" class="arena-cancel-btn">Cancel</button>
         </div>
     </div>
     <main>
@@ -47,6 +77,36 @@
             <h3>Task History</h3>
             <div id="history-list"></div>
         </aside>
+        <section class="arena-view hidden" id="arena-view">
+            <div class="arena-header">
+                <div class="arena-team-info">
+                    <span class="team-name team-red">RED TEAM</span>
+                    <div class="score-bar"><span class="score-fill score-red" id="score-red"></span></div>
+                    <span class="score-num" id="score-red-num">0</span>
+                </div>
+                <div class="arena-round-info">
+                    <span class="round-label" id="round-label">READY</span>
+                </div>
+                <div class="arena-team-info">
+                    <span class="team-name team-blue">BLUE TEAM</span>
+                    <div class="score-bar"><span class="score-fill score-blue" id="score-blue"></span></div>
+                    <span class="score-num" id="score-blue-num">0</span>
+                </div>
+            </div>
+            <div class="arena-commentary" id="arena-commentary">
+                <div class="commentary-text" id="commentary-text">Awaiting Arena Master...</div>
+            </div>
+            <div class="arena-teams">
+                <div class="arena-team-log">
+                    <div class="team-log-header team-red">RED TEAM</div>
+                    <div class="team-log-content" id="red-log"></div>
+                </div>
+                <div class="arena-team-log">
+                    <div class="team-log-header team-blue">BLUE TEAM</div>
+                    <div class="team-log-content" id="blue-log"></div>
+                </div>
+            </div>
+        </section>
         <section class="chat-area">
             <div class="messages" id="messages">
                 <div class="msg status">

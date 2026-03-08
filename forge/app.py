@@ -4,6 +4,7 @@ Flask web server for The Forge.
 Routes:
   GET  /                  → serves the SPA
   POST /api/task          → submit a task, returns task_id
+  POST /api/arena         → launch arena deathmatch, returns task_id
   GET  /api/stream/<id>   → SSE stream of task progress
   POST /api/kill/<id>     → cancel a running task
   GET  /api/history       → recent completed tasks
@@ -146,6 +147,48 @@ def stream(task_id):
         "Cache-Control": "no-cache",
         "X-Accel-Buffering": "no",
     })
+
+
+@app.route("/api/arena", methods=["POST"])
+def submit_arena():
+    data = request.get_json() or {}
+    red_model = data.get("red_model", "").strip()
+    blue_model = data.get("blue_model", "").strip()
+
+    task_id = f"arena-{str(uuid.uuid4())[:8]}"
+    q = Queue()
+    cancel_event = threading.Event()
+    task_queues[task_id] = q
+    task_cancel_events[task_id] = cancel_event
+
+    thread = threading.Thread(
+        target=run_arena,
+        args=(task_id, q, cancel_event, red_model, blue_model),
+        daemon=True,
+    )
+    thread.start()
+
+    log.info("Arena %s launched: Red=%s Blue=%s", task_id, red_model or "default", blue_model or "default")
+    return jsonify({"task_id": task_id})
+
+
+def run_arena(task_id: str, q: Queue, cancel_event: threading.Event,
+              red_model: str = "", blue_model: str = ""):
+    """Background thread that runs the arena and pushes messages to a queue."""
+    try:
+        from forge.arena.runner import ArenaRunner
+        runner = ArenaRunner(
+            cancel_event=cancel_event,
+            red_model=red_model,
+            blue_model=blue_model,
+        )
+        for msg in runner.run():
+            q.put(msg)
+    except Exception as e:
+        log.exception("Arena %s failed", task_id)
+        q.put({"type": "error", "content": f"{type(e).__name__}: {e}"})
+    finally:
+        q.put(None)
 
 
 @app.route("/api/history")
