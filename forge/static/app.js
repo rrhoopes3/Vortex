@@ -1,6 +1,7 @@
 const messagesEl = document.getElementById("messages");
 const taskInput = document.getElementById("task-input");
 const submitBtn = document.getElementById("submit-btn");
+const killBtn = document.getElementById("kill-btn");
 const statusEl = document.getElementById("status");
 const historyEl = document.getElementById("history-list");
 const sandboxToggle = document.getElementById("sandbox-toggle");
@@ -11,6 +12,7 @@ const agentCountEl = document.getElementById("agent-count");
 const agentControl = document.getElementById("agent-control");
 
 let isRunning = false;
+let currentTaskId = null;
 
 // ── Sandbox State ─────────────────────────────────────────────────────────
 
@@ -98,10 +100,26 @@ async function submitTask() {
             setRunning(false);
             return;
         }
+        currentTaskId = task_id;
         streamTask(task_id);
     } catch (e) {
         addMessage("error", `Connection failed: ${e.message}`);
         setRunning(false);
+    }
+}
+
+// ── Kill Task ─────────────────────────────────────────────────────────────
+
+async function killTask() {
+    if (!currentTaskId) return;
+
+    killBtn.disabled = true;
+    killBtn.textContent = "KILLING...";
+
+    try {
+        await fetch(`/api/kill/${currentTaskId}`, { method: "POST" });
+    } catch (e) {
+        // Kill request failed — task may have already finished
     }
 }
 
@@ -157,8 +175,12 @@ function streamTask(taskId) {
                 break;
 
             case "step_done":
-                const icon = msg.status === "success" ? "✓" : "✗";
+                const icon = msg.status === "success" ? "✓" : (msg.status === "cancelled" ? "⊘" : "✗");
                 addMessage("status", `${icon} Step ${msg.step} ${msg.status}`, msg.status === "success" ? "executing" : "");
+                break;
+
+            case "cancelled":
+                addMessage("cancelled", msg.content || "Task cancelled");
                 break;
 
             case "error":
@@ -170,6 +192,7 @@ function streamTask(taskId) {
                 if (msg.final) {
                     source.close();
                     setRunning(false);
+                    currentTaskId = null;
                     loadHistory();
                 }
                 break;
@@ -179,6 +202,7 @@ function streamTask(taskId) {
     source.onerror = () => {
         source.close();
         setRunning(false);
+        currentTaskId = null;
         updateStatus("Disconnected");
     };
 }
@@ -209,6 +233,15 @@ function setRunning(running) {
     submitBtn.disabled = running;
     statusEl.className = "status" + (running ? " running" : "");
     statusEl.textContent = running ? "Running..." : "Ready";
+
+    // Toggle kill button visibility
+    if (running) {
+        killBtn.classList.remove("hidden");
+        killBtn.disabled = false;
+        killBtn.textContent = "KILL";
+    } else {
+        killBtn.classList.add("hidden");
+    }
 }
 
 function updateStatus(text) {
@@ -252,6 +285,7 @@ function truncate(str, len) {
 // ── Event Listeners ───────────────────────────────────────────────────────
 
 submitBtn.addEventListener("click", submitTask);
+killBtn.addEventListener("click", killTask);
 
 taskInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {

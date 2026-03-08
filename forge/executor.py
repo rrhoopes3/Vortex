@@ -2,11 +2,13 @@
 Single-agent executor with client-side tool-calling loop.
 
 Uses grok-4.20-experimental-beta-0304-reasoning with custom tools
-(filesystem, shell, browser) to execute plan steps.
+(filesystem, shell, browser, http, python, git, search, etc.) to execute plan steps.
 """
 from __future__ import annotations
 import json
 import logging
+import time
+import threading
 from typing import Generator
 from xai_sdk import Client
 from xai_sdk.chat import user, tool_result
@@ -16,6 +18,9 @@ from forge.config import EXECUTOR_MODEL, EXECUTOR_MAX_ITERATIONS
 from forge.tools.registry import ToolRegistry
 
 log = logging.getLogger("forge.executor")
+
+MAX_RETRIES = 3
+RETRY_DELAYS = [2, 4, 8]  # seconds
 
 EXECUTOR_SYSTEM = """You are The Forge Executor — an autonomous agent that completes tasks by using tools.
 
@@ -36,6 +41,7 @@ def execute_step(
     step_description: str,
     context: str = "",
     sandbox_path: str = "",
+    cancel_event: threading.Event | None = None,
 ) -> Generator[dict, None, str]:
     """
     Execute a single plan step using the reasoning model + client-side tools.
@@ -61,17 +67,51 @@ def execute_step(
     full_output = ""
 
     for iteration in range(EXECUTOR_MAX_ITERATIONS):
+        # Check cancellation before each iteration
+        if cancel_event and cancel_event.is_set():
+            yield {"type": "cancelled", "content": "Step cancelled"}
+            return full_output
+
         log.info("Executor iteration %d for step: %s", iteration + 1, step_title)
 
-        # Stream the response
+        # Stream the response with retry logic
         collected_content = ""
         tool_calls = []
         response = None
+        stream_success = False
 
-        for response, chunk in chat.stream():
-            if chunk.content:
-                collected_content += chunk.content
-                yield {"type": "content", "content": chunk.content}
+        for attempt in range(MAX_RETRIES):
+            try:
+                for response, chunk in chat.stream():
+                    # Check cancellation during streaming
+                    if cancel_event and cancel_event.is_set():
+                        yield {"type": "cancelled", "content": "Step cancelled"}
+                        return full_output
+
+                    if chunk.content:
+                        collected_content += chunk.content
+                        yield {"type": "content", "content": chunk.content}
+
+                stream_success = True
+                break  # Stream completed successfully
+
+            except Exception as e:
+                if cancel_event and cancel_event.is_set():
+                    yield {"type": "cancelled", "content": "Step cancelled"}
+                    return full_output
+
+                if attempt < MAX_RETRIES - 1:
+                    delay = RETRY_DELAYS[attempt]
+                    log.warning("Executor stream attempt %d failed: %s — retrying in %ds", attempt + 1, e, delay)
+                    yield {"type": "status", "content": f"API error, retrying in {delay}s... ({type(e).__name__})"}
+                    time.sleep(delay)
+                else:
+                    log.error("Executor stream failed after %d attempts: %s", MAX_RETRIES, e)
+                    yield {"type": "error", "content": f"API failed after {MAX_RETRIES} attempts: {type(e).__name__}: {e}"}
+                    return full_output
+
+        if not stream_success:
+            return full_output
 
         # Collect tool calls from the final response
         if response and hasattr(response, "tool_calls") and response.tool_calls:
@@ -93,6 +133,11 @@ def execute_step(
         # Execute tool calls and feed results back
         chat.append(response)
         for tc in tool_calls:
+            # Check cancellation before each tool call
+            if cancel_event and cancel_event.is_set():
+                yield {"type": "cancelled", "content": "Step cancelled"}
+                return full_output
+
             func_name = tc.function.name
             try:
                 args = json.loads(tc.function.arguments)

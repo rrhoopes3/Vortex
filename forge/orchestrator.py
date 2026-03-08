@@ -6,6 +6,7 @@ Direct Mode: User Task → Execute directly (single agent + tools) → Result
 """
 from __future__ import annotations
 import logging
+import threading
 import uuid
 from typing import Generator
 from xai_sdk import Client
@@ -19,12 +20,19 @@ log = logging.getLogger("forge.orchestrator")
 
 
 class Orchestrator:
-    def __init__(self, sandbox_path: str = "", direct_mode: bool = False, agent_count: int = 16):
+    def __init__(
+        self,
+        sandbox_path: str = "",
+        direct_mode: bool = False,
+        agent_count: int = 16,
+        cancel_event: threading.Event | None = None,
+    ):
         self.client = Client(api_key=XAI_API_KEY)
         self.registry = create_registry()
         self.sandbox_path = sandbox_path
         self.direct_mode = direct_mode
         self.agent_count = max(4, min(16, agent_count))  # clamp 4-16
+        self.cancel_event = cancel_event or threading.Event()
         log.info("Forge initialized. Tools: %s | Sandbox: %s | Direct: %s | Agents: %d",
                  self.registry.list_tools(), sandbox_path or "OFF", direct_mode, self.agent_count)
 
@@ -58,6 +66,7 @@ class Orchestrator:
             step_description=task,
             context="",
             sandbox_path=self.sandbox_path,
+            cancel_event=self.cancel_event,
         )
 
         try:
@@ -70,19 +79,24 @@ class Orchestrator:
                     tools_used.append(msg["name"])
                 elif msg.get("type") == "error":
                     error = msg["content"]
+                elif msg.get("type") == "cancelled":
+                    error = "Cancelled"
+                    break
         except StopIteration as e:
             if e.value:
                 step_output = e.value
 
+        cancelled = self.cancel_event.is_set()
+        status = "cancelled" if cancelled else ("failed" if error else "success")
         result = StepResult(
             step_number=1,
-            status="failed" if error else "success",
+            status=status,
             output=step_output[:2000],
             tools_used=list(set(tools_used)),
             error=error,
         )
 
-        summary = "Direct execution complete" if not error else "Direct execution failed"
+        summary = "Task cancelled" if cancelled else ("Direct execution complete" if not error else "Direct execution failed")
         yield {"type": "done", "summary": summary}
 
         return TaskResult(
@@ -102,11 +116,14 @@ class Orchestrator:
         plan_raw = ""
         steps: list[PlanStep] = []
 
-        gen = planner.plan(self.client, task, agent_count=self.agent_count)
+        gen = planner.plan(self.client, task, agent_count=self.agent_count, cancel_event=self.cancel_event)
         try:
             while True:
                 msg = next(gen)
                 yield msg
+                if msg.get("type") == "cancelled":
+                    yield {"type": "done", "summary": "Task cancelled"}
+                    return TaskResult(task_id=task_id, task=task, plan_raw=plan_raw, final_summary="Task cancelled")
         except StopIteration as e:
             if e.value:
                 plan_raw, steps = e.value
@@ -122,6 +139,11 @@ class Orchestrator:
         context_so_far = ""
 
         for step in steps:
+            # Check cancellation before each step
+            if self.cancel_event.is_set():
+                yield {"type": "cancelled", "content": f"Task cancelled before step {step.step_number}"}
+                break
+
             yield {
                 "type": "step_start",
                 "step": step.step_number,
@@ -140,6 +162,7 @@ class Orchestrator:
                 step_description=step.description,
                 context=context_so_far,
                 sandbox_path=self.sandbox_path,
+                cancel_event=self.cancel_event,
             )
 
             try:
@@ -152,13 +175,18 @@ class Orchestrator:
                         tools_used.append(msg["name"])
                     elif msg.get("type") == "error":
                         error = msg["content"]
+                    elif msg.get("type") == "cancelled":
+                        error = "Cancelled"
+                        break
             except StopIteration as e:
                 if e.value:
                     step_output = e.value
 
+            cancelled = self.cancel_event.is_set()
+            status = "cancelled" if cancelled else ("failed" if error else "success")
             result = StepResult(
                 step_number=step.step_number,
-                status="failed" if error else "success",
+                status=status,
                 output=step_output[:2000],
                 tools_used=list(set(tools_used)),
                 error=error,
@@ -172,8 +200,14 @@ class Orchestrator:
                 "status": result.status,
             }
 
+            if cancelled:
+                break
+
         # ── Summary ─────────────────────────────────────────────────────
-        summary = f"Completed {sum(1 for r in results if r.status == 'success')}/{len(results)} steps"
+        if self.cancel_event.is_set():
+            summary = f"Cancelled after {len(results)}/{len(steps)} steps"
+        else:
+            summary = f"Completed {sum(1 for r in results if r.status == 'success')}/{len(results)} steps"
         yield {"type": "done", "summary": summary}
 
         return TaskResult(

@@ -5,6 +5,7 @@ Routes:
   GET  /                  → serves the SPA
   POST /api/task          → submit a task, returns task_id
   GET  /api/stream/<id>   → SSE stream of task progress
+  POST /api/kill/<id>     → cancel a running task
   GET  /api/history       → recent completed tasks
 """
 import sys
@@ -37,13 +38,19 @@ app = Flask(__name__, static_folder="static", static_url_path="/static")
 # ── Task State ──────────────────────────────────────────────────────────────
 task_queues: dict[str, Queue] = {}
 task_results: dict[str, TaskResult] = {}
+task_cancel_events: dict[str, threading.Event] = {}
 
 
-def run_task(task_id: str, task: str, q: Queue, sandbox_path: str = "",
-             direct_mode: bool = False, agent_count: int = 16):
+def run_task(task_id: str, task: str, q: Queue, cancel_event: threading.Event,
+             sandbox_path: str = "", direct_mode: bool = False, agent_count: int = 16):
     """Background thread that runs the orchestrator and pushes messages to a queue."""
     try:
-        orch = Orchestrator(sandbox_path=sandbox_path, direct_mode=direct_mode, agent_count=agent_count)
+        orch = Orchestrator(
+            sandbox_path=sandbox_path,
+            direct_mode=direct_mode,
+            agent_count=agent_count,
+            cancel_event=cancel_event,
+        )
         gen = orch.run(task)
         result = None
         try:
@@ -86,11 +93,13 @@ def submit_task():
 
     task_id = str(uuid.uuid4())[:8]
     q = Queue()
+    cancel_event = threading.Event()
     task_queues[task_id] = q
+    task_cancel_events[task_id] = cancel_event
 
     thread = threading.Thread(
         target=run_task,
-        args=(task_id, task, q),
+        args=(task_id, task, q, cancel_event),
         kwargs={
             "sandbox_path": sandbox_path,
             "direct_mode": direct_mode,
@@ -102,6 +111,17 @@ def submit_task():
 
     log.info("Task %s submitted: %s", task_id, task[:80])
     return jsonify({"task_id": task_id})
+
+
+@app.route("/api/kill/<task_id>", methods=["POST"])
+def kill_task(task_id):
+    cancel_event = task_cancel_events.get(task_id)
+    if not cancel_event:
+        return jsonify({"error": "Unknown task_id"}), 404
+
+    cancel_event.set()
+    log.info("Task %s kill signal sent", task_id)
+    return jsonify({"status": "kill_signal_sent", "task_id": task_id})
 
 
 @app.route("/api/stream/<task_id>")

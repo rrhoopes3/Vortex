@@ -8,6 +8,8 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
+import threading
 from typing import Generator
 from xai_sdk import Client
 from xai_sdk.chat import user
@@ -17,6 +19,9 @@ from forge.config import PLANNER_MODEL, PLANNER_AGENT_COUNT, EXECUTOR_MODEL
 from forge.models import PlanStep, ExecutionPlan
 
 log = logging.getLogger("forge.planner")
+
+MAX_RETRIES = 3
+RETRY_DELAYS = [2, 4, 8]  # seconds
 
 PLANNER_SYSTEM = """You are The Forge Planner — a 16-agent research council that analyzes tasks and creates execution plans.
 
@@ -92,7 +97,12 @@ PLAN_END
 Be specific in descriptions. Include exact file paths, commands, and expected outcomes."""
 
 
-def plan(client: Client, task: str, agent_count: int = 16) -> Generator[dict, None, tuple[str, list[PlanStep]]]:
+def plan(
+    client: Client,
+    task: str,
+    agent_count: int = 16,
+    cancel_event: threading.Event | None = None,
+) -> Generator[dict, None, tuple[str, list[PlanStep]]]:
     """
     Use multi-agent model to research and plan a task.
 
@@ -100,43 +110,68 @@ def plan(client: Client, task: str, agent_count: int = 16) -> Generator[dict, No
     Returns (raw_plan_text, parsed_steps).
     """
     count = max(4, min(16, agent_count))
-    chat = client.chat.create(
-        model=PLANNER_MODEL,
-        agent_count=count,
-        tools=[web_search(), x_search(), code_execution()],
-        include=["verbose_streaming"],
-    )
 
-    chat.append(user(PLANNER_SYSTEM))
-    chat.append(user(f"Task: {task}"))
+    for attempt in range(MAX_RETRIES):
+        try:
+            chat = client.chat.create(
+                model=PLANNER_MODEL,
+                agent_count=count,
+                tools=[web_search(), x_search(), code_execution()],
+                include=["verbose_streaming"],
+            )
 
-    yield {"type": "status", "phase": "planning", "content": f"{count} agents researching: {task[:100]}..."}
+            chat.append(user(PLANNER_SYSTEM))
+            chat.append(user(f"Task: {task}"))
 
-    full_response = ""
-    is_thinking = True
+            yield {"type": "status", "phase": "planning", "content": f"{count} agents researching: {task[:100]}..."}
 
-    for response, chunk in chat.stream():
-        if is_thinking:
-            r_tokens = 0
-            if hasattr(response, "usage") and response.usage:
-                if hasattr(response.usage, "reasoning_tokens") and response.usage.reasoning_tokens:
-                    r_tokens = response.usage.reasoning_tokens
-            if r_tokens:
-                yield {"type": "status", "phase": "planning", "content": f"Deliberating... ({r_tokens:,} reasoning tokens)"}
+            full_response = ""
+            is_thinking = True
 
-        if chunk.content and is_thinking:
-            is_thinking = False
-            yield {"type": "status", "phase": "planning", "content": "Council responding..."}
+            for response, chunk in chat.stream():
+                # Check cancellation
+                if cancel_event and cancel_event.is_set():
+                    yield {"type": "cancelled", "content": "Task cancelled during planning"}
+                    return "", []
 
-        if chunk.content:
-            full_response += chunk.content
-            yield {"type": "plan_content", "content": chunk.content}
+                if is_thinking:
+                    r_tokens = 0
+                    if hasattr(response, "usage") and response.usage:
+                        if hasattr(response.usage, "reasoning_tokens") and response.usage.reasoning_tokens:
+                            r_tokens = response.usage.reasoning_tokens
+                    if r_tokens:
+                        yield {"type": "status", "phase": "planning", "content": f"Deliberating... ({r_tokens:,} reasoning tokens)"}
 
-    # Parse the structured plan
-    steps = parse_plan(full_response)
-    yield {"type": "status", "phase": "planning", "content": f"Plan ready: {len(steps)} steps"}
+                if chunk.content and is_thinking:
+                    is_thinking = False
+                    yield {"type": "status", "phase": "planning", "content": "Council responding..."}
 
-    return full_response, steps
+                if chunk.content:
+                    full_response += chunk.content
+                    yield {"type": "plan_content", "content": chunk.content}
+
+            # Parse the structured plan
+            steps = parse_plan(full_response)
+            yield {"type": "status", "phase": "planning", "content": f"Plan ready: {len(steps)} steps"}
+
+            return full_response, steps
+
+        except Exception as e:
+            if cancel_event and cancel_event.is_set():
+                yield {"type": "cancelled", "content": "Task cancelled"}
+                return "", []
+
+            if attempt < MAX_RETRIES - 1:
+                delay = RETRY_DELAYS[attempt]
+                log.warning("Planner attempt %d failed: %s — retrying in %ds", attempt + 1, e, delay)
+                yield {"type": "status", "phase": "planning", "content": f"API error, retrying in {delay}s... ({type(e).__name__})"}
+                time.sleep(delay)
+            else:
+                log.error("Planner failed after %d attempts: %s", MAX_RETRIES, e)
+                yield {"type": "error", "content": f"Planner failed after {MAX_RETRIES} attempts: {type(e).__name__}: {e}"}
+                return "", []
+
+    return "", []
 
 
 def parse_plan(plan_text: str) -> list[PlanStep]:
