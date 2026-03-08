@@ -21,6 +21,18 @@
         </div>
         <div class="status" id="status">Ready</div>
     </header>
+    <div class="settings-bar">
+        <label class="direct-toggle" title="Skip the multi-agent planner and send task straight to executor">
+            <input type="checkbox" id="direct-toggle">
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Direct Mode</span>
+        </label>
+        <div class="agent-control" id="agent-control">
+            <label for="agent-slider">Agents</label>
+            <input type="range" id="agent-slider" min="4" max="16" step="4" value="16">
+            <span class="agent-count" id="agent-count">16</span>
+        </div>
+    </div>
     <main>
         <aside class="sidebar">
             <h3>Task History</h3>

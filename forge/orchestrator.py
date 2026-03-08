@@ -1,7 +1,8 @@
 """
 Core orchestrator — wires the planner and executor together.
 
-Flow: User Task → Plan (16 agents) → Parse Steps → Execute Each Step (single agent + tools) → Result
+Flow: User Task → Plan (multi-agent) → Parse Steps → Execute Each Step (single agent + tools) → Result
+Direct Mode: User Task → Execute directly (single agent + tools) → Result
 """
 from __future__ import annotations
 import logging
@@ -18,15 +19,18 @@ log = logging.getLogger("forge.orchestrator")
 
 
 class Orchestrator:
-    def __init__(self, sandbox_path: str = ""):
+    def __init__(self, sandbox_path: str = "", direct_mode: bool = False, agent_count: int = 16):
         self.client = Client(api_key=XAI_API_KEY)
         self.registry = create_registry()
         self.sandbox_path = sandbox_path
-        log.info("Forge initialized. Tools: %s | Sandbox: %s", self.registry.list_tools(), sandbox_path or "OFF")
+        self.direct_mode = direct_mode
+        self.agent_count = max(4, min(16, agent_count))  # clamp 4-16
+        log.info("Forge initialized. Tools: %s | Sandbox: %s | Direct: %s | Agents: %d",
+                 self.registry.list_tools(), sandbox_path or "OFF", direct_mode, self.agent_count)
 
     def run(self, task: str) -> Generator[dict, None, TaskResult]:
         """
-        Run a full task through the plan → execute pipeline.
+        Run a full task through the plan → execute pipeline (or direct mode).
 
         Yields SSE-style dicts for real-time UI updates.
         Returns the final TaskResult.
@@ -34,13 +38,71 @@ class Orchestrator:
         task_id = str(uuid.uuid4())[:8]
         yield {"type": "status", "content": f"Forge task {task_id} started"}
 
+        if self.direct_mode:
+            return (yield from self._run_direct(task_id, task))
+        else:
+            return (yield from self._run_planned(task_id, task))
+
+    def _run_direct(self, task_id: str, task: str) -> Generator[dict, None, TaskResult]:
+        """Skip planner — send task straight to executor as a single step."""
+        yield {"type": "status", "phase": "executing", "content": "Direct mode — executing with tools..."}
+
+        step_output = ""
+        tools_used = []
+        error = None
+
+        gen = executor.execute_step(
+            client=self.client,
+            registry=self.registry,
+            step_title="Direct execution",
+            step_description=task,
+            context="",
+            sandbox_path=self.sandbox_path,
+        )
+
+        try:
+            while True:
+                msg = next(gen)
+                yield msg
+                if msg.get("type") == "content":
+                    step_output += msg["content"]
+                elif msg.get("type") == "tool_call":
+                    tools_used.append(msg["name"])
+                elif msg.get("type") == "error":
+                    error = msg["content"]
+        except StopIteration as e:
+            if e.value:
+                step_output = e.value
+
+        result = StepResult(
+            step_number=1,
+            status="failed" if error else "success",
+            output=step_output[:2000],
+            tools_used=list(set(tools_used)),
+            error=error,
+        )
+
+        summary = "Direct execution complete" if not error else "Direct execution failed"
+        yield {"type": "done", "summary": summary}
+
+        return TaskResult(
+            task_id=task_id,
+            task=task,
+            plan_raw="(direct mode — no plan)",
+            results=[result],
+            final_summary=summary,
+        )
+
+    def _run_planned(self, task_id: str, task: str) -> Generator[dict, None, TaskResult]:
+        """Full pipeline: multi-agent planner → executor."""
         # ── Phase 1: Plan ───────────────────────────────────────────────
-        yield {"type": "status", "phase": "planning", "content": "Launching 16-agent planner..."}
+        yield {"type": "status", "phase": "planning",
+               "content": f"Launching {self.agent_count}-agent planner..."}
 
         plan_raw = ""
         steps: list[PlanStep] = []
 
-        gen = planner.plan(self.client, task)
+        gen = planner.plan(self.client, task, agent_count=self.agent_count)
         try:
             while True:
                 msg = next(gen)

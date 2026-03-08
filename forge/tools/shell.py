@@ -19,8 +19,8 @@ def run_command(command: str, _sandbox_cwd: str = "") -> str:
         )
         output = {
             "returncode": result.returncode,
-            "stdout": result.stdout[:10_000] if result.stdout else "",
-            "stderr": result.stderr[:5_000] if result.stderr else "",
+            "stdout": result.stdout[:4_000] if result.stdout else "",
+            "stderr": result.stderr[:2_000] if result.stderr else "",
         }
         return json.dumps(output)
     except subprocess.TimeoutExpired:

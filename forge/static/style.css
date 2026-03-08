@@ -146,6 +146,100 @@ header .status.running {
     background: rgba(240, 160, 48, 0.1);
 }
 
+/* ── Settings Bar ────────────────────────────────────── */
+.settings-bar {
+    padding: 8px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    font-size: 12px;
+}
+
+.direct-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.direct-toggle input[type="checkbox"] {
+    display: none;
+}
+
+.direct-toggle input:checked + .toggle-slider {
+    background: rgba(240, 160, 48, 0.15);
+    border-color: var(--accent);
+}
+
+.direct-toggle input:checked + .toggle-slider::after {
+    transform: translateX(16px);
+    background: var(--accent);
+}
+
+.direct-toggle input:checked ~ .toggle-label {
+    color: var(--accent);
+}
+
+.agent-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: opacity 0.2s;
+}
+
+.agent-control.disabled {
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+.agent-control label {
+    color: var(--dim);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.agent-count {
+    color: var(--accent);
+    font-weight: 700;
+    font-family: 'Cascadia Code', 'Consolas', monospace;
+    min-width: 20px;
+    text-align: center;
+}
+
+#agent-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+}
+
+#agent-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: none;
+}
+
+#agent-slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: none;
+}
+
 /* ── Main Layout ──────────────────────────────────────── */
 main {
     flex: 1;

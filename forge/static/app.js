@@ -5,6 +5,10 @@ const statusEl = document.getElementById("status");
 const historyEl = document.getElementById("history-list");
 const sandboxToggle = document.getElementById("sandbox-toggle");
 const sandboxPathInput = document.getElementById("sandbox-path");
+const directToggle = document.getElementById("direct-toggle");
+const agentSlider = document.getElementById("agent-slider");
+const agentCountEl = document.getElementById("agent-count");
+const agentControl = document.getElementById("agent-control");
 
 let isRunning = false;
 
@@ -36,6 +40,36 @@ function updateSandboxUI() {
     }
 }
 
+// ── Settings State ────────────────────────────────────────────────────────
+
+function initSettingsControls() {
+    // Restore from localStorage
+    const savedDirect = localStorage.getItem("forge_direct_mode");
+    const savedAgents = localStorage.getItem("forge_agent_count");
+    if (savedDirect !== null) directToggle.checked = savedDirect === "true";
+    if (savedAgents !== null) agentSlider.value = savedAgents;
+    agentCountEl.textContent = agentSlider.value;
+    updateSettingsUI();
+
+    // Listeners
+    directToggle.addEventListener("change", () => {
+        localStorage.setItem("forge_direct_mode", directToggle.checked);
+        updateSettingsUI();
+    });
+    agentSlider.addEventListener("input", () => {
+        agentCountEl.textContent = agentSlider.value;
+        localStorage.setItem("forge_agent_count", agentSlider.value);
+    });
+}
+
+function updateSettingsUI() {
+    if (directToggle.checked) {
+        agentControl.classList.add("disabled");
+    } else {
+        agentControl.classList.remove("disabled");
+    }
+}
+
 // ── Submit Task ───────────────────────────────────────────────────────────
 
 async function submitTask() {
@@ -54,6 +88,8 @@ async function submitTask() {
                 task,
                 sandbox_mode: sandboxToggle.checked,
                 sandbox_path: sandboxPathInput.value.trim(),
+                direct_mode: directToggle.checked,
+                agent_count: parseInt(agentSlider.value, 10),
             }),
         });
         const { task_id, error } = await res.json();
@@ -226,4 +262,5 @@ taskInput.addEventListener("keydown", (e) => {
 
 // ── Init ──────────────────────────────────────────────────────────────────
 initSandboxControls();
+initSettingsControls();
 loadHistory();

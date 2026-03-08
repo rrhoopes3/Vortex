@@ -57,16 +57,17 @@ PLAN_END
 Be specific in descriptions. Include exact file paths, commands, and expected outcomes."""
 
 
-def plan(client: Client, task: str) -> Generator[dict, None, tuple[str, list[PlanStep]]]:
+def plan(client: Client, task: str, agent_count: int = 16) -> Generator[dict, None, tuple[str, list[PlanStep]]]:
     """
     Use multi-agent model to research and plan a task.
 
     Yields SSE-style dicts.
     Returns (raw_plan_text, parsed_steps).
     """
+    count = max(4, min(16, agent_count))
     chat = client.chat.create(
         model=PLANNER_MODEL,
-        agent_count=PLANNER_AGENT_COUNT,
+        agent_count=count,
         tools=[web_search(), x_search(), code_execution()],
         include=["verbose_streaming"],
     )
@@ -74,7 +75,7 @@ def plan(client: Client, task: str) -> Generator[dict, None, tuple[str, list[Pla
     chat.append(user(PLANNER_SYSTEM))
     chat.append(user(f"Task: {task}"))
 
-    yield {"type": "status", "phase": "planning", "content": f"16 agents researching: {task[:100]}..."}
+    yield {"type": "status", "phase": "planning", "content": f"{count} agents researching: {task[:100]}..."}
 
     full_response = ""
     is_thinking = True

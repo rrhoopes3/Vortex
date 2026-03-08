@@ -39,10 +39,11 @@ task_queues: dict[str, Queue] = {}
 task_results: dict[str, TaskResult] = {}
 
 
-def run_task(task_id: str, task: str, q: Queue, sandbox_path: str = ""):
+def run_task(task_id: str, task: str, q: Queue, sandbox_path: str = "",
+             direct_mode: bool = False, agent_count: int = 16):
     """Background thread that runs the orchestrator and pushes messages to a queue."""
     try:
-        orch = Orchestrator(sandbox_path=sandbox_path)
+        orch = Orchestrator(sandbox_path=sandbox_path, direct_mode=direct_mode, agent_count=agent_count)
         gen = orch.run(task)
         result = None
         try:
@@ -77,9 +78,11 @@ def submit_task():
     if not task:
         return jsonify({"error": "No task provided"}), 400
 
-    # Sandbox settings from frontend toggle
+    # Settings from frontend
     sandbox_mode = data.get("sandbox_mode", False)
     sandbox_path = data.get("sandbox_path", "").strip() if sandbox_mode else ""
+    direct_mode = data.get("direct_mode", False)
+    agent_count = data.get("agent_count", 16)
 
     task_id = str(uuid.uuid4())[:8]
     q = Queue()
@@ -88,7 +91,11 @@ def submit_task():
     thread = threading.Thread(
         target=run_task,
         args=(task_id, task, q),
-        kwargs={"sandbox_path": sandbox_path},
+        kwargs={
+            "sandbox_path": sandbox_path,
+            "direct_mode": direct_mode,
+            "agent_count": agent_count,
+        },
         daemon=True,
     )
     thread.start()

@@ -14,9 +14,9 @@ def read_file(path: str) -> str:
         return f'{{"error": "Not a file: {path}"}}'
     try:
         text = p.read_text(encoding="utf-8", errors="replace")
-        # Cap at ~50k chars to avoid blowing context
-        if len(text) > 50_000:
-            text = text[:50_000] + f"\n... [truncated, {len(text)} chars total]"
+        # Cap at ~8k chars to control token costs
+        if len(text) > 8_000:
+            text = text[:8_000] + f"\n... [truncated, {len(text)} chars total]"
         return text
     except Exception as e:
         return f'{{"error": "{e}"}}'
@@ -48,7 +48,7 @@ def list_directory(path: str) -> str:
                 "type": "dir" if item.is_dir() else "file",
                 "size": item.stat().st_size if item.is_file() else None,
             })
-        return json.dumps({"path": str(p), "entries": entries}, indent=2)
+        return json.dumps({"path": str(p), "entries": entries}, separators=(",", ":"))
     except Exception as e:
         return f'{{"error": "{e}"}}'
 
