@@ -197,7 +197,7 @@ class Orchestrator:
                 error=error,
             )
             results.append(result)
-            context_so_far += f"\nStep {step.step_number} ({step.title}): {step_output[:500]}\n"
+            context_so_far += f"\nStep {step.step_number} ({step.title}): {step_output[:2000]}\n"
 
             yield {
                 "type": "step_done",

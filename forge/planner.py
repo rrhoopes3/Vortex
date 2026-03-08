@@ -94,7 +94,14 @@ TOOLS: [comma-separated tool names needed]
 SUCCESS: [how to verify the task is complete]
 PLAN_END
 
-Be specific in descriptions. Include exact file paths, commands, and expected outcomes."""
+Be specific in descriptions. Include exact file paths, commands, and expected outcomes.
+
+CRITICAL RULES:
+- Stay focused on the user's actual task. Do NOT explore unrelated files or directories.
+- If the task references a specific file (e.g. "make flappy_bird.py better"), ONLY plan steps that touch that file and directly related files.
+- Do NOT inventory the entire workspace or count lines in unrelated projects.
+- If the user's intent is ambiguous or unclear, keep the plan minimal (1-2 steps) and have the first step clarify what's needed before doing extensive work.
+- Fewer, focused steps are better than many broad exploratory steps. Prefer 2-4 targeted steps over 5+ vague ones."""
 
 
 def plan(

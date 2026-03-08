@@ -17,7 +17,6 @@ EXECUTOR_MODELS = {
     "grok-4.20-experimental-beta-0304-reasoning": "Grok 4.20 Reasoning  ($2/$6)",
     "grok-4-1-fast-reasoning":                    "Grok 4.1 Fast Reasoning  ($0.20/$0.50)",
     "grok-4-1-fast-non-reasoning":                "Grok 4.1 Fast  ($0.20/$0.50)",
-    "grok-code-fast-1":                           "Grok Code Fast  ($0.20/$1.50)",
 }
 
 # ── Paths ───────────────────────────────────────────────────────────────────
@@ -34,3 +33,11 @@ CONVERSATIONS_DIR.mkdir(exist_ok=True)
 EXECUTOR_MAX_ITERATIONS = 10
 SHELL_TIMEOUT_SECONDS = 30
 SHELL_WORKING_DIR = Path("B:/Grok")  # restrict shell commands to this tree
+
+# ── Arena ──────────────────────────────────────────────────────────────────
+ARENA_MASTER_MODEL = PLANNER_MODEL       # 16-agent Pantheon for commentary/judging
+ARENA_DEFAULT_FIGHTER_MODEL = "grok-4-1-fast-reasoning"
+ARENA_FIGHTER_AGENT_COUNT = 4
+ARENA_RECON_ITERATIONS = 3               # tool iterations for recon round
+ARENA_FORGE_ITERATIONS = 5               # tool iterations for weapon forge round
+ARENA_COMBAT_TURNS = 6                   # total turns in combat (3 per team)

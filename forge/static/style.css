@@ -372,6 +372,8 @@ main {
     border-left: 3px solid var(--purple);
     width: 100%;
     max-width: 100%;
+    overflow-wrap: break-word;
+    word-break: break-word;
 }
 
 .msg.response {
@@ -380,6 +382,8 @@ main {
     border: 1px solid var(--border);
     width: 100%;
     max-width: 100%;
+    overflow-wrap: break-word;
+    word-break: break-word;
 }
 
 .msg.step-header {
@@ -536,6 +540,204 @@ main {
     font-weight: 600;
     padding: 8px 20px;
     border-radius: 20px;
+}
+
+/* ── Arena ────────────────────────────────────────────── */
+.arena-btn {
+    background: var(--red) !important;
+    color: #fff !important;
+    border: none;
+    padding: 4px 16px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 12px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: background 0.15s, box-shadow 0.15s;
+}
+.arena-btn:hover {
+    box-shadow: 0 0 12px rgba(224, 64, 64, 0.3);
+}
+
+.arena-setup {
+    padding: 8px 24px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+}
+.arena-setup.hidden { display: none; }
+.arena-setup-inner {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+.arena-setup-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--accent);
+    letter-spacing: 2px;
+}
+.arena-team-pick {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.arena-team-pick select {
+    background: var(--bg2);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+.team-red { color: #e04040; font-weight: 700; }
+.team-blue { color: #4090e0; font-weight: 700; }
+.arena-vs {
+    font-weight: 900;
+    font-size: 16px;
+    color: var(--dim);
+}
+.tts-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 12px;
+}
+.tts-toggle .toggle-label { color: var(--dim); }
+.tts-toggle input:checked ~ .toggle-label { color: var(--accent); }
+
+.arena-go-btn {
+    background: var(--red);
+    color: #fff;
+    border: none;
+    padding: 6px 20px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    letter-spacing: 1px;
+}
+.arena-go-btn:hover { background: #ff2020; }
+.arena-cancel-btn {
+    background: transparent;
+    color: var(--dim);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+/* Arena View */
+.arena-view {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+}
+.arena-view.hidden { display: none; }
+
+.arena-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 24px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+}
+.arena-team-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.team-name {
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 1px;
+}
+.score-bar {
+    width: 120px;
+    height: 10px;
+    background: var(--bg);
+    border-radius: 5px;
+    overflow: hidden;
+}
+.score-fill {
+    display: block;
+    height: 100%;
+    border-radius: 5px;
+    transition: width 0.3s ease;
+    width: 0%;
+}
+.score-red { background: #e04040; }
+.score-blue { background: #4090e0; }
+.score-num {
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--fg);
+    min-width: 30px;
+}
+.arena-round-info {
+    text-align: center;
+}
+.round-label {
+    font-weight: 900;
+    font-size: 16px;
+    color: var(--accent);
+    letter-spacing: 2px;
+}
+
+/* Commentary (center panel, the star of the show) */
+.arena-commentary {
+    flex: 1;
+    padding: 20px 32px;
+    overflow-y: auto;
+    background: var(--bg);
+    min-height: 200px;
+}
+.commentary-text {
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--fg);
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
+/* Team logs (split bottom panel) */
+.arena-teams {
+    display: flex;
+    border-top: 1px solid var(--border);
+    max-height: 200px;
+}
+.arena-team-log {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.arena-team-log + .arena-team-log {
+    border-left: 1px solid var(--border);
+}
+.team-log-header {
+    padding: 6px 12px;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 1px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+}
+.team-log-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px;
+    font-family: 'Cascadia Code', 'Consolas', monospace;
+    font-size: 11px;
+    color: var(--dim);
+    background: var(--bg);
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
 /* ── Scrollbar ────────────────────────────────────────── */
