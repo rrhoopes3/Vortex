@@ -53,6 +53,18 @@ def list_directory(path: str) -> str:
         return f'{{"error": "{e}"}}'
 
 
+def append_file(path: str, content: str) -> str:
+    """Append content to an existing file, or create it if it doesn't exist."""
+    try:
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with p.open("a", encoding="utf-8") as f:
+            f.write(content)
+        return f'{{"status": "ok", "path": "{path}", "bytes_appended": {len(content)}}}'
+    except Exception as e:
+        return f'{{"error": "{e}"}}'
+
+
 def delete_file(path: str) -> str:
     """Delete a file (not directories)."""
     p = Path(path)
@@ -106,6 +118,19 @@ def register(registry: ToolRegistry):
             "required": ["path"],
         },
         handler=list_directory,
+    )
+    registry.register(
+        name="append_file",
+        description="Append content to the end of a file. Creates the file if it doesn't exist.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Absolute path to the file"},
+                "content": {"type": "string", "description": "Content to append"},
+            },
+            "required": ["path", "content"],
+        },
+        handler=append_file,
     )
     registry.register(
         name="delete_file",

@@ -7,8 +7,25 @@ from xai_sdk.chat import tool as xai_tool
 
 log = logging.getLogger("forge.tools")
 
-# Tools that accept a "path" argument — sandbox checks apply here
-_PATH_ARG_TOOLS = {"read_file", "write_file", "delete_file", "list_directory"}
+# Tools with path arguments — sandbox checks apply here
+# Maps tool_name → list of argument names that must be within the sandbox
+_SANDBOX_PATH_ARGS = {
+    "read_file": ["path"],
+    "write_file": ["path"],
+    "delete_file": ["path"],
+    "list_directory": ["path"],
+    "append_file": ["path"],
+    "find_files": ["directory"],
+    "grep_files": ["directory"],
+    "resize_image": ["input_path", "output_path"],
+    "convert_image": ["input_path", "output_path"],
+    "query_sqlite": ["database"],
+    "extract_archive": ["archive_path", "output_dir"],
+    "zip_files": ["output_path"],
+}
+
+# Tools that should have their cwd overridden in sandbox mode
+_SANDBOX_CWD_TOOLS = {"run_command", "run_python", "git_status", "git_diff", "git_commit", "git_log"}
 
 
 class ToolRegistry:
@@ -47,17 +64,19 @@ class ToolRegistry:
         if sandbox_path:
             sandbox_root = Path(sandbox_path).resolve()
 
-            # Check path-based tools
-            if name in _PATH_ARG_TOOLS and "path" in arguments:
-                target = Path(arguments["path"]).resolve()
-                if not str(target).startswith(str(sandbox_root)):
-                    log.warning("Sandbox blocked %s: %s outside %s", name, target, sandbox_root)
-                    return json.dumps({
-                        "error": f"Sandbox: {target} is outside allowed directory {sandbox_root}",
-                    })
+            # Check all path-based arguments
+            if name in _SANDBOX_PATH_ARGS:
+                for arg_name in _SANDBOX_PATH_ARGS[name]:
+                    if arg_name in arguments:
+                        target = Path(arguments[arg_name]).resolve()
+                        if not str(target).startswith(str(sandbox_root)):
+                            log.warning("Sandbox blocked %s: %s outside %s", name, target, sandbox_root)
+                            return json.dumps({
+                                "error": f"Sandbox: {target} is outside allowed directory {sandbox_root}",
+                            })
 
-            # Override cwd for shell commands
-            if name == "run_command":
+            # Override cwd for shell/python/git commands
+            if name in _SANDBOX_CWD_TOOLS:
                 arguments = {**arguments, "_sandbox_cwd": str(sandbox_root)}
 
         # ── Execute ──────────────────────────────────────────────────

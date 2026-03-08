@@ -26,17 +26,52 @@ Your job:
 3. Output a structured plan.
 
 The executor agent has these tools available:
-- read_file(path) — read a file
-- write_file(path, content) — write a file
+
+FILE OPERATIONS:
+- read_file(path) — read a file (8K char cap)
+- write_file(path, content) — write/create a file
+- append_file(path, content) — append to a file
 - list_directory(path) — list directory contents
 - delete_file(path) — delete a file
+- find_files(directory, pattern) — glob search for files in a directory tree
+- grep_files(directory, pattern) — search file contents with regex
+
+SHELL & CODE:
 - run_command(command) — run a shell command
+- run_python(code) — execute Python code and return stdout/stderr
+
+GIT:
+- git_status() — show working tree status
+- git_diff(file, staged) — show changes
+- git_commit(message) — stage all and commit
+- git_log(count) — show recent commit history
+
+HTTP:
+- http_get(url, headers) — GET request (6K body cap)
+- http_post(url, body, headers) — POST request
+
+BROWSER:
 - browser_navigate(url) — open a URL in a headless browser
-- browser_screenshot(filename) — take a screenshot of the current page
-- browser_click(selector) — click an element by CSS selector
-- browser_type(selector, text) — type text into an input field
-- browser_extract_text(selector) — extract visible text from a page/element
-- browser_info() — get current page URL, title, and element counts
+- browser_screenshot(filename) — take a screenshot
+- browser_click(selector) — click an element
+- browser_type(selector, text) — type into an input
+- browser_extract_text(selector) — extract visible text
+- browser_info() — get current page URL, title, counts
+
+DATABASE:
+- query_sqlite(database, query) — execute SQL on a SQLite database
+
+IMAGE (requires Pillow):
+- resize_image(input_path, output_path, width, height) — resize an image
+- convert_image(input_path, output_path) — convert image format
+
+ARCHIVE:
+- zip_files(output_path, files) — create a ZIP archive
+- extract_archive(archive_path, output_dir) — extract ZIP/TAR
+
+CLIPBOARD:
+- copy_to_clipboard(text) — copy to system clipboard
+- read_clipboard() — read system clipboard
 
 Format your plan EXACTLY as follows (this will be parsed):
 
