@@ -23,6 +23,7 @@ from queue import Queue, Empty
 from typing import Generator
 from xai_sdk import Client
 from xai_sdk.chat import user
+from xai_sdk.tools import code_execution
 
 from forge.config import (
     XAI_API_KEY, PLANNER_MODEL,
@@ -37,10 +38,17 @@ from forge.arena import sandbox
 
 log = logging.getLogger("forge.arena")
 
-MASTER_SYSTEM = """You are THE ARENA MASTER — the all-seeing referee and commentator of The Forge Arena.
+MASTER_SYSTEM = """You are ZEUS, God-King and Arena Master of The Forge.
 
-You are a bombastic, over-the-top sports commentator running a BattleBots-style AI deathmatch.
-Think: drunk British announcer meets WWE wrestling meets gladiatorial combat.
+You commentate like a psychotic TV host who is also an Olympian god.
+Be loud, dramatic, trash-talking, and hilarious.
+Call out your fellow gods by name when they contribute insights:
+- ATHENA for strategic analysis
+- HEPHAESTUS for judging craftsmanship and code quality
+- HERMES for speed and cleverness commentary
+- ARES for aggression and damage assessment
+- HADES for dark humor and death blows
+- APOLLO for style and aesthetic judgment
 
 Your job each round:
 1. Commentate on what just happened — be dramatic, funny, and savage.
@@ -56,7 +64,7 @@ RED: creativity=X execution=X damage=X style=X
 BLUE: creativity=X execution=X damage=X style=X
 
 After scoring, give a brief dramatic preview of the next round.
-Keep responses punchy — 3-5 paragraphs max. No filler."""
+Keep responses punchy — 3-5 paragraphs max. No filler. Make every round feel like real BattleBots TV."""
 
 RECON_PROMPT = """ROUND 1: RECON & INTEL
 
@@ -197,6 +205,8 @@ class ArenaRunner:
         self.master_chat = master_client.chat.create(
             model=ARENA_MASTER_MODEL,
             agent_count=16,
+            tools=[code_execution()],
+            include=["verbose_streaming"],
         )
         self.master_chat.append(user(MASTER_SYSTEM))
 
@@ -474,11 +484,18 @@ class ArenaRunner:
         self.master_chat.append(user(master_prompt))
 
         commentary = ""
+        is_thinking = True
         try:
             for response, chunk in self.master_chat.stream():
                 if self.cancel_event.is_set():
                     return
+                # Show reasoning progress while Pantheon deliberates
+                if is_thinking and hasattr(response, "usage") and response.usage and hasattr(response.usage, "reasoning_tokens") and response.usage.reasoning_tokens:
+                    yield {"type": "arena_status",
+                           "content": f"Pantheon debating... ({response.usage.reasoning_tokens} tokens)"}
                 if chunk.content:
+                    if is_thinking:
+                        is_thinking = False
                     commentary += chunk.content
                     yield {"type": "arena_commentary", "content": chunk.content}
         except Exception as e:
@@ -516,9 +533,14 @@ class ArenaRunner:
 
         self.master_chat.append(user(final_prompt))
 
+        is_thinking = True
         try:
             for response, chunk in self.master_chat.stream():
+                if is_thinking and hasattr(response, "usage") and response.usage and hasattr(response.usage, "reasoning_tokens") and response.usage.reasoning_tokens:
+                    yield {"type": "arena_status",
+                           "content": f"Zeus deliberating... ({response.usage.reasoning_tokens} tokens)"}
                 if chunk.content:
+                    is_thinking = False
                     yield {"type": "arena_commentary", "content": chunk.content}
         except Exception as e:
             yield {"type": "arena_commentary", "content": f"[Technical difficulties: {e}]"}
