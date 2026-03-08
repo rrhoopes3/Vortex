@@ -5,16 +5,17 @@ from .registry import ToolRegistry
 from forge.config import SHELL_TIMEOUT_SECONDS, SHELL_WORKING_DIR
 
 
-def run_command(command: str) -> str:
+def run_command(command: str, _sandbox_cwd: str = "") -> str:
     """Run a shell command and return stdout + stderr."""
     try:
+        cwd = _sandbox_cwd if _sandbox_cwd else str(SHELL_WORKING_DIR)
         result = subprocess.run(
             command,
             shell=True,
             capture_output=True,
             text=True,
             timeout=SHELL_TIMEOUT_SECONDS,
-            cwd=str(SHELL_WORKING_DIR),
+            cwd=cwd,
         )
         output = {
             "returncode": result.returncode,

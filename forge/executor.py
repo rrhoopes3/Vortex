@@ -35,6 +35,7 @@ def execute_step(
     step_title: str,
     step_description: str,
     context: str = "",
+    sandbox_path: str = "",
 ) -> Generator[dict, None, str]:
     """
     Execute a single plan step using the reasoning model + client-side tools.
@@ -49,6 +50,8 @@ def execute_step(
     )
 
     prompt = f"{EXECUTOR_SYSTEM}\n\n"
+    if sandbox_path:
+        prompt += f"SANDBOX MODE ACTIVE: All file operations are restricted to {sandbox_path}. Do not attempt to access paths outside this directory.\n\n"
     if context:
         prompt += f"Context from previous steps:\n{context}\n\n"
     prompt += f"Execute this step:\nTitle: {step_title}\nDescription: {step_description}\n\nUse your tools to complete this. Begin."
@@ -99,7 +102,7 @@ def execute_step(
             yield {"type": "tool_call", "name": func_name, "args": args}
             log.info("Tool call: %s(%s)", func_name, args)
 
-            result = registry.execute(func_name, args)
+            result = registry.execute(func_name, args, sandbox_path=sandbox_path)
 
             # Truncate large results for display
             display_result = result[:500] + "..." if len(result) > 500 else result

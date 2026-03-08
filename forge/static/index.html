@@ -11,6 +11,14 @@
     <header>
         <div class="logo">THE FORGE</div>
         <div class="subtitle">Grok 4.20 Autonomous Agent</div>
+        <div class="sandbox-controls">
+            <label class="sandbox-toggle" title="Restrict file/shell access to a directory">
+                <input type="checkbox" id="sandbox-toggle" checked>
+                <span class="toggle-slider"></span>
+                <span class="toggle-label">Sandbox</span>
+            </label>
+            <input type="text" id="sandbox-path" value="B:/Grok" placeholder="Sandbox directory..." title="Root directory for sandboxed operations">
+        </div>
         <div class="status" id="status">Ready</div>
     </header>
     <main>

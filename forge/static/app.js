@@ -3,8 +3,38 @@ const taskInput = document.getElementById("task-input");
 const submitBtn = document.getElementById("submit-btn");
 const statusEl = document.getElementById("status");
 const historyEl = document.getElementById("history-list");
+const sandboxToggle = document.getElementById("sandbox-toggle");
+const sandboxPathInput = document.getElementById("sandbox-path");
 
 let isRunning = false;
+
+// ── Sandbox State ─────────────────────────────────────────────────────────
+
+function initSandboxControls() {
+    // Restore from localStorage
+    const savedMode = localStorage.getItem("forge_sandbox_mode");
+    const savedPath = localStorage.getItem("forge_sandbox_path");
+    if (savedMode !== null) sandboxToggle.checked = savedMode === "true";
+    if (savedPath !== null) sandboxPathInput.value = savedPath;
+    updateSandboxUI();
+
+    // Listeners
+    sandboxToggle.addEventListener("change", () => {
+        localStorage.setItem("forge_sandbox_mode", sandboxToggle.checked);
+        updateSandboxUI();
+    });
+    sandboxPathInput.addEventListener("input", () => {
+        localStorage.setItem("forge_sandbox_path", sandboxPathInput.value);
+    });
+}
+
+function updateSandboxUI() {
+    if (sandboxToggle.checked) {
+        sandboxPathInput.classList.remove("disabled");
+    } else {
+        sandboxPathInput.classList.add("disabled");
+    }
+}
 
 // ── Submit Task ───────────────────────────────────────────────────────────
 
@@ -20,7 +50,11 @@ async function submitTask() {
         const res = await fetch("/api/task", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ task }),
+            body: JSON.stringify({
+                task,
+                sandbox_mode: sandboxToggle.checked,
+                sandbox_path: sandboxPathInput.value.trim(),
+            }),
         });
         const { task_id, error } = await res.json();
         if (error) {
@@ -191,4 +225,5 @@ taskInput.addEventListener("keydown", (e) => {
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────
+initSandboxControls();
 loadHistory();

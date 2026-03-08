@@ -18,10 +18,11 @@ log = logging.getLogger("forge.orchestrator")
 
 
 class Orchestrator:
-    def __init__(self):
+    def __init__(self, sandbox_path: str = ""):
         self.client = Client(api_key=XAI_API_KEY)
         self.registry = create_registry()
-        log.info("Forge initialized. Tools: %s", self.registry.list_tools())
+        self.sandbox_path = sandbox_path
+        log.info("Forge initialized. Tools: %s | Sandbox: %s", self.registry.list_tools(), sandbox_path or "OFF")
 
     def run(self, task: str) -> Generator[dict, None, TaskResult]:
         """
@@ -76,6 +77,7 @@ class Orchestrator:
                 step_title=step.title,
                 step_description=step.description,
                 context=context_so_far,
+                sandbox_path=self.sandbox_path,
             )
 
             try:
