@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Forge — Grok 4.20 Agent</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <header>
+        <div class="logo">THE FORGE</div>
+        <div class="subtitle">Grok 4.20 Autonomous Agent</div>
+        <div class="status" id="status">Ready</div>
+    </header>
+    <main>
+        <aside class="sidebar">
+            <h3>Task History</h3>
+            <div id="history-list"></div>
+        </aside>
+        <section class="chat-area">
+            <div class="messages" id="messages">
+                <div class="msg status">
+                    The Forge is ready. Describe a task and the 16-agent planner will research and strategize, then the executor will carry it out with tools.
+                </div>
+            </div>
+            <div class="input-bar">
+                <input type="text" id="task-input" placeholder="Describe a task for The Forge..." autofocus>
+                <button id="submit-btn">FORGE</button>
+            </div>
+        </section>
+    </main>
+    <script src="/static/app.js"></script>
+</body>
+</html>

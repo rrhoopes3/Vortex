@@ -1,0 +1,194 @@
+const messagesEl = document.getElementById("messages");
+const taskInput = document.getElementById("task-input");
+const submitBtn = document.getElementById("submit-btn");
+const statusEl = document.getElementById("status");
+const historyEl = document.getElementById("history-list");
+
+let isRunning = false;
+
+// ── Submit Task ───────────────────────────────────────────────────────────
+
+async function submitTask() {
+    const task = taskInput.value.trim();
+    if (!task || isRunning) return;
+
+    setRunning(true);
+    taskInput.value = "";
+    addMessage("user", task);
+
+    try {
+        const res = await fetch("/api/task", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ task }),
+        });
+        const { task_id, error } = await res.json();
+        if (error) {
+            addMessage("error", error);
+            setRunning(false);
+            return;
+        }
+        streamTask(task_id);
+    } catch (e) {
+        addMessage("error", `Connection failed: ${e.message}`);
+        setRunning(false);
+    }
+}
+
+// ── SSE Stream ────────────────────────────────────────────────────────────
+
+function streamTask(taskId) {
+    const source = new EventSource(`/api/stream/${taskId}`);
+    let contentBuffer = "";
+    let contentEl = null;
+
+    source.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+
+        switch (msg.type) {
+            case "status":
+                updateStatus(msg.content);
+                addMessage("status", msg.content, msg.phase || "");
+                break;
+
+            case "plan_content":
+                if (!contentEl || !contentEl.classList.contains("plan")) {
+                    contentBuffer = "";
+                    contentEl = addMessage("plan", "");
+                }
+                contentBuffer += msg.content;
+                contentEl.innerHTML = renderMarkdown(contentBuffer);
+                scrollToBottom();
+                break;
+
+            case "step_start":
+                contentEl = null;
+                contentBuffer = "";
+                addMessage("step-header", `Step ${msg.step}: ${msg.title}`);
+                break;
+
+            case "tool_call":
+                const argsStr = JSON.stringify(msg.args, null, 2);
+                addMessage("tool-call", `⚡ ${msg.name}(${argsStr})`);
+                break;
+
+            case "tool_result":
+                addMessage("tool-result", msg.result);
+                break;
+
+            case "content":
+                if (!contentEl || contentEl.classList.contains("plan") || contentEl.classList.contains("step-header")) {
+                    contentBuffer = "";
+                    contentEl = addMessage("response", "");
+                }
+                contentBuffer += msg.content;
+                contentEl.innerHTML = renderMarkdown(contentBuffer);
+                scrollToBottom();
+                break;
+
+            case "step_done":
+                const icon = msg.status === "success" ? "✓" : "✗";
+                addMessage("status", `${icon} Step ${msg.step} ${msg.status}`, msg.status === "success" ? "executing" : "");
+                break;
+
+            case "error":
+                addMessage("error", msg.content);
+                break;
+
+            case "done":
+                if (msg.summary) addMessage("done", msg.summary);
+                if (msg.final) {
+                    source.close();
+                    setRunning(false);
+                    loadHistory();
+                }
+                break;
+        }
+    };
+
+    source.onerror = () => {
+        source.close();
+        setRunning(false);
+        updateStatus("Disconnected");
+    };
+}
+
+// ── UI Helpers ────────────────────────────────────────────────────────────
+
+function addMessage(type, content, extra = "") {
+    const div = document.createElement("div");
+    div.className = `msg ${type} ${extra}`.trim();
+
+    if (type === "plan" || type === "response") {
+        div.innerHTML = renderMarkdown(content);
+    } else {
+        div.textContent = content;
+    }
+
+    messagesEl.appendChild(div);
+    scrollToBottom();
+    return div;
+}
+
+function scrollToBottom() {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function setRunning(running) {
+    isRunning = running;
+    submitBtn.disabled = running;
+    statusEl.className = "status" + (running ? " running" : "");
+    statusEl.textContent = running ? "Running..." : "Ready";
+}
+
+function updateStatus(text) {
+    statusEl.textContent = text;
+    statusEl.className = "status running";
+}
+
+function renderMarkdown(text) {
+    if (typeof marked !== "undefined") {
+        return marked.parse(text);
+    }
+    // Fallback: basic escaping
+    return text.replace(/</g, "&lt;").replace(/\n/g, "<br>");
+}
+
+// ── History ───────────────────────────────────────────────────────────────
+
+async function loadHistory() {
+    try {
+        const res = await fetch("/api/history");
+        const tasks = await res.json();
+        historyEl.innerHTML = "";
+        tasks.reverse().forEach((t) => {
+            const div = document.createElement("div");
+            div.className = "task-item";
+            div.innerHTML = `
+                <div>${truncate(t.task, 60)}</div>
+                <div class="time">${t.task_id || ""} &middot; ${t.final_summary || ""}</div>
+            `;
+            historyEl.appendChild(div);
+        });
+    } catch (e) {
+        // History load failed — not critical
+    }
+}
+
+function truncate(str, len) {
+    return str.length > len ? str.slice(0, len) + "..." : str;
+}
+
+// ── Event Listeners ───────────────────────────────────────────────────────
+
+submitBtn.addEventListener("click", submitTask);
+
+taskInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        submitTask();
+    }
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────
+loadHistory();

@@ -1,0 +1,26 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Runtime data
+forge/data/
+presidential_council_history.json
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+
+# Claude
+.claude/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# PDF guide (large, copyrighted)
+*.pdf
