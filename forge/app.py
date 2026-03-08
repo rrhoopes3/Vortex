@@ -53,6 +53,7 @@ def run_task(task_id: str, task: str, q: Queue, cancel_event: threading.Event,
             agent_count=agent_count,
             cancel_event=cancel_event,
             executor_model=executor_model,
+            task_id=task_id,
         )
         gen = orch.run(task)
         result = None

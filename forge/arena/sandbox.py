@@ -37,6 +37,7 @@ def setup() -> dict[str, str]:
     )
 
     return {
+        "arena_root": str(ARENA_ROOT),
         "battlefield": str(BATTLEFIELD),
         "red": str(RED_BASE),
         "blue": str(BLUE_BASE),

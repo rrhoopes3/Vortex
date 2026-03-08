@@ -46,6 +46,7 @@ def execute_step(
     sandbox_path: str = "",
     cancel_event: threading.Event | None = None,
     model: str = "",
+    max_iterations: int = 0,
 ) -> Generator[dict, None, str]:
     """
     Execute a single plan step using the reasoning model + client-side tools.
@@ -54,7 +55,8 @@ def execute_step(
     Returns the final text output.
     """
     use_model = model if model else EXECUTOR_MODEL
-    log.info("Using executor model: %s", use_model)
+    iteration_limit = max_iterations if max_iterations > 0 else EXECUTOR_MAX_ITERATIONS
+    log.info("Using executor model: %s (max %d iterations)", use_model, iteration_limit)
 
     chat = client.chat.create(
         model=use_model,
@@ -73,7 +75,7 @@ def execute_step(
 
     full_output = ""
 
-    for iteration in range(EXECUTOR_MAX_ITERATIONS):
+    for iteration in range(iteration_limit):
         # Check cancellation before each iteration
         if cancel_event and cancel_event.is_set():
             yield {"type": "cancelled", "content": "Step cancelled"}
@@ -162,6 +164,6 @@ def execute_step(
 
             chat.append(tool_result(result, tool_call_id=tc.id))
     else:
-        yield {"type": "status", "content": f"Hit max iterations ({EXECUTOR_MAX_ITERATIONS}) for step: {step_title}"}
+        yield {"type": "status", "content": f"Hit max iterations ({iteration_limit}) for step: {step_title}"}
 
     return full_output

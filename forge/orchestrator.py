@@ -27,6 +27,7 @@ class Orchestrator:
         agent_count: int = 16,
         cancel_event: threading.Event | None = None,
         executor_model: str = "",
+        task_id: str = "",
     ):
         self.client = Client(api_key=XAI_API_KEY)
         self.registry = create_registry()
@@ -35,6 +36,7 @@ class Orchestrator:
         self.agent_count = max(4, min(16, agent_count))  # clamp 4-16
         self.cancel_event = cancel_event or threading.Event()
         self.executor_model = executor_model  # empty string = use default from config
+        self.task_id = task_id  # use caller-provided ID if given
         log.info("Forge initialized. Tools: %s | Sandbox: %s | Direct: %s | Agents: %d | Model: %s",
                  self.registry.list_tools(), sandbox_path or "OFF", direct_mode, self.agent_count,
                  executor_model or "default")
@@ -46,7 +48,7 @@ class Orchestrator:
         Yields SSE-style dicts for real-time UI updates.
         Returns the final TaskResult.
         """
-        task_id = str(uuid.uuid4())[:8]
+        task_id = self.task_id or str(uuid.uuid4())[:8]
         yield {"type": "status", "content": f"Forge task {task_id} started"}
 
         if self.direct_mode:

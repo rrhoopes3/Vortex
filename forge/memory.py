@@ -2,17 +2,21 @@
 from __future__ import annotations
 import json
 import logging
+import threading
 from forge.config import TASKS_FILE, CONVERSATIONS_DIR
 from forge.models import TaskResult
 
 log = logging.getLogger("forge.memory")
 
+_save_lock = threading.Lock()
+
 
 def save_task(result: TaskResult):
-    """Append a completed task result to the tasks file."""
-    tasks = load_tasks()
-    tasks.append(result.model_dump())
-    TASKS_FILE.write_text(json.dumps(tasks, indent=2, default=str), encoding="utf-8")
+    """Append a completed task result to the tasks file (thread-safe)."""
+    with _save_lock:
+        tasks = load_tasks()
+        tasks.append(result.model_dump())
+        TASKS_FILE.write_text(json.dumps(tasks, indent=2, default=str), encoding="utf-8")
     log.info("Saved task %s", result.task_id)
 
 

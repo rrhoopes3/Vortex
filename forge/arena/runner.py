@@ -155,6 +155,7 @@ def _run_team_step(
             sandbox_path=sandbox_path,
             cancel_event=cancel_event,
             model=model,
+            max_iterations=max_iters,
         )
 
         output = ""
@@ -278,16 +279,17 @@ class ArenaRunner:
             iterations=max_iters,
         )
 
-        # Spawn both teams
+        # Spawn both teams — sandbox to arena root so they can access own base + battlefield
+        arena_root = self.paths["arena_root"]
         red_thread = threading.Thread(
             target=_run_team_step,
-            args=("red", red_prompt, self.red_model, self.paths["battlefield"],
+            args=("red", red_prompt, self.red_model, arena_root,
                   max_iters, self.cancel_event, out_queue),
             daemon=True,
         )
         blue_thread = threading.Thread(
             target=_run_team_step,
-            args=("blue", blue_prompt, self.blue_model, self.paths["battlefield"],
+            args=("blue", blue_prompt, self.blue_model, arena_root,
                   max_iters, self.cancel_event, out_queue),
             daemon=True,
         )
@@ -363,7 +365,7 @@ class ArenaRunner:
             t = threading.Thread(
                 target=_run_team_step,
                 args=(team, prompt, self.red_model if team == "red" else self.blue_model,
-                      self.paths["battlefield"], 2, self.cancel_event, out_queue),
+                      self.paths["arena_root"], 2, self.cancel_event, out_queue),
                 daemon=True,
             )
             t.start()
@@ -429,7 +431,7 @@ class ArenaRunner:
             t = threading.Thread(
                 target=_run_team_step,
                 args=(team, prompt, self.red_model if team == "red" else self.blue_model,
-                      self.paths["battlefield"], 2, self.cancel_event, out_queue),
+                      self.paths["arena_root"], 2, self.cancel_event, out_queue),
                 daemon=True,
             )
             t.start()
