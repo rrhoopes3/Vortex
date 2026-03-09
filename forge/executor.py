@@ -1,8 +1,11 @@
 """
 Single-agent executor with client-side tool-calling loop.
 
-Uses grok-4.20-experimental-beta-0304-reasoning with custom tools
-(filesystem, shell, browser, http, python, git, search, etc.) to execute plan steps.
+Supports multiple providers:
+  - xAI (grok-*): native xai_sdk
+  - Anthropic (claude-*): Anthropic Messages API
+  - OpenAI (gpt-*, o3-*): OpenAI Chat Completions API
+  - LM Studio (lmstudio:*): OpenAI-compatible local server
 """
 from __future__ import annotations
 import json
@@ -14,8 +17,9 @@ from xai_sdk import Client
 from xai_sdk.chat import user, tool_result
 from xai_sdk.tools import get_tool_call_type
 
-from forge.config import EXECUTOR_MODEL, EXECUTOR_MAX_ITERATIONS
+from forge.config import EXECUTOR_MODEL, EXECUTOR_MAX_ITERATIONS, LMSTUDIO_BASE_URL
 from forge.tools.registry import ToolRegistry
+from forge.providers import detect_provider, run_anthropic, run_openai
 
 log = logging.getLogger("forge.executor")
 
@@ -38,7 +42,7 @@ Rules:
 
 
 def execute_step(
-    client: Client,
+    client: Client | None,
     registry: ToolRegistry,
     step_title: str,
     step_description: str,
@@ -53,23 +57,51 @@ def execute_step(
 
     Yields SSE-style dicts: {"type": "...", ...}
     Returns the final text output.
+
+    Routes to the correct provider based on model name prefix.
     """
     use_model = model if model else EXECUTOR_MODEL
     iteration_limit = max_iterations if max_iterations > 0 else EXECUTOR_MAX_ITERATIONS
-    log.info("Using executor model: %s (max %d iterations)", use_model, iteration_limit)
+    provider = detect_provider(use_model)
+    log.info("Using executor model: %s (provider: %s, max %d iterations)", use_model, provider, iteration_limit)
 
-    chat = client.chat.create(
-        model=use_model,
-        tools=registry.get_definitions(),
-        use_encrypted_content=True,
-    )
-
+    # Build the full prompt (shared across all providers)
     prompt = f"{EXECUTOR_SYSTEM}\n\n"
     if sandbox_path:
         prompt += f"SANDBOX MODE ACTIVE: All file operations are restricted to {sandbox_path}. Do not attempt to access paths outside this directory.\n\n"
     if context:
         prompt += f"Context from previous steps:\n{context}\n\n"
     prompt += f"Execute this step:\nTitle: {step_title}\nDescription: {step_description}\n\nUse your tools to complete this. Begin."
+
+    # ── Route to non-xAI providers ───────────────────────────────────
+    if provider == "anthropic":
+        return (yield from run_anthropic(
+            model=use_model, system_prompt=EXECUTOR_SYSTEM, user_prompt=prompt,
+            registry=registry, sandbox_path=sandbox_path,
+            cancel_event=cancel_event, max_iterations=iteration_limit,
+        ))
+    elif provider == "openai":
+        return (yield from run_openai(
+            model=use_model, system_prompt=EXECUTOR_SYSTEM, user_prompt=prompt,
+            registry=registry, sandbox_path=sandbox_path,
+            cancel_event=cancel_event, max_iterations=iteration_limit,
+        ))
+    elif provider == "lmstudio":
+        # Strip "lmstudio:" prefix; use "default" if nothing after it
+        lm_model = use_model.split(":", 1)[1] if ":" in use_model else "default"
+        return (yield from run_openai(
+            model=lm_model, system_prompt=EXECUTOR_SYSTEM, user_prompt=prompt,
+            registry=registry, sandbox_path=sandbox_path,
+            cancel_event=cancel_event, max_iterations=iteration_limit,
+            base_url=LMSTUDIO_BASE_URL,
+        ))
+
+    # ── xAI provider (original path) ────────────────────────────────
+    chat = client.chat.create(
+        model=use_model,
+        tools=registry.get_definitions(),
+        use_encrypted_content=True,
+    )
 
     chat.append(user(prompt))
 

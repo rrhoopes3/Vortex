@@ -35,9 +35,23 @@
         <div class="model-control">
             <label for="model-select">Model</label>
             <select id="model-select">
-                <option value="grok-4.20-experimental-beta-0304-reasoning">4.20 Reasoning  $2/$6</option>
-                <option value="grok-4-1-fast-reasoning">4.1 Fast Reasoning  $0.20/$0.50</option>
-                <option value="grok-4-1-fast-non-reasoning">4.1 Fast  $0.20/$0.50</option>
+                <optgroup label="xAI">
+                    <option value="grok-4.20-experimental-beta-0304-reasoning">4.20 Reasoning $2/$6</option>
+                    <option value="grok-4-1-fast-reasoning">4.1 Fast Reasoning $0.20/$0.50</option>
+                    <option value="grok-4-1-fast-non-reasoning">4.1 Fast $0.20/$0.50</option>
+                </optgroup>
+                <optgroup label="Anthropic">
+                    <option value="claude-sonnet-4-20250514">Claude Sonnet 4 $3/$15</option>
+                    <option value="claude-haiku-4-20250414">Claude Haiku 4 $0.80/$4</option>
+                </optgroup>
+                <optgroup label="OpenAI">
+                    <option value="gpt-4o">GPT-4o $2.50/$10</option>
+                    <option value="gpt-4o-mini">GPT-4o Mini $0.15/$0.60</option>
+                    <option value="o3-mini">o3-mini $1.10/$4.40</option>
+                </optgroup>
+                <optgroup label="Local">
+                    <option value="lmstudio:default">LM Studio (Local)</option>
+                </optgroup>
             </select>
         </div>
         <button id="arena-btn" class="arena-btn" title="Launch BattleBot Arena — two AI teams deathmatch!">ARENA</button>
@@ -49,18 +63,46 @@
             <div class="arena-team-pick">
                 <label class="team-red">RED</label>
                 <select id="red-model">
-                    <option value="grok-4-1-fast-reasoning">4.1 Fast Reasoning</option>
-                    <option value="grok-4.20-experimental-beta-0304-reasoning">4.20 Reasoning</option>
-                    <option value="grok-4-1-fast-non-reasoning">4.1 Fast</option>
+                    <optgroup label="xAI">
+                        <option value="grok-4-1-fast-reasoning">4.1 Fast Reasoning</option>
+                        <option value="grok-4.20-experimental-beta-0304-reasoning">4.20 Reasoning</option>
+                        <option value="grok-4-1-fast-non-reasoning">4.1 Fast</option>
+                    </optgroup>
+                    <optgroup label="Anthropic">
+                        <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
+                        <option value="claude-haiku-4-20250414">Claude Haiku 4</option>
+                    </optgroup>
+                    <optgroup label="OpenAI">
+                        <option value="gpt-4o">GPT-4o</option>
+                        <option value="gpt-4o-mini">GPT-4o Mini</option>
+                        <option value="o3-mini">o3-mini</option>
+                    </optgroup>
+                    <optgroup label="Local">
+                        <option value="lmstudio:default">LM Studio</option>
+                    </optgroup>
                 </select>
             </div>
             <span class="arena-vs">VS</span>
             <div class="arena-team-pick">
                 <label class="team-blue">BLUE</label>
                 <select id="blue-model">
-                    <option value="grok-4-1-fast-reasoning">4.1 Fast Reasoning</option>
-                    <option value="grok-4.20-experimental-beta-0304-reasoning">4.20 Reasoning</option>
-                    <option value="grok-4-1-fast-non-reasoning">4.1 Fast</option>
+                    <optgroup label="xAI">
+                        <option value="grok-4-1-fast-reasoning">4.1 Fast Reasoning</option>
+                        <option value="grok-4.20-experimental-beta-0304-reasoning">4.20 Reasoning</option>
+                        <option value="grok-4-1-fast-non-reasoning">4.1 Fast</option>
+                    </optgroup>
+                    <optgroup label="Anthropic">
+                        <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
+                        <option value="claude-haiku-4-20250414">Claude Haiku 4</option>
+                    </optgroup>
+                    <optgroup label="OpenAI">
+                        <option value="gpt-4o">GPT-4o</option>
+                        <option value="gpt-4o-mini">GPT-4o Mini</option>
+                        <option value="o3-mini">o3-mini</option>
+                    </optgroup>
+                    <optgroup label="Local">
+                        <option value="lmstudio:default">LM Studio</option>
+                    </optgroup>
                 </select>
             </div>
             <label class="tts-toggle" title="Arena Master commentary read aloud">

@@ -34,6 +34,7 @@ class ToolRegistry:
     def __init__(self):
         self._handlers: dict[str, Callable] = {}
         self._definitions: list = []
+        self._raw_tools: list[dict] = []  # raw schemas for cross-provider conversion
 
     def register(
         self,
@@ -45,11 +46,16 @@ class ToolRegistry:
         defn = xai_tool(name=name, description=description, parameters=parameters)
         self._definitions.append(defn)
         self._handlers[name] = handler
+        self._raw_tools.append({"name": name, "description": description, "parameters": parameters})
         log.info("Registered tool: %s", name)
 
     def get_definitions(self) -> list:
         """Return list of xai_sdk tool objects to pass to chat.create()."""
         return list(self._definitions)
+
+    def get_raw_tools(self) -> list[dict]:
+        """Return raw tool schemas {name, description, parameters} for non-xAI providers."""
+        return list(self._raw_tools)
 
     def execute(self, name: str, arguments: dict, sandbox_path: str = "") -> str:
         """Execute a tool by name with the given arguments. Returns JSON string.
