@@ -144,8 +144,13 @@ def _run_team_step(
 ):
     """Run a team's executor step in a thread, putting tagged messages in out_queue."""
     try:
-        client = Client(api_key=XAI_API_KEY)
+        from forge.providers import detect_provider
         registry = create_registry()
+
+        # Only create xAI client if the model needs it
+        client = None
+        if detect_provider(model) == "xai":
+            client = Client(api_key=XAI_API_KEY)
 
         gen = executor.execute_step(
             client=client,
@@ -178,6 +183,18 @@ def _run_team_step(
 
 
 class ArenaRunner:
+    """
+    Orchestrates a full BattleBots-style AI deathmatch.
+
+    Privacy model: Teams share the same arena root sandbox. There are NO hard
+    ACLs between team directories — this is by design. Espionage, sabotage, and
+    reading enemy files are valid gameplay tactics (the Recon prompt even
+    encourages it: "try to peek in if you can"). The separation is prompt-based
+    (each team is told which directory is "theirs") but not enforced at the
+    filesystem level. The outer sandbox boundary (arena_root) IS enforced by the
+    executor's sandbox_path restriction, preventing access outside the arena.
+    """
+
     def __init__(
         self,
         cancel_event: threading.Event | None = None,
@@ -201,7 +218,7 @@ class ArenaRunner:
         self.paths = sandbox.setup()
         yield {"type": "arena_status", "content": "Battlefield prepared. Three zones active."}
 
-        # Arena Master init
+        # Arena Master init — always xAI (16-agent Pantheon requires multi-agent support)
         master_client = Client(api_key=XAI_API_KEY)
         self.master_chat = master_client.chat.create(
             model=ARENA_MASTER_MODEL,

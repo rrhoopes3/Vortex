@@ -137,12 +137,19 @@ def stream(task_id):
         return jsonify({"error": "Unknown task_id"}), 404
 
     def generate():
-        while True:
-            msg = q.get()
-            if msg is None:
-                yield f"data: {json.dumps({'type': 'done', 'final': True})}\n\n"
-                break
-            yield f"data: {json.dumps(msg)}\n\n"
+        try:
+            while True:
+                msg = q.get()
+                if msg is None:
+                    yield f"data: {json.dumps({'type': 'done', 'final': True})}\n\n"
+                    break
+                yield f"data: {json.dumps(msg)}\n\n"
+        finally:
+            # Clean up task state — background thread has finished by now (it sent the None sentinel)
+            task_queues.pop(task_id, None)
+            task_cancel_events.pop(task_id, None)
+            task_results.pop(task_id, None)  # already persisted to disk via save_task()
+            log.info("Task %s state cleaned up", task_id)
 
     return Response(generate(), mimetype="text/event-stream", headers={
         "Cache-Control": "no-cache",

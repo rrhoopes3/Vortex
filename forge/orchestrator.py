@@ -9,11 +9,11 @@ import logging
 import threading
 import uuid
 from typing import Generator
-from xai_sdk import Client
 
 from forge.config import XAI_API_KEY
 from forge.models import PlanStep, StepResult, TaskResult
 from forge.tools import create_registry
+from forge.providers import detect_provider
 from forge import planner, executor
 
 log = logging.getLogger("forge.orchestrator")
@@ -29,7 +29,7 @@ class Orchestrator:
         executor_model: str = "",
         task_id: str = "",
     ):
-        self.client = Client(api_key=XAI_API_KEY)
+        self._client = None  # xAI Client created lazily — only when needed
         self.registry = create_registry()
         self.sandbox_path = sandbox_path
         self.direct_mode = direct_mode
@@ -40,6 +40,20 @@ class Orchestrator:
         log.info("Forge initialized. Tools: %s | Sandbox: %s | Direct: %s | Agents: %d | Model: %s",
                  self.registry.list_tools(), sandbox_path or "OFF", direct_mode, self.agent_count,
                  executor_model or "default")
+
+    @property
+    def client(self):
+        """Lazy xAI Client — only created when actually needed (xAI model selected)."""
+        if self._client is None:
+            from xai_sdk import Client
+            self._client = Client(api_key=XAI_API_KEY)
+        return self._client
+
+    def _needs_xai_client(self, model: str = "") -> bool:
+        """Check if the given model (or default executor model) requires the xAI client."""
+        from forge.config import EXECUTOR_MODEL
+        effective_model = model or self.executor_model or EXECUTOR_MODEL
+        return detect_provider(effective_model) == "xai"
 
     def run(self, task: str) -> Generator[dict, None, TaskResult]:
         """
@@ -64,8 +78,11 @@ class Orchestrator:
         tools_used = []
         error = None
 
+        # Only create xAI client if the executor model needs it
+        xai_client = self.client if self._needs_xai_client() else None
+
         gen = executor.execute_step(
-            client=self.client,
+            client=xai_client,
             registry=self.registry,
             step_title="Direct execution",
             step_description=task,
@@ -115,7 +132,7 @@ class Orchestrator:
 
     def _run_planned(self, task_id: str, task: str) -> Generator[dict, None, TaskResult]:
         """Full pipeline: multi-agent planner → executor."""
-        # ── Phase 1: Plan ───────────────────────────────────────────────
+        # ── Phase 1: Plan (always xAI — multi-agent Pantheon) ────────────
         yield {"type": "status", "phase": "planning",
                "content": f"Launching {self.agent_count}-agent planner..."}
 
@@ -141,6 +158,9 @@ class Orchestrator:
         yield {"type": "status", "phase": "executing", "content": f"Executing {len(steps)} steps..."}
 
         # ── Phase 2: Execute ────────────────────────────────────────────
+        # Only create xAI client for executor if the model needs it
+        xai_client = self.client if self._needs_xai_client() else None
+
         results: list[StepResult] = []
         context_so_far = ""
 
@@ -162,7 +182,7 @@ class Orchestrator:
             error = None
 
             gen = executor.execute_step(
-                client=self.client,
+                client=xai_client,
                 registry=self.registry,
                 step_title=step.title,
                 step_description=step.description,
