@@ -98,3 +98,25 @@ class APIKey(BaseModel):
     created_at: str = Field(default_factory=_now_iso)
     last_used_at: str | None = None
     is_revoked: bool = False
+
+
+class AgentProfile(BaseModel):
+    """Public agent profile for the directory + relay."""
+    agent_id: str
+    name: str
+    description: str = ""
+    capabilities: list[str] = Field(default_factory=list)
+    is_public: bool = True
+    created_at: str = Field(default_factory=_now_iso)
+
+
+class Invoice(BaseModel):
+    """Invoice issued in 402 responses, tracked for Solana USDC matching."""
+    invoice_id: str = Field(default_factory=lambda: f"inv_{uuid.uuid4().hex[:12]}")
+    agent_id: str
+    amount_usd: float
+    status: Literal["pending", "paid", "expired"] = "pending"
+    created_at: str = Field(default_factory=_now_iso)
+    paid_at: str | None = None
+    solana_tx_hash: str = ""
+    solana_amount_usdc: float = 0.0

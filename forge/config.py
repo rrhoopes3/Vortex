@@ -100,6 +100,14 @@ MARKETPLACE_TASK_ESTIMATE = float(os.getenv("FORGE_MARKETPLACE_TASK_ESTIMATE", "
 MARKETPLACE_BASE_USDC_ADDRESS = os.getenv("FORGE_BASE_USDC_ADDRESS", "")    # Base L2 USDC receiver
 MARKETPLACE_SOLANA_USDC_ADDRESS = os.getenv("FORGE_SOLANA_USDC_ADDRESS", "2RzBNDG52n7EhqSeUYksa5eyTb7YJ8b3xvyJLESzY6zf")  # Solana USDC receiver
 
+# ── Solana Watcher (Beat 4) ──────────────────────────────────────────────
+SOLANA_WATCHER_ENABLED = os.getenv("FORGE_SOLANA_WATCHER_ENABLED", "false").lower() == "true"
+SOLANA_NETWORK = os.getenv("FORGE_SOLANA_NETWORK", "devnet")  # "devnet" | "mainnet-beta"
+SOLANA_RPC_URL = os.getenv("FORGE_SOLANA_RPC_URL", "")  # custom RPC; empty = public endpoint
+SOLANA_POLL_INTERVAL = int(os.getenv("FORGE_SOLANA_POLL_INTERVAL", "15"))  # seconds
+SOLANA_USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"  # mainnet USDC mint
+SOLANA_USDC_DECIMALS = 6
+
 # ── Arena ──────────────────────────────────────────────────────────────────
 ARENA_MASTER_MODEL = PLANNER_MODEL       # 16-agent Pantheon for commentary/judging
 ARENA_DEFAULT_FIGHTER_MODEL = "grok-4-1-fast-reasoning"

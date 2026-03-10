@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import functools
 import logging
-import uuid
 
 from flask import g, jsonify
 
@@ -43,7 +42,7 @@ def toll_gate(estimate_usd: float = 0.05):
 
             if balance < estimate_usd:
                 shortfall = round(estimate_usd - balance, 8)
-                invoice_id = f"inv_{uuid.uuid4().hex[:12]}"
+                invoice = ledger.create_invoice(agent_id, estimate_usd)
 
                 payment_methods = [
                     {"type": "api_deposit", "method": "POST /api/v1/wallet/deposit"},
@@ -58,17 +57,18 @@ def toll_gate(estimate_usd: float = 0.05):
                     payment_methods.append({
                         "type": "solana_usdc",
                         "receiver": MARKETPLACE_SOLANA_USDC_ADDRESS,
+                        "memo": invoice.invoice_id,
                     })
 
-                log.info("402 gate: agent=%s balance=%.6f estimate=%.6f shortfall=%.6f",
-                         agent_id, balance, estimate_usd, shortfall)
+                log.info("402 gate: agent=%s balance=%.6f estimate=%.6f shortfall=%.6f invoice=%s",
+                         agent_id, balance, estimate_usd, shortfall, invoice.invoice_id)
 
                 return jsonify({
                     "error": "payment_required",
                     "estimate_usd": estimate_usd,
                     "current_balance_usd": round(balance, 8),
                     "shortfall_usd": shortfall,
-                    "invoice_id": invoice_id,
+                    "invoice_id": invoice.invoice_id,
                     "payment_methods": payment_methods,
                 }), 402
 

@@ -73,10 +73,15 @@ def register_agent():
             "agent_id": agent_id,
         }), 409
 
-    # Create wallet + API key
+    # Create wallet + API key + profile
     from forge.config import MARKETPLACE_DEFAULT_BALANCE
     wallet = ledger.get_or_create_wallet(agent_id, owner, MARKETPLACE_DEFAULT_BALANCE)
     api_key = ledger.create_api_key(agent_id, owner)
+    description = data.get("description", "").strip()
+    capabilities = data.get("capabilities", [])
+    if not isinstance(capabilities, list):
+        capabilities = []
+    ledger.create_agent_profile(agent_id, safe_name, description, capabilities)
 
     log.info("Agent registered: %s (owner=%s)", agent_id, owner)
 
@@ -159,6 +164,7 @@ def submit_task():
     if balance < MARKETPLACE_TASK_ESTIMATE:
         from forge.config import MARKETPLACE_BASE_USDC_ADDRESS, MARKETPLACE_SOLANA_USDC_ADDRESS
         shortfall = round(MARKETPLACE_TASK_ESTIMATE - balance, 8)
+        invoice = ledger.create_invoice(agent_id, MARKETPLACE_TASK_ESTIMATE)
         payment_methods = [
             {"type": "api_deposit", "method": "POST /api/v1/wallet/deposit"},
         ]
@@ -171,13 +177,14 @@ def submit_task():
             payment_methods.append({
                 "type": "solana_usdc",
                 "receiver": MARKETPLACE_SOLANA_USDC_ADDRESS,
+                "memo": invoice.invoice_id,
             })
         return jsonify({
             "error": "payment_required",
             "estimate_usd": MARKETPLACE_TASK_ESTIMATE,
             "current_balance_usd": round(balance, 8),
             "shortfall_usd": shortfall,
-            "invoice_id": f"inv_{uuid.uuid4().hex[:12]}",
+            "invoice_id": invoice.invoice_id,
             "payment_methods": payment_methods,
         }), 402
 
@@ -316,6 +323,109 @@ def task_result(task_id: str):
     _ext_task_owners.pop(task_id, None)
 
     return jsonify(response)
+
+
+# ── Deposit Status ────────────────────────────────────────────────────────
+
+@public_bp.route("/wallet/deposit/status/<invoice_id>")
+@require_api_key
+def deposit_status(invoice_id: str):
+    """Check whether a Solana USDC deposit has been matched to an invoice."""
+    ledger = _get_ledger()
+    inv = ledger.get_invoice(invoice_id)
+    if not inv:
+        return jsonify({"error": "invoice not found"}), 404
+    if inv.agent_id != g.agent_id:
+        return jsonify({"error": "invoice not found"}), 404
+    return jsonify(inv.model_dump())
+
+
+# ── Agent Directory + Relay (Beat 5) ─────────────────────────────────────
+
+@public_bp.route("/agents")
+def agent_directory():
+    """Public agent directory — lists all registered agents with profiles."""
+    ledger = _get_ledger()
+    profiles = ledger.list_agent_profiles(public_only=True)
+    return jsonify([p.model_dump() for p in profiles])
+
+
+@public_bp.route("/agents/me/profile", methods=["PATCH"])
+@require_api_key
+def update_profile():
+    """Update authenticated agent's profile (description, capabilities, visibility)."""
+    data = request.get_json() or {}
+    ledger = _get_ledger()
+    profile = ledger.update_agent_profile(
+        g.agent_id,
+        description=data.get("description"),
+        capabilities=data.get("capabilities"),
+        is_public=data.get("is_public"),
+    )
+    if not profile:
+        return jsonify({"error": "profile not found"}), 404
+    return jsonify(profile.model_dump())
+
+
+@public_bp.route("/agents/<target_agent>/invoke", methods=["POST"])
+@require_api_key
+def invoke_agent(target_agent: str):
+    """Invoke another agent — submits a task billed to the caller.
+
+    Body: { "task": "...", "executor_model": "..." }
+    The calling agent pays all tolls. A relay fee is recorded.
+    """
+    from forge.config import MARKETPLACE_TASK_ESTIMATE
+
+    ledger = _get_ledger()
+
+    # Verify target exists
+    target_profile = ledger.get_agent_profile(target_agent)
+    if not target_profile:
+        return jsonify({"error": "agent not found"}), 404
+
+    if target_agent == g.agent_id:
+        return jsonify({"error": "cannot invoke yourself"}), 400
+
+    # Check caller balance
+    balance = ledger.get_balance(g.agent_id)
+    if balance < MARKETPLACE_TASK_ESTIMATE:
+        return jsonify({
+            "error": "payment_required",
+            "estimate_usd": MARKETPLACE_TASK_ESTIMATE,
+            "current_balance_usd": round(balance, 8),
+        }), 402
+
+    data = request.get_json() or {}
+    task = data.get("task", "").strip()
+    if not task:
+        return jsonify({"error": "task is required"}), 400
+
+    executor_model = data.get("executor_model", "").strip()
+
+    task_id = f"relay-{uuid.uuid4().hex[:8]}"
+    q = Queue()
+    cancel_event = threading.Event()
+    _ext_queues[task_id] = q
+    _ext_cancel[task_id] = cancel_event
+    _ext_task_owners[task_id] = g.agent_id
+
+    thread = threading.Thread(
+        target=_run_ext_task,
+        args=(task_id, task, q, cancel_event, g.agent_id),
+        kwargs={"direct_mode": True, "executor_model": executor_model},
+        daemon=True,
+    )
+    thread.start()
+
+    log.info("Relay %s: %s → %s task=%s", task_id, g.agent_id, target_agent, task[:60])
+
+    return jsonify({
+        "task_id": task_id,
+        "relay": {"caller": g.agent_id, "target": target_agent},
+        "stream_url": f"/api/v1/tasks/{task_id}/stream",
+        "result_url": f"/api/v1/tasks/{task_id}/result",
+    }), 202
 
 
 # ── Info (public) ─────────────────────────────────────────────────────────

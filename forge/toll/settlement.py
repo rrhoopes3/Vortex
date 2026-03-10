@@ -48,3 +48,62 @@ class LocalSettlement(SettlementBackend):
 
     def get_balance(self, wallet_address: str) -> float:
         return 0.0  # not applicable for local
+
+
+class SolanaSettlement(SettlementBackend):
+    """Solana USDC settlement — read-only verification.
+
+    Beat 4: Verifies incoming USDC transfers on Solana.
+    Does not send transactions (no private key needed).
+    """
+
+    def __init__(self, rpc_url: str, usdc_mint: str):
+        self.rpc_url = rpc_url
+        self.usdc_mint = usdc_mint
+
+    def settle(self, transactions: list[Transaction]) -> list[str]:
+        raise NotImplementedError(
+            "SolanaSettlement is read-only. Agents deposit USDC directly."
+        )
+
+    def verify(self, chain_tx_hash: str) -> bool:
+        """Verify a Solana transaction exists and succeeded."""
+        import requests
+        payload = {
+            "jsonrpc": "2.0", "id": 1,
+            "method": "getTransaction",
+            "params": [chain_tx_hash, {"encoding": "jsonParsed",
+                                        "maxSupportedTransactionVersion": 0}],
+        }
+        try:
+            resp = requests.post(self.rpc_url, json=payload, timeout=10)
+            data = resp.json()
+            result = data.get("result")
+            if not result:
+                return False
+            return result.get("meta", {}).get("err") is None
+        except Exception:
+            return False
+
+    def get_balance(self, wallet_address: str) -> float:
+        """Get USDC balance for a Solana wallet address."""
+        import requests
+        payload = {
+            "jsonrpc": "2.0", "id": 1,
+            "method": "getTokenAccountsByOwner",
+            "params": [
+                wallet_address,
+                {"mint": self.usdc_mint},
+                {"encoding": "jsonParsed"},
+            ],
+        }
+        try:
+            resp = requests.post(self.rpc_url, json=payload, timeout=10)
+            data = resp.json()
+            accounts = data.get("result", {}).get("value", [])
+            if not accounts:
+                return 0.0
+            info = accounts[0]["account"]["data"]["parsed"]["info"]
+            return float(info["tokenAmount"]["uiAmount"] or 0)
+        except Exception:
+            return 0.0

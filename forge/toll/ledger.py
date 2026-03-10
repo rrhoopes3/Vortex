@@ -13,7 +13,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from forge.toll.models import (
-    APIKey, TollMessage, TollReceipt, TollSummary, Transaction, Wallet,
+    AgentProfile, APIKey, Invoice, TollMessage, TollReceipt, TollSummary,
+    Transaction, Wallet,
 )
 
 if TYPE_CHECKING:
@@ -76,6 +77,38 @@ CREATE TABLE IF NOT EXISTS api_keys (
 );
 
 CREATE INDEX IF NOT EXISTS idx_ak_agent ON api_keys(agent_id);
+
+CREATE TABLE IF NOT EXISTS invoices (
+    invoice_id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL,
+    amount_usd REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending'
+        CHECK(status IN ('pending','paid','expired')),
+    created_at TEXT NOT NULL,
+    paid_at TEXT,
+    solana_tx_hash TEXT DEFAULT '',
+    solana_amount_usdc REAL DEFAULT 0.0
+);
+
+CREATE INDEX IF NOT EXISTS idx_inv_agent ON invoices(agent_id);
+CREATE INDEX IF NOT EXISTS idx_inv_status ON invoices(status);
+
+CREATE TABLE IF NOT EXISTS processed_solana_txs (
+    signature TEXT PRIMARY KEY,
+    processed_at TEXT NOT NULL,
+    agent_id TEXT DEFAULT '',
+    amount_usdc REAL DEFAULT 0.0,
+    invoice_id TEXT DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS agent_profiles (
+    agent_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    capabilities TEXT DEFAULT '[]',
+    is_public INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL
+);
 """
 
 CREATOR_AGENT_ID = "creator"
@@ -455,12 +488,173 @@ class Ledger:
                 for r in cur.fetchall()
             ]
 
+    # ── Invoices (Beat 4) ─────────────────────────────────────────────────
+
+    def create_invoice(self, agent_id: str, amount_usd: float) -> Invoice:
+        """Create a pending invoice for an agent (used in 402 responses)."""
+        inv = Invoice(agent_id=agent_id, amount_usd=amount_usd)
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO invoices (invoice_id, agent_id, amount_usd, status, "
+                "created_at, paid_at, solana_tx_hash, solana_amount_usdc) "
+                "VALUES (?,?,?,?,?,?,?,?)",
+                (inv.invoice_id, inv.agent_id, inv.amount_usd, inv.status,
+                 inv.created_at, inv.paid_at, inv.solana_tx_hash, inv.solana_amount_usdc),
+            )
+            self._conn.commit()
+        return inv
+
+    def get_invoice(self, invoice_id: str) -> Invoice | None:
+        """Look up an invoice by ID."""
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT invoice_id, agent_id, amount_usd, status, created_at, "
+                "paid_at, solana_tx_hash, solana_amount_usdc FROM invoices WHERE invoice_id = ?",
+                (invoice_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return Invoice(
+                invoice_id=row[0], agent_id=row[1], amount_usd=row[2],
+                status=row[3], created_at=row[4], paid_at=row[5],
+                solana_tx_hash=row[6] or "", solana_amount_usdc=row[7] or 0.0,
+            )
+
+    def mark_invoice_paid(self, invoice_id: str, solana_tx_hash: str,
+                          solana_amount_usdc: float) -> bool:
+        """Mark an invoice as paid with the Solana transaction details."""
+        from forge.toll.models import _now_iso
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE invoices SET status = 'paid', paid_at = ?, "
+                "solana_tx_hash = ?, solana_amount_usdc = ? "
+                "WHERE invoice_id = ? AND status = 'pending'",
+                (_now_iso(), solana_tx_hash, solana_amount_usdc, invoice_id),
+            )
+            self._conn.commit()
+            return cur.rowcount > 0
+
+    # ── Solana TX Tracking (Beat 4) ────────────────────────────────────────
+
+    def is_solana_tx_processed(self, signature: str) -> bool:
+        """Check if a Solana transaction has already been processed (idempotency)."""
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT 1 FROM processed_solana_txs WHERE signature = ?",
+                (signature,),
+            )
+            return cur.fetchone() is not None
+
+    def record_solana_tx(self, signature: str, agent_id: str = "",
+                         amount_usdc: float = 0.0, invoice_id: str = "") -> None:
+        """Record a processed Solana transaction to prevent double-crediting."""
+        from forge.toll.models import _now_iso
+        with self._lock:
+            self._conn.execute(
+                "INSERT OR IGNORE INTO processed_solana_txs "
+                "(signature, processed_at, agent_id, amount_usdc, invoice_id) "
+                "VALUES (?,?,?,?,?)",
+                (signature, _now_iso(), agent_id, amount_usdc, invoice_id),
+            )
+            self._conn.commit()
+
+    # ── Agent Profiles (Beat 5) ──────────────────────────────────────────
+
+    def create_agent_profile(self, agent_id: str, name: str,
+                             description: str = "",
+                             capabilities: list[str] | None = None) -> AgentProfile:
+        """Create or update an agent profile."""
+        import json as _json
+        caps = capabilities or []
+        profile = AgentProfile(agent_id=agent_id, name=name,
+                               description=description, capabilities=caps)
+        with self._lock:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO agent_profiles "
+                "(agent_id, name, description, capabilities, is_public, created_at) "
+                "VALUES (?,?,?,?,?,?)",
+                (profile.agent_id, profile.name, profile.description,
+                 _json.dumps(profile.capabilities), int(profile.is_public),
+                 profile.created_at),
+            )
+            self._conn.commit()
+        return profile
+
+    def get_agent_profile(self, agent_id: str) -> AgentProfile | None:
+        """Get a single agent profile."""
+        import json as _json
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT agent_id, name, description, capabilities, is_public, created_at "
+                "FROM agent_profiles WHERE agent_id = ?",
+                (agent_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return AgentProfile(
+                agent_id=row[0], name=row[1], description=row[2],
+                capabilities=_json.loads(row[3] or "[]"),
+                is_public=bool(row[4]), created_at=row[5],
+            )
+
+    def list_agent_profiles(self, public_only: bool = True) -> list[AgentProfile]:
+        """List all agent profiles (optionally filtered to public)."""
+        import json as _json
+        with self._lock:
+            query = "SELECT agent_id, name, description, capabilities, is_public, created_at FROM agent_profiles"
+            if public_only:
+                query += " WHERE is_public = 1"
+            query += " ORDER BY name"
+            cur = self._conn.execute(query)
+            return [
+                AgentProfile(
+                    agent_id=r[0], name=r[1], description=r[2],
+                    capabilities=_json.loads(r[3] or "[]"),
+                    is_public=bool(r[4]), created_at=r[5],
+                )
+                for r in cur.fetchall()
+            ]
+
+    def update_agent_profile(self, agent_id: str, description: str | None = None,
+                             capabilities: list[str] | None = None,
+                             is_public: bool | None = None) -> AgentProfile | None:
+        """Update an existing agent profile. Returns updated profile or None."""
+        import json as _json
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT agent_id, name, description, capabilities, is_public, created_at "
+                "FROM agent_profiles WHERE agent_id = ?",
+                (agent_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            new_desc = description if description is not None else row[2]
+            new_caps = _json.dumps(capabilities) if capabilities is not None else row[3]
+            new_public = int(is_public) if is_public is not None else row[4]
+            self._conn.execute(
+                "UPDATE agent_profiles SET description = ?, capabilities = ?, is_public = ? "
+                "WHERE agent_id = ?",
+                (new_desc, new_caps, new_public, agent_id),
+            )
+            self._conn.commit()
+            return AgentProfile(
+                agent_id=row[0], name=row[1], description=new_desc,
+                capabilities=_json.loads(new_caps) if isinstance(new_caps, str) else new_caps,
+                is_public=bool(new_public), created_at=row[5],
+            )
+
     # ── Admin ──────────────────────────────────────────────────────────────
 
     def reset(self) -> None:
         """Reset all toll data (dev/testing)."""
         with self._lock:
             self._conn.executescript("""
+                DELETE FROM agent_profiles;
+                DELETE FROM processed_solana_txs;
+                DELETE FROM invoices;
                 DELETE FROM api_keys;
                 DELETE FROM toll_messages;
                 DELETE FROM transactions;

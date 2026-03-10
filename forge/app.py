@@ -30,7 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from forge.orchestrator import Orchestrator
 from forge.memory import save_task, get_recent_tasks
 from forge.models import TaskResult
-from forge.config import EXECUTOR_MODELS, COST_LIMIT_PER_TASK, COST_LIMIT_PER_SESSION, SHELL_WORKING_DIR, TOLL_ENABLED, MARKETPLACE_ENABLED
+from forge.config import EXECUTOR_MODELS, COST_LIMIT_PER_TASK, COST_LIMIT_PER_SESSION, SHELL_WORKING_DIR, TOLL_ENABLED, MARKETPLACE_ENABLED, SOLANA_WATCHER_ENABLED
 from forge.toll.endpoints import toll_bp
 from forge.toll.public_api import public_bp
 
@@ -284,6 +284,39 @@ def track_cost(msg: dict):
     if msg.get("type") == "token_usage":
         with session_cost_lock:
             session_cost_usd += msg.get("cost_usd", 0.0)
+
+
+# ── Solana Watcher ────────────────────────────────────────────────────────
+
+def _start_solana_watcher():
+    """Start the Solana USDC watcher if enabled via config."""
+    if not SOLANA_WATCHER_ENABLED:
+        return
+    from forge.config import (
+        SOLANA_RPC_URL, SOLANA_NETWORK, SOLANA_POLL_INTERVAL,
+        SOLANA_USDC_MINT, SOLANA_USDC_DECIMALS,
+        MARKETPLACE_SOLANA_USDC_ADDRESS, TOLL_DB_PATH,
+    )
+    rpc_url = SOLANA_RPC_URL or f"https://api.{SOLANA_NETWORK}.solana.com"
+    if not MARKETPLACE_SOLANA_USDC_ADDRESS:
+        log.warning("Solana watcher enabled but no receiver address configured")
+        return
+    from forge.toll.ledger import Ledger
+    from forge.toll.solana_watcher import SolanaUSDCWatcher
+    ledger = Ledger(TOLL_DB_PATH)
+    watcher = SolanaUSDCWatcher(
+        ledger=ledger,
+        rpc_url=rpc_url,
+        receiver_address=MARKETPLACE_SOLANA_USDC_ADDRESS,
+        usdc_mint=SOLANA_USDC_MINT,
+        poll_interval=SOLANA_POLL_INTERVAL,
+        usdc_decimals=SOLANA_USDC_DECIMALS,
+    )
+    watcher.start()
+    log.info("Solana USDC watcher started (network=%s)", SOLANA_NETWORK)
+
+
+_start_solana_watcher()
 
 
 # ── Toll Tracking ─────────────────────────────────────────────────────────
