@@ -27,6 +27,56 @@ _SANDBOX_PATH_ARGS = {
 # Tools that should have their cwd overridden in sandbox mode
 _SANDBOX_CWD_TOOLS = {"run_command", "run_python", "git_status", "git_diff", "git_commit", "git_log"}
 
+# ── Tool Categories (Lazy Discovery) ─────────────────────────────────────
+# Maps category name → set of tool names in that category
+TOOL_CATEGORIES = {
+    "filesystem": {"read_file", "write_file", "list_directory", "append_file", "delete_file"},
+    "search":     {"find_files", "grep_files"},
+    "shell":      {"run_command"},
+    "python":     {"run_python"},
+    "git":        {"git_status", "git_diff", "git_commit", "git_log"},
+    "http":       {"http_get", "http_post"},
+    "browser":    {"browser_navigate", "browser_screenshot", "browser_click",
+                   "browser_type", "browser_extract_text", "browser_info"},
+    "database":   {"query_sqlite"},
+    "image":      {"resize_image", "convert_image"},
+    "archive":    {"zip_files", "extract_archive"},
+    "clipboard":  {"copy_to_clipboard", "read_clipboard"},
+}
+
+# Reverse map: tool_name → category
+TOOL_TO_CATEGORY = {}
+for _cat, _tools in TOOL_CATEGORIES.items():
+    for _t in _tools:
+        TOOL_TO_CATEGORY[_t] = _cat
+
+# Core tools always included (cheap, universally useful)
+CORE_TOOLS = {"read_file", "write_file", "list_directory", "find_files", "grep_files", "run_command"}
+
+
+def resolve_tools_for_step(tools_needed: list[str]) -> set[str]:
+    """Given a list of tool names or category hints from the planner, resolve the
+    full set of tools to make available for a step.
+
+    Always includes CORE_TOOLS. Expands category names to their member tools.
+    Also includes any explicitly named tools.
+    """
+    resolved = set(CORE_TOOLS)
+    for hint in tools_needed:
+        hint_lower = hint.strip().lower()
+        # Check if it's a category name
+        if hint_lower in TOOL_CATEGORIES:
+            resolved.update(TOOL_CATEGORIES[hint_lower])
+        # Check if it's a direct tool name
+        elif hint_lower in TOOL_TO_CATEGORY:
+            resolved.add(hint_lower)
+        else:
+            # Fuzzy: check if any tool name contains the hint
+            for tool_name in TOOL_TO_CATEGORY:
+                if hint_lower in tool_name or tool_name in hint_lower:
+                    resolved.add(tool_name)
+    return resolved
+
 
 class ToolRegistry:
     """Central registry mapping tool names → SDK definitions + handlers."""
@@ -49,13 +99,23 @@ class ToolRegistry:
         self._raw_tools.append({"name": name, "description": description, "parameters": parameters})
         log.info("Registered tool: %s", name)
 
-    def get_definitions(self) -> list:
-        """Return list of xai_sdk tool objects to pass to chat.create()."""
-        return list(self._definitions)
+    def get_definitions(self, only: set[str] | None = None) -> list:
+        """Return list of xai_sdk tool objects to pass to chat.create().
 
-    def get_raw_tools(self) -> list[dict]:
-        """Return raw tool schemas {name, description, parameters} for non-xAI providers."""
-        return list(self._raw_tools)
+        If `only` is provided, filters to just those tool names (lazy discovery).
+        """
+        if only is None:
+            return list(self._definitions)
+        return [d for d in self._definitions if d.name in only]
+
+    def get_raw_tools(self, only: set[str] | None = None) -> list[dict]:
+        """Return raw tool schemas {name, description, parameters} for non-xAI providers.
+
+        If `only` is provided, filters to just those tool names (lazy discovery).
+        """
+        if only is None:
+            return list(self._raw_tools)
+        return [t for t in self._raw_tools if t["name"] in only]
 
     def execute(self, name: str, arguments: dict, sandbox_path: str = "") -> str:
         """Execute a tool by name with the given arguments. Returns JSON string.

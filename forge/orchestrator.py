@@ -3,6 +3,13 @@ Core orchestrator — wires the planner and executor together.
 
 Flow: User Task → Plan (multi-agent) → Parse Steps → Execute Each Step (single agent + tools) → Result
 Direct Mode: User Task → Execute directly (single agent + tools) → Result
+
+Enhanced with OpenDev-inspired context engineering:
+  - Lazy tool discovery (only inject tools needed per step)
+  - Adaptive context compaction (summarize old step outputs)
+  - Session memory (learn from previous tasks)
+  - Instruction reminders (prevent goal drift)
+  - Auto model routing (select model by task complexity)
 """
 from __future__ import annotations
 import logging
@@ -13,7 +20,12 @@ from typing import Generator
 from forge.config import XAI_API_KEY
 from forge.models import PlanStep, StepResult, TaskResult
 from forge.tools import create_registry
+from forge.tools.registry import resolve_tools_for_step
 from forge.providers import detect_provider
+from forge.context_engine import (
+    compact_context, recall_relevant, remember_task,
+    extract_key_paths, auto_select_model,
+)
 from forge import planner, executor
 
 log = logging.getLogger("forge.orchestrator")
@@ -40,6 +52,14 @@ class Orchestrator:
         log.info("Forge initialized. Tools: %s | Sandbox: %s | Direct: %s | Agents: %d | Model: %s",
                  self.registry.list_tools(), sandbox_path or "OFF", direct_mode, self.agent_count,
                  executor_model or "default")
+
+    def _resolve_model(self, task: str) -> str:
+        """Resolve the executor model — supports 'auto' routing."""
+        if self.executor_model == "auto":
+            model = auto_select_model(task)
+            log.info("Auto-routed to model: %s", model)
+            return model
+        return self.executor_model
 
     @property
     def client(self):
@@ -72,24 +92,35 @@ class Orchestrator:
 
     def _run_direct(self, task_id: str, task: str) -> Generator[dict, None, TaskResult]:
         """Skip planner — send task straight to executor as a single step."""
-        yield {"type": "status", "phase": "executing", "content": "Direct mode — executing with tools..."}
+        resolved_model = self._resolve_model(task)
+
+        # Session memory: recall relevant learnings
+        memory_context = recall_relevant(task)
+        context = memory_context if memory_context else ""
+
+        if resolved_model != self.executor_model and self.executor_model == "auto":
+            yield {"type": "status", "phase": "executing",
+                   "content": f"Direct mode — auto-routed to {resolved_model}"}
+        else:
+            yield {"type": "status", "phase": "executing", "content": "Direct mode — executing with tools..."}
 
         step_output = ""
         tools_used = []
         error = None
 
         # Only create xAI client if the executor model needs it
-        xai_client = self.client if self._needs_xai_client() else None
+        xai_client = self.client if self._needs_xai_client(resolved_model) else None
 
         gen = executor.execute_step(
             client=xai_client,
             registry=self.registry,
             step_title="Direct execution",
             step_description=task,
-            context="",
+            context=context,
             sandbox_path=self.sandbox_path,
             cancel_event=self.cancel_event,
-            model=self.executor_model,
+            model=resolved_model,
+            task_goal=task,
         )
 
         try:
@@ -119,6 +150,11 @@ class Orchestrator:
             error=error,
         )
 
+        # Session memory: remember what we learned
+        if status == "success":
+            key_paths = extract_key_paths([step_output])
+            remember_task(task, tools_used, key_paths, step_output[:300])
+
         summary = "Task cancelled" if cancelled else ("Direct execution complete" if not error else "Direct execution failed")
         yield {"type": "done", "summary": summary}
 
@@ -131,15 +167,36 @@ class Orchestrator:
         )
 
     def _run_planned(self, task_id: str, task: str) -> Generator[dict, None, TaskResult]:
-        """Full pipeline: multi-agent planner → executor."""
+        """Full pipeline: multi-agent planner → executor.
+
+        Enhanced with:
+        - Session memory injection into planner context
+        - Lazy tool discovery per step (only inject tools the planner says are needed)
+        - Adaptive context compaction (summarize older steps as context grows)
+        - Instruction reminders (pass task goal to executor for drift prevention)
+        - Auto model routing (resolve model before execution)
+        """
+        resolved_model = self._resolve_model(task)
+
         # ── Phase 1: Plan (always xAI — multi-agent Pantheon) ────────────
-        yield {"type": "status", "phase": "planning",
-               "content": f"Launching {self.agent_count}-agent planner..."}
+        # Inject session memory into the planner's task context
+        memory_hint = recall_relevant(task)
+        enriched_task = task
+        if memory_hint:
+            enriched_task = f"{task}\n\n{memory_hint}"
+            log.info("Injected session memory into planner (%d chars)", len(memory_hint))
+
+        if resolved_model != self.executor_model and self.executor_model == "auto":
+            yield {"type": "status", "phase": "planning",
+                   "content": f"Auto-routed executor to {resolved_model}. Launching {self.agent_count}-agent planner..."}
+        else:
+            yield {"type": "status", "phase": "planning",
+                   "content": f"Launching {self.agent_count}-agent planner..."}
 
         plan_raw = ""
         steps: list[PlanStep] = []
 
-        gen = planner.plan(self.client, task, agent_count=self.agent_count, cancel_event=self.cancel_event)
+        gen = planner.plan(self.client, enriched_task, agent_count=self.agent_count, cancel_event=self.cancel_event)
         try:
             while True:
                 msg = next(gen)
@@ -159,10 +216,12 @@ class Orchestrator:
 
         # ── Phase 2: Execute ────────────────────────────────────────────
         # Only create xAI client for executor if the model needs it
-        xai_client = self.client if self._needs_xai_client() else None
+        xai_client = self.client if self._needs_xai_client(resolved_model) else None
 
         results: list[StepResult] = []
         context_so_far = ""
+        all_tools_used = []
+        all_step_outputs = []
 
         for step in steps:
             # Check cancellation before each step
@@ -170,26 +229,40 @@ class Orchestrator:
                 yield {"type": "cancelled", "content": f"Task cancelled before step {step.step_number}"}
                 break
 
+            # ── Lazy Tool Discovery ──────────────────────────────────────
+            # Use planner's tools_needed to filter the registry
+            tool_filter = None
+            if step.tools_needed:
+                tool_filter = resolve_tools_for_step(step.tools_needed)
+                log.info("Step %d: lazy discovery → %d tools (from %s)",
+                         step.step_number, len(tool_filter), step.tools_needed)
+
             yield {
                 "type": "step_start",
                 "step": step.step_number,
                 "title": step.title,
                 "description": step.description,
+                "tools_filtered": len(tool_filter) if tool_filter else len(self.registry.list_tools()),
             }
 
             step_output = ""
             tools_used = []
             error = None
 
+            # ── Adaptive Context Compaction ───────────────────────────────
+            compacted_context = compact_context(context_so_far, step.step_number)
+
             gen = executor.execute_step(
                 client=xai_client,
                 registry=self.registry,
                 step_title=step.title,
                 step_description=step.description,
-                context=context_so_far,
+                context=compacted_context,
                 sandbox_path=self.sandbox_path,
                 cancel_event=self.cancel_event,
-                model=self.executor_model,
+                model=resolved_model,
+                tool_filter=tool_filter,
+                task_goal=task,
             )
 
             try:
@@ -219,6 +292,8 @@ class Orchestrator:
                 error=error,
             )
             results.append(result)
+            all_tools_used.extend(tools_used)
+            all_step_outputs.append(step_output[:2000])
             context_so_far += f"\nStep {step.step_number} ({step.title}): {step_output[:2000]}\n"
 
             yield {
@@ -234,7 +309,17 @@ class Orchestrator:
         if self.cancel_event.is_set():
             summary = f"Cancelled after {len(results)}/{len(steps)} steps"
         else:
-            summary = f"Completed {sum(1 for r in results if r.status == 'success')}/{len(results)} steps"
+            success_count = sum(1 for r in results if r.status == "success")
+            summary = f"Completed {success_count}/{len(results)} steps"
+
+            # Session memory: remember what we learned from successful tasks
+            if success_count > 0:
+                key_paths = extract_key_paths(all_step_outputs)
+                outcome = "; ".join(
+                    f"Step {r.step_number}: {r.status}" for r in results
+                )
+                remember_task(task, all_tools_used, key_paths, outcome)
+
         yield {"type": "done", "summary": summary}
 
         return TaskResult(

@@ -12,17 +12,29 @@ const agentCountEl = document.getElementById("agent-count");
 const agentControl = document.getElementById("agent-control");
 const modelSelect = document.getElementById("model-select");
 
+const costValueEl = document.getElementById("cost-value");
+const costTickerEl = document.getElementById("cost-ticker");
+
 let isRunning = false;
 let currentTaskId = null;
+let taskCostUsd = 0;  // cost for current task
 
 // ── Sandbox State ─────────────────────────────────────────────────────────
 
-function initSandboxControls() {
-    // Restore from localStorage
+async function initSandboxControls() {
+    // Restore from localStorage, or fetch default from server
     const savedMode = localStorage.getItem("forge_sandbox_mode");
     const savedPath = localStorage.getItem("forge_sandbox_path");
     if (savedMode !== null) sandboxToggle.checked = savedMode === "true";
-    if (savedPath !== null) sandboxPathInput.value = savedPath;
+    if (savedPath) {
+        sandboxPathInput.value = savedPath;
+    } else {
+        try {
+            const res = await fetch("/api/config");
+            const cfg = await res.json();
+            if (cfg.default_sandbox_path) sandboxPathInput.value = cfg.default_sandbox_path;
+        } catch (e) { /* fallback to empty */ }
+    }
     updateSandboxUI();
 
     // Listeners
@@ -78,6 +90,85 @@ function updateSettingsUI() {
     }
 }
 
+// ── Dynamic Model Loading ────────────────────────────────────────────────
+
+async function loadModels() {
+    try {
+        const res = await fetch("/api/models");
+        const models = await res.json();
+        populateModelSelect(modelSelect, models, true);
+        populateModelSelect(redModelSelect, models, false);
+        populateModelSelect(blueModelSelect, models, false);
+
+        // Restore saved selection
+        const savedModel = localStorage.getItem("forge_executor_model");
+        if (savedModel) modelSelect.value = savedModel;
+    } catch (e) {
+        // Fallback — keep whatever is in HTML
+    }
+}
+
+function populateModelSelect(selectEl, models, includeAuto) {
+    selectEl.innerHTML = "";
+    const groups = {};
+    for (const m of models) {
+        if (!includeAuto && m.id === "auto") continue;
+        const provider = m.provider || "Other";
+        if (!groups[provider]) groups[provider] = [];
+        groups[provider].push(m);
+    }
+    for (const [provider, items] of Object.entries(groups)) {
+        const optgroup = document.createElement("optgroup");
+        optgroup.label = provider;
+        for (const m of items) {
+            const opt = document.createElement("option");
+            opt.value = m.id;
+            const cost = m.cost_in > 0 ? ` $${m.cost_in}/$${m.cost_out}` : "";
+            opt.textContent = `${m.label}${cost}`;
+            optgroup.appendChild(opt);
+        }
+        selectEl.appendChild(optgroup);
+    }
+}
+
+// ── Cost Ticker ──────────────────────────────────────────────────────────
+
+async function loadSessionCost() {
+    try {
+        const res = await fetch("/api/cost");
+        const data = await res.json();
+        updateCostDisplay(data.session_cost);
+    } catch (e) {
+        // Cost load failed — not critical
+    }
+}
+
+function updateCostDisplay(totalCost) {
+    if (costValueEl) {
+        costValueEl.textContent = totalCost.toFixed(6);
+        // Color code: green < $1, yellow < $5, red >= $5
+        costTickerEl.classList.remove("cost-low", "cost-mid", "cost-high");
+        if (totalCost >= 5) costTickerEl.classList.add("cost-high");
+        else if (totalCost >= 1) costTickerEl.classList.add("cost-mid");
+        else costTickerEl.classList.add("cost-low");
+    }
+}
+
+function handleTokenUsage(msg) {
+    taskCostUsd += msg.cost_usd || 0;
+    loadSessionCost();  // refresh from server for accuracy
+}
+
+if (costTickerEl) {
+    costTickerEl.addEventListener("click", async () => {
+        if (isRunning) return;
+        if (confirm("Reset session cost counter?")) {
+            await fetch("/api/cost/reset", { method: "POST" });
+            updateCostDisplay(0);
+        }
+    });
+}
+
 // ── Submit Task ───────────────────────────────────────────────────────────
 
 async function submitTask() {
@@ -86,6 +177,7 @@ async function submitTask() {
 
     setRunning(true);
     taskInput.value = "";
+    taskCostUsd = 0;
     addMessage("user", task);
 
     try {
@@ -159,7 +251,8 @@ function streamTask(taskId) {
             case "step_start":
                 contentEl = null;
                 contentBuffer = "";
-                addMessage("step-header", `Step ${msg.step}: ${msg.title}`);
+                const toolInfo = msg.tools_filtered ? ` [${msg.tools_filtered} tools]` : "";
+                addMessage("step-header", `Step ${msg.step}: ${msg.title}${toolInfo}`);
                 break;
 
             case "tool_call":
@@ -194,8 +287,15 @@ function streamTask(taskId) {
                 addMessage("error", msg.content);
                 break;
 
+            case "token_usage":
+                handleTokenUsage(msg);
+                break;
+
             case "done":
-                if (msg.summary) addMessage("done", msg.summary);
+                if (msg.summary) {
+                    const costStr = taskCostUsd > 0 ? ` [$${taskCostUsd.toFixed(4)}]` : "";
+                    addMessage("done", msg.summary + costStr);
+                }
                 if (msg.final) {
                     source.close();
                     setRunning(false);
@@ -569,4 +669,6 @@ arenaBtn.addEventListener("dblclick", () => {
 initSandboxControls();
 initSettingsControls();
 initTTS();
+loadModels();
+loadSessionCost();
 loadHistory();

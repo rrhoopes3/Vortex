@@ -17,10 +17,27 @@ import logging
 import threading
 from typing import Generator
 
-from forge.config import ANTHROPIC_API_KEY, OPENAI_API_KEY, LMSTUDIO_BASE_URL
+from forge.config import ANTHROPIC_API_KEY, OPENAI_API_KEY, LMSTUDIO_BASE_URL, EXECUTOR_MODELS
 from forge.tools.registry import ToolRegistry
 
 log = logging.getLogger("forge.providers")
+
+
+# ── Cost Calculation ──────────────────────────────────────────────────────
+
+def calculate_cost(model: str, input_tokens: int, output_tokens: int) -> dict:
+    """Calculate cost in USD from token usage and return a token_usage event dict."""
+    info = EXECUTOR_MODELS.get(model, {})
+    cost_in = info.get("cost_in", 0)
+    cost_out = info.get("cost_out", 0)
+    cost_usd = (input_tokens * cost_in + output_tokens * cost_out) / 1_000_000
+    return {
+        "type": "token_usage",
+        "model": model,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "cost_usd": round(cost_usd, 6),
+    }
 
 
 # ── Provider Detection ─────────────────────────────────────────────────────
@@ -38,10 +55,10 @@ def detect_provider(model: str) -> str:
 
 # ── Tool Format Converters ─────────────────────────────────────────────────
 
-def _to_anthropic_tools(registry: ToolRegistry) -> list[dict]:
+def _to_anthropic_tools(registry: ToolRegistry, only: set[str] | None = None) -> list[dict]:
     """Convert registry tools to Anthropic format."""
     tools = []
-    for t in registry.get_raw_tools():
+    for t in registry.get_raw_tools(only=only):
         tools.append({
             "name": t["name"],
             "description": t["description"],
@@ -50,10 +67,10 @@ def _to_anthropic_tools(registry: ToolRegistry) -> list[dict]:
     return tools
 
 
-def _to_openai_tools(registry: ToolRegistry) -> list[dict]:
+def _to_openai_tools(registry: ToolRegistry, only: set[str] | None = None) -> list[dict]:
     """Convert registry tools to OpenAI function-calling format."""
     tools = []
-    for t in registry.get_raw_tools():
+    for t in registry.get_raw_tools(only=only):
         tools.append({
             "type": "function",
             "function": {
@@ -75,6 +92,8 @@ def run_anthropic(
     sandbox_path: str,
     cancel_event: threading.Event | None,
     max_iterations: int,
+    tool_filter: set[str] | None = None,
+    task_goal: str = "",
 ) -> Generator[dict, None, str]:
     """Run Anthropic Messages API with tool-calling loop."""
     try:
@@ -87,8 +106,10 @@ def run_anthropic(
         yield {"type": "error", "content": "ANTHROPIC_API_KEY not set in .env"}
         return ""
 
+    REMINDER_INTERVAL = 3
+
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    tools = _to_anthropic_tools(registry)
+    tools = _to_anthropic_tools(registry, only=tool_filter)
 
     messages = [{"role": "user", "content": user_prompt}]
     full_output = ""
@@ -97,6 +118,11 @@ def run_anthropic(
         if cancel_event and cancel_event.is_set():
             yield {"type": "cancelled", "content": "Step cancelled"}
             return full_output
+
+        # ── Instruction Reminder ─────────────────────────────────────
+        if task_goal and iteration > 0 and iteration % REMINDER_INTERVAL == 0:
+            messages.append({"role": "user", "content":
+                f"[SYSTEM REMINDER] Original task goal: {task_goal[:500]}\nStay focused."})
 
         log.info("Anthropic iteration %d (model: %s)", iteration + 1, model)
 
@@ -132,6 +158,10 @@ def run_anthropic(
             return full_output
 
         full_output += collected_text
+
+        # Emit token usage for cost tracking
+        if hasattr(response, "usage") and response.usage:
+            yield calculate_cost(model, response.usage.input_tokens, response.usage.output_tokens)
 
         # Check for tool_use blocks
         tool_uses = [block for block in response.content if block.type == "tool_use"]
@@ -183,6 +213,8 @@ def run_openai(
     max_iterations: int,
     base_url: str | None = None,
     api_key: str | None = None,
+    tool_filter: set[str] | None = None,
+    task_goal: str = "",
 ) -> Generator[dict, None, str]:
     """Run OpenAI Chat Completions API with tool-calling loop."""
     try:
@@ -196,6 +228,8 @@ def run_openai(
         yield {"type": "error", "content": "OPENAI_API_KEY not set in .env"}
         return ""
 
+    REMINDER_INTERVAL = 3
+
     # LM Studio doesn't need a real key but the SDK requires one
     client_kwargs = {}
     if base_url:
@@ -205,7 +239,7 @@ def run_openai(
         client_kwargs["api_key"] = effective_key
 
     client = OpenAI(**client_kwargs)
-    tools = _to_openai_tools(registry)
+    tools = _to_openai_tools(registry, only=tool_filter)
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -218,18 +252,25 @@ def run_openai(
             yield {"type": "cancelled", "content": "Step cancelled"}
             return full_output
 
+        # ── Instruction Reminder ─────────────────────────────────────
+        if task_goal and iteration > 0 and iteration % REMINDER_INTERVAL == 0:
+            messages.append({"role": "user", "content":
+                f"[SYSTEM REMINDER] Original task goal: {task_goal[:500]}\nStay focused."})
+
         log.info("OpenAI iteration %d (model: %s, base_url: %s)", iteration + 1, model, base_url or "default")
 
         try:
             # Stream the response
             collected_text = ""
             tool_calls_acc: dict[int, dict] = {}  # index → {id, name, arguments}
+            usage_data = None
 
             stream = client.chat.completions.create(
                 model=model,
                 messages=messages,
                 tools=tools if tools else None,
                 stream=True,
+                stream_options={"include_usage": True},
             )
 
             for chunk in stream:
@@ -245,6 +286,10 @@ def run_openai(
                 if delta and delta.content:
                     collected_text += delta.content
                     yield {"type": "content", "content": delta.content}
+
+                # Capture usage from final chunk
+                if hasattr(chunk, "usage") and chunk.usage:
+                    usage_data = chunk.usage
 
                 # Accumulate streamed tool calls
                 if delta and delta.tool_calls:
@@ -270,6 +315,12 @@ def run_openai(
             return full_output
 
         full_output += collected_text
+
+        # Emit token usage for cost tracking
+        if usage_data:
+            in_tok = getattr(usage_data, "prompt_tokens", 0) or 0
+            out_tok = getattr(usage_data, "completion_tokens", 0) or 0
+            yield calculate_cost(model, in_tok, out_tok)
 
         # No tool calls → done
         if not tool_calls_acc:

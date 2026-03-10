@@ -19,7 +19,7 @@ from xai_sdk.tools import get_tool_call_type
 
 from forge.config import EXECUTOR_MODEL, EXECUTOR_MAX_ITERATIONS, LMSTUDIO_BASE_URL
 from forge.tools.registry import ToolRegistry
-from forge.providers import detect_provider, run_anthropic, run_openai
+from forge.providers import detect_provider, run_anthropic, run_openai, calculate_cost
 
 log = logging.getLogger("forge.executor")
 
@@ -51,6 +51,8 @@ def execute_step(
     cancel_event: threading.Event | None = None,
     model: str = "",
     max_iterations: int = 0,
+    tool_filter: set[str] | None = None,
+    task_goal: str = "",
 ) -> Generator[dict, None, str]:
     """
     Execute a single plan step using the reasoning model + client-side tools.
@@ -59,11 +61,16 @@ def execute_step(
     Returns the final text output.
 
     Routes to the correct provider based on model name prefix.
+
+    tool_filter: if set, only these tools are made available (lazy discovery).
+    task_goal: original task description, used for instruction reminders.
     """
     use_model = model if model else EXECUTOR_MODEL
     iteration_limit = max_iterations if max_iterations > 0 else EXECUTOR_MAX_ITERATIONS
     provider = detect_provider(use_model)
-    log.info("Using executor model: %s (provider: %s, max %d iterations)", use_model, provider, iteration_limit)
+    log.info("Using executor model: %s (provider: %s, max %d iterations, tools: %s)",
+             use_model, provider, iteration_limit,
+             f"{len(tool_filter)} filtered" if tool_filter else "all")
 
     # Build the full prompt (shared across all providers)
     prompt = f"{EXECUTOR_SYSTEM}\n\n"
@@ -79,12 +86,14 @@ def execute_step(
             model=use_model, system_prompt=EXECUTOR_SYSTEM, user_prompt=prompt,
             registry=registry, sandbox_path=sandbox_path,
             cancel_event=cancel_event, max_iterations=iteration_limit,
+            tool_filter=tool_filter, task_goal=task_goal,
         ))
     elif provider == "openai":
         return (yield from run_openai(
             model=use_model, system_prompt=EXECUTOR_SYSTEM, user_prompt=prompt,
             registry=registry, sandbox_path=sandbox_path,
             cancel_event=cancel_event, max_iterations=iteration_limit,
+            tool_filter=tool_filter, task_goal=task_goal,
         ))
     elif provider == "lmstudio":
         # Strip "lmstudio:" prefix; use "default" if nothing after it
@@ -93,13 +102,13 @@ def execute_step(
             model=lm_model, system_prompt=EXECUTOR_SYSTEM, user_prompt=prompt,
             registry=registry, sandbox_path=sandbox_path,
             cancel_event=cancel_event, max_iterations=iteration_limit,
-            base_url=LMSTUDIO_BASE_URL,
+            base_url=LMSTUDIO_BASE_URL, tool_filter=tool_filter, task_goal=task_goal,
         ))
 
     # ── xAI provider (original path) ────────────────────────────────
     chat = client.chat.create(
         model=use_model,
-        tools=registry.get_definitions(),
+        tools=registry.get_definitions(only=tool_filter),
         use_encrypted_content=True,
     )
 
@@ -107,11 +116,23 @@ def execute_step(
 
     full_output = ""
 
+    # Instruction reminder interval — re-inject task goal every N iterations
+    REMINDER_INTERVAL = 3
+
     for iteration in range(iteration_limit):
         # Check cancellation before each iteration
         if cancel_event and cancel_event.is_set():
             yield {"type": "cancelled", "content": "Step cancelled"}
             return full_output
+
+        # ── Instruction Reminder (prevent goal drift) ────────────────
+        if task_goal and iteration > 0 and iteration % REMINDER_INTERVAL == 0:
+            reminder = (
+                f"[SYSTEM REMINDER] Original task goal: {task_goal[:500]}\n"
+                f"Current step: {step_title}\nStay focused on completing this step."
+            )
+            chat.append(user(reminder))
+            log.info("Injected instruction reminder at iteration %d", iteration + 1)
 
         log.info("Executor iteration %d for step: %s", iteration + 1, step_title)
 
@@ -153,6 +174,13 @@ def execute_step(
 
         if not stream_success:
             return full_output
+
+        # Emit token usage for cost tracking (xAI responses may include usage)
+        if response and hasattr(response, "usage") and response.usage:
+            in_tok = getattr(response.usage, "input_tokens", 0) or getattr(response.usage, "prompt_tokens", 0) or 0
+            out_tok = getattr(response.usage, "output_tokens", 0) or getattr(response.usage, "completion_tokens", 0) or 0
+            if in_tok or out_tok:
+                yield calculate_cost(use_model, in_tok, out_tok)
 
         # Collect tool calls from the final response
         if response and hasattr(response, "tool_calls") and response.tool_calls:

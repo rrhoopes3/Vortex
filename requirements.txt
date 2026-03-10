@@ -1,0 +1,15 @@
+# The Forge — Grok 4.20 Autonomous Agent OS
+# Core
+flask>=3.0
+python-dotenv>=1.0
+pydantic>=2.0
+
+# AI Providers
+xai-sdk>=0.1
+anthropic>=0.40
+openai>=1.50
+
+# Tools
+pillow>=10.0
+playwright>=1.40
+rich>=13.0

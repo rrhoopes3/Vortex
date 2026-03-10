@@ -271,6 +271,39 @@ header .status.running {
     border-color: var(--accent);
 }
 
+/* ── Cost Ticker ──────────────────────────────────────── */
+.cost-ticker {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    font-family: 'Cascadia Code', 'Consolas', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+    user-select: none;
+}
+
+.cost-ticker:hover {
+    border-color: var(--accent);
+}
+
+.cost-label {
+    color: var(--dim);
+    font-weight: 600;
+}
+
+.cost-value {
+    color: var(--green);
+    font-weight: 600;
+}
+
+.cost-ticker.cost-mid .cost-value { color: var(--accent); }
+.cost-ticker.cost-high .cost-value { color: var(--red); }
+
 #model-select option {
     background: var(--bg2);
     color: var(--text);

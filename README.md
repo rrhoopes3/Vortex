@@ -1,100 +1,98 @@
 # THE FORGE
 
-**Grok 4.20 Autonomous Agent OS** &mdash; a multi-agent task execution engine with a BattleBot Arena, powered by xAI's multi-agent API.
+**The first autonomous agent OS built on xAI's Grok 4.20 multi-agent beta.**
+
+A 16-agent research council plans your task. A tool-wielding executor carries it out. 30+ client-side tools. 4 AI providers. Real-time streaming. Live cost tracking. And a BattleBot Arena where AI teams fight to the death while Zeus narrates.
 
 ![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue)
+![Tests](https://img.shields.io/badge/tests-29%20passing-green)
 
 ---
 
-## What Is This?
+## Architecture
 
-The Forge is a two-tier AI agent system:
+```
+User Task
+    |
+    v
+[16-Agent Planner] ── Grok 4.20 multi-agent swarm
+    |                   web_search, x_search, code_execution
+    |                   produces structured execution plan
+    v
+[Single Executor] ──── 30+ client-side tools
+    |                   filesystem, shell, git, browser, HTTP,
+    |                   Python REPL, SQLite, image, archive
+    |                   routes to: xAI | Anthropic | OpenAI | LM Studio
+    v
+Result ── streamed live via SSE with cost tracking
+```
 
-1. **Planner** &mdash; A 16-agent research council (Grok 4.20 multi-agent) analyzes your task, searches the web, and produces a structured execution plan.
-2. **Executor** &mdash; A single agent carries out each step using 30+ client-side tools (file I/O, shell, git, browser automation, HTTP, database, and more).
+**Direct Mode** skips the planner entirely for simple tasks.
+**Auto Routing** classifies task complexity and picks the cheapest model that can handle it.
 
-It also ships with:
-- **BattleBot Arena** &mdash; Pit two AI teams against each other in a sandboxed deathmatch with Zeus as Arena Master.
-- **Presidential Council** &mdash; A CLI think tank where 16 US Presidents debate modern problems.
+---
 
-### Context Engineering (OpenDev-Inspired)
+## What Ships With It
 
-The Forge implements five techniques from the [OpenDev paper](https://arxiv.org/abs/2603.05344) for smarter context management:
+### Task Engine
+The core loop. Type a task, get a plan, watch it execute with real tools. File I/O, shell commands, git operations, browser automation, HTTP requests, database queries — all streamed live in a dark-themed web UI.
 
-| Feature | What It Does |
+### BattleBot Arena
+Pit two AI teams against each other in a sandboxed deathmatch. Recon, weapon forging, turn-based combat, and a 16-agent Pantheon (Zeus, Athena, Hephaestus, Hermes, Ares, Hades, Apollo) scoring creativity, execution, damage, and style. Enable TTS for dramatic live commentary.
+
+### Presidential Council
+A CLI think tank where 16 US Presidents (Washington through Trump) debate modern problems using the Grok 4.20 multi-agent API. Persistent conversation history across sessions.
+
+### Live Cost Ticker
+Real-time USD cost tracking in the UI. See exactly what each task costs as it runs. Color-coded (green/amber/red), configurable limits per task and session, click to reset.
+
+### Context Engineering
+Five techniques from the [OpenDev paper](https://arxiv.org/abs/2603.05344):
+
+| Technique | Effect |
 |---|---|
-| **Lazy Tool Discovery** | Only injects tools relevant to each step (not all 30+), reducing context size ~60% |
-| **Adaptive Context Compaction** | Older step outputs are progressively summarized as context grows |
-| **Session Memory** | Learns from completed tasks and recalls relevant knowledge for future ones |
-| **Instruction Reminders** | Re-injects the original task goal every 3 iterations to prevent drift |
-| **Auto Model Routing** | Classifies task complexity and picks cheap/fast vs powerful model automatically |
+| **Lazy Tool Discovery** | Only injects tools the planner says are needed (~60% context reduction) |
+| **Adaptive Context Compaction** | Older step outputs progressively summarized as context grows |
+| **Session Memory** | Learns from completed tasks, recalls relevant knowledge for new ones |
+| **Instruction Reminders** | Re-injects task goal every 3 iterations to prevent drift |
+| **Auto Model Routing** | Classifies complexity, picks cheap/fast vs powerful model automatically |
 
 ---
 
 ## Quick Start
 
-### 1. Install Dependencies
+### 1. Install
 
 ```bash
-pip install xai-sdk flask anthropic openai python-dotenv pydantic rich playwright pillow
+pip install -r requirements.txt
+playwright install chromium  # optional, for browser automation
 ```
 
-For browser automation (optional):
-```bash
-playwright install chromium
-```
+### 2. Configure
 
-### 2. Configure API Keys
-
-Create a `.env` file in the project root:
+Create `.env` in the project root:
 
 ```env
 XAI_API_KEY=your-xai-api-key-here
-ANTHROPIC_API_KEY=           # optional, for Claude models
-OPENAI_API_KEY=              # optional, for GPT models
-LMSTUDIO_BASE_URL=http://localhost:1234/v1  # optional, for local models
+ANTHROPIC_API_KEY=           # optional
+OPENAI_API_KEY=              # optional
+LMSTUDIO_BASE_URL=http://localhost:1234/v1  # optional
 ```
 
-Only `XAI_API_KEY` is required. The other providers are optional.
+Only `XAI_API_KEY` is required. Other providers are optional.
 
-### 3. Run The Forge (Web UI)
-
-```bash
-python forge/app.py
-```
-
-Open **http://localhost:5000** in your browser.
-
-### 4. Run the Presidential Council (CLI)
+### 3. Run
 
 ```bash
-python lads_war_room.py
+python forge/app.py          # Web UI at http://localhost:5000
+python lads_war_room.py      # Presidential Council CLI
 ```
 
 ---
 
-## Web UI Features
+## Multi-Provider Support
 
-### Task Execution
-
-Type a task in the input bar and hit **FORGE**. The system will:
-
-1. Launch the multi-agent planner (4-16 agents configurable)
-2. Stream the plan in real-time
-3. Execute each step with tools, streaming output and tool calls live
-4. Save results to task history
-
-### Controls
-
-| Control | Description |
-|---|---|
-| **Sandbox** toggle | Restricts file/shell ops to a directory (default: `B:/Grok`) |
-| **Direct Mode** toggle | Skips the planner, sends task straight to executor |
-| **Agents** slider | Number of planner agents (4, 8, 12, or 16) |
-| **Model** dropdown | Executor model selection (see below) |
-| **KILL** button | Cancels a running task immediately |
-
-### Available Executor Models
+The executor routes to 4 different AI backends. Model list is served from the backend — the UI populates dynamically, no hardcoded dropdowns.
 
 | Model | Provider | Cost (in/out per 1M tokens) |
 |---|---|---|
@@ -107,17 +105,11 @@ Type a task in the input bar and hit **FORGE**. The system will:
 | GPT-4o | OpenAI | $2.50 / $10 |
 | GPT-4o Mini | OpenAI | $0.15 / $0.60 |
 | o3-mini | OpenAI | $1.10 / $4.40 |
-| LM Studio (Local) | Local | Free |
-
-**Auto routing** classifies your task as simple, moderate, or complex and picks the right model:
-- Simple/moderate tasks &rarr; Grok 4.1 Fast Reasoning (cheap)
-- Complex tasks (refactoring, multi-file, architecture) &rarr; Grok 4.20 Reasoning (powerful)
+| LM Studio | Local | Free |
 
 ---
 
 ## Tools (30+)
-
-The executor has access to these client-side tools:
 
 | Category | Tools |
 |---|---|
@@ -126,33 +118,32 @@ The executor has access to these client-side tools:
 | **Shell** | `run_command` (30s timeout) |
 | **Python** | `run_python` (execute code, capture stdout/stderr) |
 | **Git** | `git_status`, `git_diff`, `git_commit`, `git_log` |
-| **HTTP** | `http_get`, `http_post` (6K body cap) |
+| **HTTP** | `http_get`, `http_post` |
 | **Browser** | `browser_navigate`, `browser_screenshot`, `browser_click`, `browser_type`, `browser_extract_text`, `browser_info` |
 | **Database** | `query_sqlite` |
 | **Image** | `resize_image`, `convert_image` |
 | **Archive** | `zip_files`, `extract_archive` |
 | **Clipboard** | `copy_to_clipboard`, `read_clipboard` |
 
-With **lazy tool discovery**, only the tools relevant to each step are injected into the model's context. Core tools (read, write, list, find, grep, shell) are always available.
+Lazy tool discovery means only the tools relevant to each step are injected into context. Core tools (read, write, list, find, grep, shell) are always available.
 
 ---
 
-## BattleBot Arena
+## Web UI Controls
 
-Click the **ARENA** button in the web UI to launch a deathmatch:
-
-1. **Pick fighters** &mdash; Choose models for Red and Blue teams
-2. **Round 1: Recon** &mdash; Both teams scout the arena sandbox
-3. **Round 2: Weapon Forge** &mdash; Teams build scripts, tools, and weapons
-4. **Round 3: Combat** &mdash; Turn-based battle with tool execution
-5. **Sudden Death** &mdash; If scores are tied
-6. **Judgment** &mdash; Zeus and the Pantheon score creativity, execution, damage, and style
-
-Enable **TTS** for dramatic live commentary read aloud.
+| Control | Description |
+|---|---|
+| **Sandbox** toggle | Restricts file/shell ops to a directory (defaults to repo root) |
+| **Direct Mode** toggle | Skips the planner, sends task straight to executor |
+| **Agents** slider | Number of planner agents (4, 8, 12, or 16) |
+| **Model** dropdown | Executor model (populated from backend) |
+| **Cost ticker** | Live session cost in USD (click to reset) |
+| **KILL** button | Cancels a running task immediately |
+| **ARENA** button | Launch BattleBot Arena |
 
 ---
 
-## API Endpoints
+## API
 
 | Method | Endpoint | Description |
 |---|---|---|
@@ -160,11 +151,13 @@ Enable **TTS** for dramatic live commentary read aloud.
 | `GET` | `/api/stream/<id>` | SSE stream of task progress |
 | `POST` | `/api/kill/<id>` | Cancel a running task |
 | `POST` | `/api/arena` | Launch arena deathmatch |
+| `GET` | `/api/models` | Available models with pricing |
+| `GET` | `/api/cost` | Session cost and limits |
+| `POST` | `/api/cost/reset` | Reset cost counter |
+| `GET` | `/api/config` | Default config (sandbox path) |
 | `GET` | `/api/history` | Recent completed tasks |
-| `GET` | `/api/memory` | View session memory (learned patterns) |
-| `POST` | `/api/memory/clear` | Clear all session memories |
-
-### Task Submission
+| `GET` | `/api/memory` | Session memory (learned patterns) |
+| `POST` | `/api/memory/clear` | Clear session memories |
 
 ```bash
 curl -X POST http://localhost:5000/api/task \
@@ -172,7 +165,7 @@ curl -X POST http://localhost:5000/api/task \
   -d '{
     "task": "Find all TODO comments in the codebase and list them",
     "sandbox_mode": true,
-    "sandbox_path": "B:/Grok",
+    "sandbox_path": "/path/to/project",
     "direct_mode": false,
     "agent_count": 16,
     "executor_model": "auto"
@@ -185,65 +178,54 @@ curl -X POST http://localhost:5000/api/task \
 
 ```
 Grok/
+  requirements.txt              # Dependencies
   .env                          # API keys (not committed)
   lads_war_room.py              # Presidential Council CLI
   pantheon.md                   # Agent role documentation
   forge/
-    app.py                      # Flask web server
-    config.py                   # Models, limits, paths
+    app.py                      # Flask web server + API
+    config.py                   # Models, pricing, limits, paths
     orchestrator.py             # Planner -> Executor pipeline
     planner.py                  # 16-agent research council
     executor.py                 # Single-agent tool-calling loop
-    providers.py                # Anthropic/OpenAI/LM Studio adapters
+    providers.py                # Multi-provider adapters + cost calculation
     context_engine.py           # Context compaction, session memory, auto routing
     models.py                   # Pydantic data models
     memory.py                   # Task persistence (JSON)
     tools/
-      registry.py               # Tool registry + lazy discovery
-      __init__.py                # Tool registration
-      filesystem.py             # File read/write/delete/find/grep
-      shell.py                  # Shell command execution
-      python_repl.py            # Python code execution
-      git_ops.py                # Git operations
-      http.py                   # HTTP GET/POST
-      browser.py                # Playwright browser automation
-      database.py               # SQLite queries
-      image.py                  # Image resize/convert
-      archive.py                # ZIP/TAR operations
-      clipboard.py              # System clipboard
+      registry.py               # Tool registry + lazy discovery + sandbox enforcement
+      filesystem.py, shell.py, python_repl.py, git_ops.py,
+      http.py, browser.py, database.py, image.py,
+      archive.py, clipboard.py
     arena/
       runner.py                 # Arena deathmatch orchestrator
       sandbox.py                # Arena sandbox setup
     static/
-      index.html                # SPA frontend
-      style.css                 # Dark theme UI
-      app.js                    # Frontend logic + SSE streaming
-    data/                       # Runtime data (gitignored)
-      tasks.json                # Task history
-      session_memory.json       # Learned patterns across tasks
-      conversations/            # Per-task conversation logs
+      index.html, style.css, app.js
+  tests/
+    test_smoke.py               # 29 smoke tests
 ```
 
 ---
 
 ## Configuration
 
-Key settings in `forge/config.py`:
-
 ```python
+# forge/config.py
 PLANNER_MODEL = "grok-4.20-multi-agent-experimental-beta-0304"
 EXECUTOR_MODEL = "grok-4.20-experimental-beta-0304-reasoning"
-PLANNER_AGENT_COUNT = 16
-EXECUTOR_MAX_ITERATIONS = 15    # per step (raised from 10 with context compaction)
+EXECUTOR_MAX_ITERATIONS = 15    # per step
 SHELL_TIMEOUT_SECONDS = 30
-```
 
-Context engine settings in `forge/context_engine.py`:
+# Cost limits (env vars: FORGE_COST_LIMIT_TASK, FORGE_COST_LIMIT_SESSION)
+COST_LIMIT_PER_TASK = 5.00      # USD
+COST_LIMIT_PER_SESSION = 50.00  # USD
 
-```python
+# forge/context_engine.py
 COMPACT_THRESHOLD = 6000        # chars before compaction kicks in
-KEEP_RECENT_STEPS = 2           # recent steps kept at full detail
 MAX_MEMORIES = 50               # session memory cap
+
+# forge/executor.py
 REMINDER_INTERVAL = 3           # re-inject goal every N iterations
 ```
 
@@ -251,4 +233,4 @@ REMINDER_INTERVAL = 3           # re-inject goal every N iterations
 
 ## License
 
-This is a fun project. Do whatever you want with it.
+Do whatever you want with it.

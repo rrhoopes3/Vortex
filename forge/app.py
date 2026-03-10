@@ -30,6 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from forge.orchestrator import Orchestrator
 from forge.memory import save_task, get_recent_tasks
 from forge.models import TaskResult
+from forge.config import EXECUTOR_MODELS, COST_LIMIT_PER_TASK, COST_LIMIT_PER_SESSION, SHELL_WORKING_DIR
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
 log = logging.getLogger("forge.app")
@@ -40,6 +41,11 @@ app = Flask(__name__, static_folder="static", static_url_path="/static")
 task_queues: dict[str, Queue] = {}
 task_results: dict[str, TaskResult] = {}
 task_cancel_events: dict[str, threading.Event] = {}
+
+# ── Cost Tracking ──────────────────────────────────────────────────────────
+# Accumulated session cost (resets on server restart)
+session_cost_usd: float = 0.0
+session_cost_lock = threading.Lock()
 
 
 def run_task(task_id: str, task: str, q: Queue, cancel_event: threading.Event,
@@ -60,6 +66,7 @@ def run_task(task_id: str, task: str, q: Queue, cancel_event: threading.Event,
         try:
             while True:
                 msg = next(gen)
+                track_cost(msg)
                 q.put(msg)
         except StopIteration as e:
             result = e.value
@@ -202,6 +209,75 @@ def run_arena(task_id: str, q: Queue, cancel_event: threading.Event,
 @app.route("/api/history")
 def history():
     return jsonify(get_recent_tasks())
+
+
+@app.route("/api/memory")
+def session_memory():
+    """Return current session memory (learnings from past tasks)."""
+    from forge.context_engine import _load_memories
+    return jsonify(_load_memories())
+
+
+@app.route("/api/memory/clear", methods=["POST"])
+def clear_memory():
+    """Clear all session memories."""
+    from forge.context_engine import MEMORY_FILE
+    if MEMORY_FILE.exists():
+        MEMORY_FILE.unlink()
+    return jsonify({"status": "cleared"})
+
+
+# ── Models & Cost Endpoints ─────────────────────────────────────────────────
+
+@app.route("/api/models")
+def get_models():
+    """Return model list with pricing — frontend renders from this, not hardcoded HTML."""
+    models = []
+    for model_id, info in EXECUTOR_MODELS.items():
+        models.append({
+            "id": model_id,
+            "label": info["label"],
+            "provider": info["provider"],
+            "cost_in": info["cost_in"],
+            "cost_out": info["cost_out"],
+        })
+    return jsonify(models)
+
+
+@app.route("/api/config")
+def get_config():
+    """Return default config for frontend initialization."""
+    return jsonify({
+        "default_sandbox_path": str(SHELL_WORKING_DIR),
+    })
+
+
+@app.route("/api/cost")
+def get_cost():
+    """Return current session cost and limits."""
+    with session_cost_lock:
+        return jsonify({
+            "session_cost": round(session_cost_usd, 6),
+            "task_limit": COST_LIMIT_PER_TASK,
+            "session_limit": COST_LIMIT_PER_SESSION,
+        })
+
+
+@app.route("/api/cost/reset", methods=["POST"])
+def reset_cost():
+    """Reset session cost counter."""
+    global session_cost_usd
+    with session_cost_lock:
+        session_cost_usd = 0.0
+    return jsonify({"status": "reset", "session_cost": 0.0})
+
+
+def track_cost(msg: dict):
+    """Update session cost from token usage messages."""
+    global session_cost_usd
+    if msg.get("type") == "token_usage":
+        with session_cost_lock:
+            session_cost_usd += msg.get("cost_usd", 0.0)
 
 
 # ── Main ────────────────────────────────────────────────────────────────────
