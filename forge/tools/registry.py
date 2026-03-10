@@ -42,6 +42,10 @@ TOOL_CATEGORIES = {
     "image":      {"resize_image", "convert_image"},
     "archive":    {"zip_files", "extract_archive"},
     "clipboard":  {"copy_to_clipboard", "read_clipboard"},
+    "email":      {"email_check_dmarc", "email_check_health", "email_list_domains",
+                   "email_add_domain", "email_verify_domain", "email_list_aliases",
+                   "email_create_alias", "email_get_logs", "email_block_sender",
+                   "email_get_analytics"},
 }
 
 # Reverse map: tool_name → category

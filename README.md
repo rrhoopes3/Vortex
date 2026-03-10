@@ -2,10 +2,10 @@
 
 **The first autonomous agent OS built on xAI's Grok 4.20 multi-agent beta.**
 
-A 16-agent research council plans your task. A tool-wielding executor carries it out. 30+ client-side tools. 4 AI providers. Real-time streaming. Live cost tracking. And a BattleBot Arena where AI teams fight to the death while Zeus narrates.
+A 16-agent research council plans your task. A tool-wielding executor carries it out. 40+ client-side tools. 4 AI providers. Real-time streaming. Live cost tracking. ARC-Relay email integration. And a BattleBot Arena where AI teams fight to the death while Zeus narrates.
 
 ![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue)
-![Tests](https://img.shields.io/badge/tests-227%20passing-green)
+![Tests](https://img.shields.io/badge/tests-279%20passing-green)
 
 ---
 
@@ -19,9 +19,9 @@ User Task
     |                   web_search, x_search, code_execution
     |                   produces structured execution plan
     v
-[Single Executor] ──── 30+ client-side tools
+[Single Executor] ──── 40+ client-side tools
     |                   filesystem, shell, git, browser, HTTP,
-    |                   Python REPL, SQLite, image, archive
+    |                   Python REPL, SQLite, image, archive, email
     |                   routes to: xAI | Anthropic | OpenAI | LM Studio
     v
 Result ── streamed live via SSE with cost tracking
@@ -109,7 +109,7 @@ The executor routes to 4 different AI backends. Model list is served from the ba
 
 ---
 
-## Tools (30+)
+## Tools (40+)
 
 | Category | Tools |
 |---|---|
@@ -124,6 +124,7 @@ The executor routes to 4 different AI backends. Model list is served from the ba
 | **Image** | `resize_image`, `convert_image` |
 | **Archive** | `zip_files`, `extract_archive` |
 | **Clipboard** | `copy_to_clipboard`, `read_clipboard` |
+| **Email** | `email_check_dmarc`, `email_check_health`, `email_list_domains`, `email_add_domain`, `email_verify_domain`, `email_list_aliases`, `email_create_alias`, `email_get_logs`, `email_block_sender`, `email_get_analytics` |
 
 Lazy tool discovery means only the tools relevant to each step are injected into context. Core tools (read, write, list, find, grep, shell) are always available.
 
@@ -211,6 +212,9 @@ Grok/
     arena/
       runner.py                 # Arena deathmatch orchestrator
       sandbox.py                # Arena sandbox setup
+    agents/
+      email_agent.py            # Autonomous email agent (triage, auto-block, DNS alerts)
+      email_webhook.py          # Flask Blueprint for ARC-Relay webhooks
     sdk.py                      # Python client SDK (ForgeClient)
     cli.py                      # CLI tool (python -m forge.cli)
     static/
@@ -223,6 +227,8 @@ Grok/
     test_relay.py               # 24 tests (profiles, directory, invoke)
     test_sdk.py                 # 16 tests (ForgeClient methods, error handling)
     test_cli.py                 # 24 tests (arg parsing, command execution, key mgmt)
+    test_email_tools.py         # 28 tests (email tool handlers, registry, config)
+    test_email_agent.py         # 24 tests (webhook, agent lifecycle, auto-block, classify)
 ```
 
 ---
@@ -323,6 +329,41 @@ python -m forge.cli status inv_abc123
 ```
 
 Set `FORGE_URL` and `FORGE_API_KEY` env vars, or use `--save-key` on register to persist to `~/.forge_key`.
+
+---
+
+## ARC-Relay Integration
+
+The Forge integrates with [ARC-Relay](https://arc-relay.com) for email domain management, forwarding, and DNS health monitoring.
+
+### Email Tools (10)
+
+Any Forge agent can use email tools via the `email` tool category. Public tools (DMARC/health checks) require no auth. Authenticated tools use an `ar_live_` API key.
+
+```bash
+# In .env
+FORGE_ARCRELAY_URL=https://arc-relay.com
+```
+
+### Email Agent
+
+An autonomous background agent that reacts to ARC-Relay webhook events:
+
+| Capability | Trigger | Action |
+|---|---|---|
+| Triage | `forward.success` | Classifies email by sender/subject |
+| Auto-block | 5+ rejections from same sender | Calls `email_block_sender` |
+| DNS alerts | `dns.dmarc_changed` | Surfaces warnings to operator |
+
+```bash
+# In .env
+FORGE_EMAIL_AGENT_ENABLED=true
+FORGE_ARCRELAY_API_KEY=ar_live_...
+FORGE_ARCRELAY_WEBHOOK_SECRET=your-webhook-secret
+FORGE_EMAIL_AGENT_MODEL=grok-4-1-fast-non-reasoning
+```
+
+ARC-Relay sends HMAC-SHA256 signed webhooks to `POST /webhooks/arcrelay`.
 
 ---
 

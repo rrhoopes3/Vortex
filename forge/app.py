@@ -30,7 +30,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from forge.orchestrator import Orchestrator
 from forge.memory import save_task, get_recent_tasks
 from forge.models import TaskResult
-from forge.config import EXECUTOR_MODELS, COST_LIMIT_PER_TASK, COST_LIMIT_PER_SESSION, SHELL_WORKING_DIR, TOLL_ENABLED, MARKETPLACE_ENABLED, SOLANA_WATCHER_ENABLED
+from forge.config import (
+    EXECUTOR_MODELS, COST_LIMIT_PER_TASK, COST_LIMIT_PER_SESSION,
+    SHELL_WORKING_DIR, TOLL_ENABLED, MARKETPLACE_ENABLED, SOLANA_WATCHER_ENABLED,
+    EMAIL_AGENT_ENABLED, ARCRELAY_WEBHOOK_SECRET, ARCRELAY_API_KEY,
+    ARCRELAY_API_URL, EMAIL_AGENT_MODEL,
+)
 from forge.toll.endpoints import toll_bp
 from forge.toll.public_api import public_bp
 
@@ -41,6 +46,21 @@ app = Flask(__name__, static_folder="static", static_url_path="/static")
 app.register_blueprint(toll_bp)
 if MARKETPLACE_ENABLED:
     app.register_blueprint(public_bp)
+
+# ── Email Agent + Webhook ────────────────────────────────────────────────
+_email_agent = None
+if EMAIL_AGENT_ENABLED:
+    from forge.agents.email_webhook import email_webhook_bp, configure as configure_webhook
+    from forge.agents.email_agent import EmailAgent
+    _email_agent = EmailAgent(
+        api_key=ARCRELAY_API_KEY,
+        api_url=ARCRELAY_API_URL,
+        model=EMAIL_AGENT_MODEL,
+    )
+    configure_webhook(ARCRELAY_WEBHOOK_SECRET, _email_agent)
+    app.register_blueprint(email_webhook_bp)
+    _email_agent.start()
+    log.info("Email agent enabled (model=%s)", EMAIL_AGENT_MODEL)
 
 # ── Task State ──────────────────────────────────────────────────────────────
 task_queues: dict[str, Queue] = {}

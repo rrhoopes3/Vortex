@@ -86,6 +86,15 @@ EXECUTOR_MAX_ITERATIONS = 15  # raised from 10 — context compaction prevents b
 SHELL_TIMEOUT_SECONDS = 30
 SHELL_WORKING_DIR = Path(os.getenv("FORGE_WORKING_DIR", str(Path(__file__).resolve().parent.parent)))  # defaults to repo root
 
+# ── ARC-Relay ─────────────────────────────────────────────────────────────
+ARCRELAY_API_URL = os.getenv("FORGE_ARCRELAY_URL", "https://arc-relay.com")
+ARCRELAY_WEBHOOK_SECRET = os.getenv("FORGE_ARCRELAY_WEBHOOK_SECRET", "")
+ARCRELAY_API_KEY = os.getenv("FORGE_ARCRELAY_API_KEY", "")
+
+# ── Email Agent ──────────────────────────────────────────────────────────
+EMAIL_AGENT_ENABLED = os.getenv("FORGE_EMAIL_AGENT_ENABLED", "false").lower() == "true"
+EMAIL_AGENT_MODEL = os.getenv("FORGE_EMAIL_AGENT_MODEL", "grok-4-1-fast-non-reasoning")
+
 # ── Toll Protocol ─────────────────────────────────────────────────────────
 TOLL_ENABLED = os.getenv("FORGE_TOLL_ENABLED", "true").lower() == "true"
 TOLL_DB_PATH = DATA_DIR / "toll_ledger.db"
