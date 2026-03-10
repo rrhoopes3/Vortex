@@ -291,6 +291,17 @@ function streamTask(taskId) {
                 handleTokenUsage(msg);
                 break;
 
+            case "toll_deducted":
+                addMessage("toll", `[TOLL] $${msg.toll_usd.toFixed(6)} | ${msg.sender} \u2192 ${msg.receiver} (${msg.message_type})`);
+                break;
+
+            case "toll_summary":
+                addMessage("toll-summary",
+                    `Toll Summary: ${msg.total_messages} messages | ` +
+                    `$${msg.total_tolls_usd.toFixed(6)} tolls | ` +
+                    `$${msg.total_creator_revenue_usd.toFixed(6)} creator revenue`);
+                break;
+
             case "done":
                 if (msg.summary) {
                     const costStr = taskCostUsd > 0 ? ` [$${taskCostUsd.toFixed(4)}]` : "";

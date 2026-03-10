@@ -86,6 +86,20 @@ EXECUTOR_MAX_ITERATIONS = 15  # raised from 10 — context compaction prevents b
 SHELL_TIMEOUT_SECONDS = 30
 SHELL_WORKING_DIR = Path(os.getenv("FORGE_WORKING_DIR", str(Path(__file__).resolve().parent.parent)))  # defaults to repo root
 
+# ── Toll Protocol ─────────────────────────────────────────────────────────
+TOLL_ENABLED = os.getenv("FORGE_TOLL_ENABLED", "true").lower() == "true"
+TOLL_DB_PATH = DATA_DIR / "toll_ledger.db"
+TOLL_DEFAULT_BALANCE = float(os.getenv("FORGE_TOLL_DEFAULT_BALANCE", "10.0"))  # USD
+TOLL_CREATOR_WALLET = os.getenv("FORGE_TOLL_CREATOR_WALLET", "creator")
+TOLL_CREATOR_RAKE_PCT = float(os.getenv("FORGE_TOLL_CREATOR_RAKE", "30.0"))   # %
+
+# ── Marketplace (Beat 3) ─────────────────────────────────────────────────
+MARKETPLACE_ENABLED = os.getenv("FORGE_MARKETPLACE_ENABLED", "true").lower() == "true"
+MARKETPLACE_DEFAULT_BALANCE = float(os.getenv("FORGE_MARKETPLACE_DEFAULT_BALANCE", "1.0"))  # USD for new agents
+MARKETPLACE_TASK_ESTIMATE = float(os.getenv("FORGE_MARKETPLACE_TASK_ESTIMATE", "0.05"))     # USD per task estimate
+MARKETPLACE_BASE_USDC_ADDRESS = os.getenv("FORGE_BASE_USDC_ADDRESS", "")    # Base L2 USDC receiver
+MARKETPLACE_SOLANA_USDC_ADDRESS = os.getenv("FORGE_SOLANA_USDC_ADDRESS", "2RzBNDG52n7EhqSeUYksa5eyTb7YJ8b3xvyJLESzY6zf")  # Solana USDC receiver
+
 # ── Arena ──────────────────────────────────────────────────────────────────
 ARENA_MASTER_MODEL = PLANNER_MODEL       # 16-agent Pantheon for commentary/judging
 ARENA_DEFAULT_FIGHTER_MODEL = "grok-4-1-fast-reasoning"

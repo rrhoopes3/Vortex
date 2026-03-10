@@ -27,6 +27,7 @@ from forge.context_engine import (
     extract_key_paths, auto_select_model,
 )
 from forge import planner, executor
+from forge.config import TOLL_ENABLED, TOLL_DB_PATH
 
 log = logging.getLogger("forge.orchestrator")
 
@@ -40,8 +41,16 @@ class Orchestrator:
         cancel_event: threading.Event | None = None,
         executor_model: str = "",
         task_id: str = "",
+        toll_sender: str = "",
     ):
         self._client = None  # xAI Client created lazily — only when needed
+        self._toll_sender = toll_sender  # external agent ID for billing
+        self._toll_relay = None
+        if TOLL_ENABLED:
+            from forge.toll import TollRelay, Ledger, RateEngine
+            ledger = Ledger(TOLL_DB_PATH)
+            self._toll_relay = TollRelay(ledger, RateEngine())
+            log.info("Toll relay enabled")
         self.registry = create_registry()
         self.sandbox_path = sandbox_path
         self.direct_mode = direct_mode
@@ -122,6 +131,9 @@ class Orchestrator:
             model=resolved_model,
             task_goal=task,
         )
+        if self._toll_relay:
+            gen = self._toll_relay.meter(gen, sender=self._toll_sender or "orchestrator",
+                                        receiver="executor_direct", session_id=task_id)
 
         try:
             while True:
@@ -197,6 +209,9 @@ class Orchestrator:
         steps: list[PlanStep] = []
 
         gen = planner.plan(self.client, enriched_task, agent_count=self.agent_count, cancel_event=self.cancel_event)
+        if self._toll_relay:
+            gen = self._toll_relay.meter(gen, sender=self._toll_sender or "orchestrator",
+                                        receiver="planner", session_id=task_id)
         try:
             while True:
                 msg = next(gen)
@@ -264,6 +279,12 @@ class Orchestrator:
                 tool_filter=tool_filter,
                 task_goal=task,
             )
+            if self._toll_relay:
+                gen = self._toll_relay.meter(
+                    gen, sender=self._toll_sender or "planner",
+                    receiver=f"executor_step_{step.step_number}",
+                    session_id=task_id,
+                )
 
             try:
                 while True:

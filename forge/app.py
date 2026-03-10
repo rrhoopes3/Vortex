@@ -30,12 +30,17 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from forge.orchestrator import Orchestrator
 from forge.memory import save_task, get_recent_tasks
 from forge.models import TaskResult
-from forge.config import EXECUTOR_MODELS, COST_LIMIT_PER_TASK, COST_LIMIT_PER_SESSION, SHELL_WORKING_DIR
+from forge.config import EXECUTOR_MODELS, COST_LIMIT_PER_TASK, COST_LIMIT_PER_SESSION, SHELL_WORKING_DIR, TOLL_ENABLED, MARKETPLACE_ENABLED
+from forge.toll.endpoints import toll_bp
+from forge.toll.public_api import public_bp
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
 log = logging.getLogger("forge.app")
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
+app.register_blueprint(toll_bp)
+if MARKETPLACE_ENABLED:
+    app.register_blueprint(public_bp)
 
 # ── Task State ──────────────────────────────────────────────────────────────
 task_queues: dict[str, Queue] = {}
@@ -67,6 +72,7 @@ def run_task(task_id: str, task: str, q: Queue, cancel_event: threading.Event,
             while True:
                 msg = next(gen)
                 track_cost(msg)
+                track_toll(msg)
                 q.put(msg)
         except StopIteration as e:
             result = e.value
@@ -278,6 +284,19 @@ def track_cost(msg: dict):
     if msg.get("type") == "token_usage":
         with session_cost_lock:
             session_cost_usd += msg.get("cost_usd", 0.0)
+
+
+# ── Toll Tracking ─────────────────────────────────────────────────────────
+session_toll_usd: float = 0.0
+session_toll_lock = threading.Lock()
+
+
+def track_toll(msg: dict):
+    """Track toll deductions from SSE messages."""
+    global session_toll_usd
+    if msg.get("type") == "toll_deducted":
+        with session_toll_lock:
+            session_toll_usd += msg.get("toll_usd", 0.0)
 
 
 # ── Main ────────────────────────────────────────────────────────────────────

@@ -466,6 +466,30 @@ main {
     border-radius: 20px;
 }
 
+/* ── Toll Messages ──────────────────────────────────── */
+.msg.toll {
+    align-self: flex-start;
+    background: rgba(240, 160, 48, 0.06);
+    border: 1px solid rgba(240, 160, 48, 0.15);
+    font-family: 'Cascadia Code', 'Consolas', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    padding: 4px 12px;
+    border-radius: 6px;
+}
+
+.msg.toll-summary {
+    align-self: center;
+    background: rgba(240, 160, 48, 0.1);
+    border: 1px solid rgba(240, 160, 48, 0.25);
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 12px;
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-family: 'Cascadia Code', 'Consolas', monospace;
+}
+
 /* Markdown inside messages */
 .msg h1, .msg h2, .msg h3 { margin: 12px 0 6px; color: var(--accent); }
 .msg h1 { font-size: 18px; }
