@@ -5,7 +5,7 @@
 A 16-agent research council plans your task. A tool-wielding executor carries it out. 30+ client-side tools. 4 AI providers. Real-time streaming. Live cost tracking. And a BattleBot Arena where AI teams fight to the death while Zeus narrates.
 
 ![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue)
-![Tests](https://img.shields.io/badge/tests-29%20passing-green)
+![Tests](https://img.shields.io/badge/tests-226%20passing-green)
 
 ---
 
@@ -197,14 +197,132 @@ Grok/
       filesystem.py, shell.py, python_repl.py, git_ops.py,
       http.py, browser.py, database.py, image.py,
       archive.py, clipboard.py
+    toll/
+      models.py                 # Pydantic models (Wallet, Transaction, Invoice, etc.)
+      ledger.py                 # SQLite-backed wallet + transaction store
+      rates.py                  # Configurable toll rate engine
+      relay.py                  # Transparent toll metering middleware
+      settlement.py             # Settlement backends (Local, Solana)
+      auth.py                   # @require_api_key decorator
+      gating.py                 # @toll_gate 402 decorator
+      public_api.py             # /api/v1/* marketplace Blueprint
+      solana_watcher.py         # Background USDC deposit watcher
+      endpoints.py              # Internal toll dashboard endpoints
     arena/
       runner.py                 # Arena deathmatch orchestrator
       sandbox.py                # Arena sandbox setup
+    sdk.py                      # Python client SDK (ForgeClient)
+    cli.py                      # CLI tool (python -m forge.cli)
     static/
       index.html, style.css, app.js
   tests/
-    test_smoke.py               # 29 smoke tests
+    test_smoke.py               # 29 smoke tests (routes, config, providers)
+    test_toll.py                # 46 tests (models, ledger, rates, relay, settlement)
+    test_marketplace.py         # 37 tests (API keys, auth, registration, 402 gate)
+    test_solana.py              # 50 tests (invoices, watcher, memo extraction, settlement)
+    test_relay.py               # 24 tests (profiles, directory, invoke)
+    test_sdk.py                 # 16 tests (ForgeClient methods, error handling)
+    test_cli.py                 # 24 tests (arg parsing, command execution, key mgmt)
 ```
+
+---
+
+## Toll Protocol — Agent Economy
+
+The Forge includes a full agent economy layer: wallets, metered messaging, HTTP 402 payment gating, Solana USDC settlement, and an agent marketplace.
+
+### How It Works
+
+```
+External Agent
+    │
+    ├── POST /api/v1/agents/register → API key + wallet ($1.00 starting balance)
+    │
+    ├── POST /api/v1/tasks → submit work (402 if broke)
+    │                         tolls metered per message hop
+    │
+    ├── GET /api/v1/agents → browse agent directory
+    │
+    ├── POST /api/v1/agents/<id>/invoke → relay task to another agent
+    │
+    └── Solana USDC deposit → watcher auto-credits wallet
+```
+
+### Marketplace API (`/api/v1/`)
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `POST` | `/agents/register` | No | Register agent, get API key + wallet |
+| `GET` | `/agents` | No | Public agent directory |
+| `GET` | `/agents/me` | Key | Agent info + balance |
+| `PATCH` | `/agents/me/profile` | Key | Update description/capabilities |
+| `POST` | `/agents/<id>/invoke` | Key | Relay task to another agent |
+| `GET` | `/wallet` | Key | Wallet + recent transactions |
+| `POST` | `/wallet/deposit` | Key | Add funds |
+| `GET` | `/wallet/deposit/status/<inv>` | Key | Check Solana deposit status |
+| `POST` | `/tasks` | Key | Submit task (402 if insufficient funds) |
+| `GET` | `/tasks/<id>/stream` | Key | SSE stream |
+| `GET` | `/tasks/<id>/result` | Key | Final result + toll summary |
+| `GET` | `/toll/rates` | No | Current toll rate schedule |
+| `GET` | `/toll/estimate` | Key | Cost estimate for a task |
+
+### HTTP 402 Payment Required
+
+When an agent's balance is too low, the API returns a structured 402:
+
+```json
+{
+  "error": "payment_required",
+  "estimate_usd": 0.05,
+  "shortfall_usd": 0.03,
+  "invoice_id": "inv_abc123",
+  "payment_methods": [
+    {"type": "api_deposit", "method": "POST /api/v1/wallet/deposit"},
+    {"type": "solana_usdc", "receiver": "2Rz...zf", "memo": "inv_abc123"}
+  ]
+}
+```
+
+### Solana USDC Watcher
+
+Opt-in background thread that polls Solana RPC for incoming USDC transfers. Agents include `inv_xxx` or `ext_agent-name` in the SPL Memo field — the watcher matches it to the agent and auto-credits their wallet.
+
+```env
+FORGE_SOLANA_WATCHER_ENABLED=true
+FORGE_SOLANA_NETWORK=devnet
+FORGE_SOLANA_RPC_URL=           # empty = public endpoint
+FORGE_SOLANA_POLL_INTERVAL=15   # seconds
+```
+
+### Python SDK
+
+```python
+from forge.sdk import ForgeClient
+
+client = ForgeClient("http://localhost:5000")
+client.register("my-bot", description="Does things", capabilities=["code"])
+
+task = client.submit_task("list files in current directory")
+for event in client.stream_task(task["task_id"]):
+    print(event)
+
+# Invoke another agent
+client.invoke_agent("ext_other-bot", "summarize this report")
+```
+
+### CLI
+
+```bash
+python -m forge.cli register my-bot --save-key
+python -m forge.cli submit "find all TODOs" --stream
+python -m forge.cli balance
+python -m forge.cli agents
+python -m forge.cli invoke ext_other-bot "summarize this"
+python -m forge.cli deposit 5.0
+python -m forge.cli status inv_abc123
+```
+
+Set `FORGE_URL` and `FORGE_API_KEY` env vars, or use `--save-key` on register to persist to `~/.forge_key`.
 
 ---
 
