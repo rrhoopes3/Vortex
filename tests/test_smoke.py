@@ -135,6 +135,15 @@ class TestSandbox:
         assert "error" in parsed
         assert "Sandbox" in parsed["error"]
 
+    def test_sibling_path_blocked(self):
+        """Regression: B:/Grok2 must NOT pass sandbox check for B:/Grok."""
+        from forge.tools import create_registry
+        registry = create_registry()
+        result = registry.execute("read_file", {"path": "B:/Grok2/evil.txt"}, sandbox_path="B:/Grok")
+        parsed = json.loads(result)
+        assert "error" in parsed
+        assert "Sandbox" in parsed["error"]
+
 
 # ── Lazy Tool Discovery ──────────────────────────────────────────────────
 

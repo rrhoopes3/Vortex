@@ -81,9 +81,9 @@ def cmd_submit(args):
                 if etype == "done":
                     print("  --- Done ---")
                     break
-                elif etype == "executor_output":
+                elif etype == "content":
                     content = event.get("content", "")
-                    print(f"  {content}")
+                    print(f"  {content}", end="")
                 elif etype == "token_usage":
                     cost = event.get("cost_usd", 0)
                     if cost > 0:

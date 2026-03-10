@@ -132,10 +132,20 @@ def main():
     # Inject system prompt as first user message
     chat.append(user(SYSTEM_PROMPT))
 
-    # Replay previous user messages so the model has context
-    for msg in messages:
-        if msg["role"] == "user":
-            chat.append(user(msg["content"]))
+    # Replay previous conversation so the model has full context
+    # (replaying both user queries AND council responses prevents amnesia on resume)
+    if messages:
+        transcript_parts = []
+        for msg in messages:
+            role_label = "USER QUERY" if msg["role"] == "user" else "COUNCIL RESPONSE"
+            transcript_parts.append(f"[{role_label}]\n{msg['content']}")
+        transcript = "\n\n---\n\n".join(transcript_parts)
+        chat.append(user(
+            f"[PREVIOUS SESSION TRANSCRIPT — {len(messages)} messages]\n"
+            f"The following is the record of our prior conversation. "
+            f"You must maintain continuity with these positions.\n\n{transcript}\n\n"
+            f"[END OF TRANSCRIPT — Resume the Council session. Await the next query.]"
+        ))
 
     console.print()
     console.rule("[bold bright_blue]The Council awaits your query[/bold bright_blue]")

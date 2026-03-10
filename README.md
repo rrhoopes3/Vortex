@@ -5,7 +5,7 @@
 A 16-agent research council plans your task. A tool-wielding executor carries it out. 30+ client-side tools. 4 AI providers. Real-time streaming. Live cost tracking. And a BattleBot Arena where AI teams fight to the death while Zeus narrates.
 
 ![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue)
-![Tests](https://img.shields.io/badge/tests-226%20passing-green)
+![Tests](https://img.shields.io/badge/tests-227%20passing-green)
 
 ---
 
@@ -216,7 +216,7 @@ Grok/
     static/
       index.html, style.css, app.js
   tests/
-    test_smoke.py               # 29 smoke tests (routes, config, providers)
+    test_smoke.py               # 30 smoke tests (routes, config, providers, sandbox)
     test_toll.py                # 46 tests (models, ledger, rates, relay, settlement)
     test_marketplace.py         # 37 tests (API keys, auth, registration, 402 gate)
     test_solana.py              # 50 tests (invoices, watcher, memo extraction, settlement)
@@ -335,7 +335,8 @@ EXECUTOR_MODEL = "grok-4.20-experimental-beta-0304-reasoning"
 EXECUTOR_MAX_ITERATIONS = 15    # per step
 SHELL_TIMEOUT_SECONDS = 30
 
-# Cost limits (env vars: FORGE_COST_LIMIT_TASK, FORGE_COST_LIMIT_SESSION)
+# Cost limits — enforced (task auto-cancelled if exceeded)
+# env vars: FORGE_COST_LIMIT_TASK, FORGE_COST_LIMIT_SESSION
 COST_LIMIT_PER_TASK = 5.00      # USD
 COST_LIMIT_PER_SESSION = 50.00  # USD
 

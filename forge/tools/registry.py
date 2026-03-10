@@ -130,12 +130,15 @@ class ToolRegistry:
         if sandbox_path:
             sandbox_root = Path(sandbox_path).resolve()
 
-            # Check all path-based arguments
+            # Check all path-based arguments using Path.relative_to()
+            # (string prefix check is bypassable: "B:\Grok2" starts with "B:\Grok")
             if name in _SANDBOX_PATH_ARGS:
                 for arg_name in _SANDBOX_PATH_ARGS[name]:
                     if arg_name in arguments:
                         target = Path(arguments[arg_name]).resolve()
-                        if not str(target).startswith(str(sandbox_root)):
+                        try:
+                            target.relative_to(sandbox_root)
+                        except ValueError:
                             log.warning("Sandbox blocked %s: %s outside %s", name, target, sandbox_root)
                             return json.dumps({
                                 "error": f"Sandbox: {target} is outside allowed directory {sandbox_root}",

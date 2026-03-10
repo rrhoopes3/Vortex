@@ -51,12 +51,14 @@ task_cancel_events: dict[str, threading.Event] = {}
 # Accumulated session cost (resets on server restart)
 session_cost_usd: float = 0.0
 session_cost_lock = threading.Lock()
+task_costs: dict[str, float] = {}  # task_id → accumulated cost
 
 
 def run_task(task_id: str, task: str, q: Queue, cancel_event: threading.Event,
              sandbox_path: str = "", direct_mode: bool = False, agent_count: int = 16,
              executor_model: str = ""):
     """Background thread that runs the orchestrator and pushes messages to a queue."""
+    task_costs[task_id] = 0.0
     try:
         orch = Orchestrator(
             sandbox_path=sandbox_path,
@@ -71,9 +73,12 @@ def run_task(task_id: str, task: str, q: Queue, cancel_event: threading.Event,
         try:
             while True:
                 msg = next(gen)
-                track_cost(msg)
+                track_cost(msg, task_id)
                 track_toll(msg)
                 q.put(msg)
+                # Enforce cost limits
+                if _check_cost_limit(task_id, cancel_event, q):
+                    break
         except StopIteration as e:
             result = e.value
 
@@ -85,6 +90,7 @@ def run_task(task_id: str, task: str, q: Queue, cancel_event: threading.Event,
         log.exception("Task %s failed", task_id)
         q.put({"type": "error", "content": f"{type(e).__name__}: {e}"})
     finally:
+        task_costs.pop(task_id, None)
         q.put(None)  # sentinel
 
 
@@ -278,12 +284,40 @@ def reset_cost():
     return jsonify({"status": "reset", "session_cost": 0.0})
 
 
-def track_cost(msg: dict):
-    """Update session cost from token usage messages."""
+def track_cost(msg: dict, task_id: str = ""):
+    """Update session and per-task cost from token usage messages."""
     global session_cost_usd
     if msg.get("type") == "token_usage":
+        cost = msg.get("cost_usd", 0.0)
         with session_cost_lock:
-            session_cost_usd += msg.get("cost_usd", 0.0)
+            session_cost_usd += cost
+        if task_id and task_id in task_costs:
+            task_costs[task_id] += cost
+
+
+def _check_cost_limit(task_id: str, cancel_event: threading.Event, q: Queue) -> bool:
+    """Check if cost limits have been exceeded. Returns True if task should stop."""
+    this_task = task_costs.get(task_id, 0.0)
+    with session_cost_lock:
+        session_total = session_cost_usd
+
+    if COST_LIMIT_PER_TASK and this_task > COST_LIMIT_PER_TASK:
+        log.warning("Task %s exceeded per-task cost limit ($%.2f > $%.2f)",
+                     task_id, this_task, COST_LIMIT_PER_TASK)
+        q.put({"type": "error",
+               "content": f"Task cancelled: cost ${this_task:.4f} exceeded limit ${COST_LIMIT_PER_TASK:.2f}"})
+        cancel_event.set()
+        return True
+
+    if COST_LIMIT_PER_SESSION and session_total > COST_LIMIT_PER_SESSION:
+        log.warning("Session cost limit exceeded ($%.2f > $%.2f)",
+                     session_total, COST_LIMIT_PER_SESSION)
+        q.put({"type": "error",
+               "content": f"Task cancelled: session cost ${session_total:.4f} exceeded limit ${COST_LIMIT_PER_SESSION:.2f}"})
+        cancel_event.set()
+        return True
+
+    return False
 
 
 # ── Solana Watcher ────────────────────────────────────────────────────────
