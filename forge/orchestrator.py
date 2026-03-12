@@ -17,6 +17,11 @@ Cross-pollinated with "Intelligent AI Delegation" (arXiv:2602.11865):
   - Accountability chains (transitive custody tracking across hops)
   - Adaptive reassignment (fallback to alternate models on failure)
   - Dynamic assessment (real-time delegatee performance monitoring)
+
+Cross-pollinated with "AgentOS" (arXiv:2603.08938):
+  - Agent Kernel (LLM resource scheduling: token budgets, rate limits)
+  - Semantic Firewall (pre-execution safety layer for tool calls)
+  - Knowledge Graph (graph-based session memory with entity relationships)
 """
 from __future__ import annotations
 import logging
@@ -32,12 +37,14 @@ from forge.tools.registry import resolve_tools_for_step
 from forge.providers import detect_provider
 from forge.context_engine import (
     compact_context, recall_relevant, remember_task,
-    extract_key_paths, auto_select_model,
+    extract_key_paths, auto_select_model, KnowledgeGraph,
 )
 from forge.delegation import (
     TrustLedger, AccountabilityChain, AdaptiveRouter,
     DelegationAssessor, build_step_contract,
 )
+from forge.kernel import AgentKernel
+from forge.firewall import SemanticFirewall
 from forge import planner, executor
 from forge.config import TOLL_ENABLED, TOLL_DB_PATH
 
@@ -74,6 +81,11 @@ class Orchestrator:
         # ── Delegation framework (arXiv:2602.11865) ──────────────────────
         self._trust = TrustLedger()
         self._router = AdaptiveRouter(self._trust)
+
+        # ── AgentOS kernel + firewall (arXiv:2603.08938) ─────────────────
+        self._kernel = AgentKernel()
+        self._firewall = SemanticFirewall(block_danger=True)
+        self._knowledge_graph = KnowledgeGraph()
 
         log.info("Forge initialized. Tools: %s | Sandbox: %s | Direct: %s | Agents: %d | Model: %s",
                  self.registry.list_tools(), sandbox_path or "OFF", direct_mode, self.agent_count,
@@ -123,9 +135,17 @@ class Orchestrator:
         # Trust-aware routing: check if primary model should be swapped
         routed_model = self._router.select_model(resolved_model) if resolved_model else resolved_model
 
-        # Session memory: recall relevant learnings
+        # Kernel: allocate token budget for task
+        self._kernel.tokens.allocate_task(task_id)
+
+        # Session memory + knowledge graph: recall relevant learnings
         memory_context = recall_relevant(task)
-        context = memory_context if memory_context else ""
+        graph_context = self._knowledge_graph.recall_graph_context(task)
+        context = ""
+        if memory_context:
+            context += memory_context
+        if graph_context:
+            context += "\n" + graph_context
 
         if routed_model != resolved_model:
             yield {"type": "status", "phase": "executing",
@@ -200,13 +220,18 @@ class Orchestrator:
             latency_seconds=round(latency, 2),
         )
 
-        # Session memory: remember what we learned
+        # Session memory + knowledge graph: remember what we learned
         if status == "success":
             key_paths = extract_key_paths([step_output])
             remember_task(task, tools_used, key_paths, step_output[:300])
+            self._knowledge_graph.record_task_knowledge(
+                task, tools_used, key_paths, step_output[:300],
+            )
 
         summary = "Task cancelled" if cancelled else ("Direct execution complete" if not error else "Direct execution failed")
-        yield {"type": "done", "summary": summary}
+        yield {"type": "done", "summary": summary,
+               "firewall": self._firewall.stats(),
+               "kernel": self._kernel.summary()}
 
         return TaskResult(
             task_id=task_id,
@@ -235,16 +260,23 @@ class Orchestrator:
         """
         resolved_model = self._resolve_model(task)
 
+        # ── Kernel: allocate resources (arXiv:2603.08938) ──────────────
+        self._kernel.tokens.allocate_task(task_id)
+
         # ── Accountability Chain (paper §3.3) ────────────────────────────
         chain = AccountabilityChain(task_id, task)
 
         # ── Phase 1: Plan (always xAI — multi-agent Pantheon) ────────────
-        # Inject session memory into the planner's task context
+        # Inject session memory + knowledge graph into planner context
         memory_hint = recall_relevant(task)
+        graph_hint = self._knowledge_graph.recall_graph_context(task)
         enriched_task = task
         if memory_hint:
             enriched_task = f"{task}\n\n{memory_hint}"
             log.info("Injected session memory into planner (%d chars)", len(memory_hint))
+        if graph_hint:
+            enriched_task = f"{enriched_task}\n\n{graph_hint}"
+            log.info("Injected knowledge graph into planner (%d chars)", len(graph_hint))
 
         if resolved_model != self.executor_model and self.executor_model == "auto":
             yield {"type": "status", "phase": "planning",
@@ -384,15 +416,21 @@ class Orchestrator:
             if reassigned_count > 0:
                 summary += f" ({reassigned_count} reassigned)"
 
-            # Session memory: remember what we learned from successful tasks
+            # Session memory + knowledge graph: remember what we learned
             if success_count > 0:
                 key_paths = extract_key_paths(all_step_outputs)
                 outcome = "; ".join(
                     f"Step {r.step_number}: {r.status}" for r in results
                 )
                 remember_task(task, all_tools_used, key_paths, outcome)
+                self._knowledge_graph.record_task_knowledge(
+                    task, all_tools_used, key_paths, outcome,
+                )
 
-        yield {"type": "done", "summary": summary, "accountability_chain": chain.summary()}
+        yield {"type": "done", "summary": summary,
+               "accountability_chain": chain.summary(),
+               "firewall": self._firewall.stats(),
+               "kernel": self._kernel.summary()}
 
         return TaskResult(
             task_id=task_id,
@@ -464,6 +502,15 @@ class Orchestrator:
 
                     # Feed message to assessor for real-time monitoring
                     assessor.observe(msg)
+
+                    # ── Semantic Firewall (arXiv:2603.08938) ──────────
+                    if msg.get("type") == "tool_call":
+                        verdict = self._firewall.check(msg["name"], msg.get("args", {}))
+                        if not verdict.allowed:
+                            yield {"type": "firewall_block", "tool": msg["name"],
+                                   "reason": verdict.blocked_reason}
+                            error = f"Firewall blocked: {verdict.blocked_reason}"
+                            break
 
                     yield msg
                     if msg.get("type") == "content":
