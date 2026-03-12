@@ -35,6 +35,7 @@ from forge.models import PlanStep, StepResult, TaskResult
 from forge.tools import create_registry
 from forge.tools.registry import resolve_tools_for_step
 from forge.providers import detect_provider
+from forge.guardrails import GuardrailEngine
 from forge.context_engine import (
     compact_context, recall_relevant, remember_task,
     extract_key_paths, auto_select_model, KnowledgeGraph,
@@ -61,6 +62,7 @@ class Orchestrator:
         executor_model: str = "",
         task_id: str = "",
         toll_sender: str = "",
+        guardrails_enabled: bool = True,
     ):
         self._client = None  # xAI Client created lazily — only when needed
         self._toll_sender = toll_sender  # external agent ID for billing
@@ -71,6 +73,7 @@ class Orchestrator:
             self._toll_relay = TollRelay(ledger, RateEngine())
             log.info("Toll relay enabled")
         self.registry = create_registry()
+        self.guardrail_engine = GuardrailEngine(enabled=guardrails_enabled)
         self.sandbox_path = sandbox_path
         self.direct_mode = direct_mode
         self.agent_count = max(4, min(16, agent_count))  # clamp 4-16
@@ -87,9 +90,9 @@ class Orchestrator:
         self._firewall = SemanticFirewall(block_danger=True)
         self._knowledge_graph = KnowledgeGraph()
 
-        log.info("Forge initialized. Tools: %s | Sandbox: %s | Direct: %s | Agents: %d | Model: %s",
+        log.info("Forge initialized. Tools: %s | Sandbox: %s | Direct: %s | Agents: %d | Model: %s | Guardrails: %s",
                  self.registry.list_tools(), sandbox_path or "OFF", direct_mode, self.agent_count,
-                 executor_model or "default")
+                 executor_model or "default", guardrails_enabled)
 
     def _resolve_model(self, task: str) -> str:
         """Resolve the executor model — supports 'auto' routing."""
@@ -175,11 +178,13 @@ class Orchestrator:
             cancel_event=self.cancel_event,
             model=effective_model,
             task_goal=task,
+            guardrail_engine=self.guardrail_engine,
         )
         if self._toll_relay:
             gen = self._toll_relay.meter(gen, sender=self._toll_sender or "orchestrator",
                                         receiver="executor_direct", session_id=task_id)
 
+        escalation = None
         try:
             while True:
                 msg = next(gen)
@@ -193,12 +198,16 @@ class Orchestrator:
                 elif msg.get("type") == "cancelled":
                     error = "Cancelled"
                     break
+                elif msg.get("type") == "escalation":
+                    escalation = msg
+                    break
         except StopIteration as e:
             if e.value:
                 step_output = e.value
 
         cancelled = self.cancel_event.is_set()
-        status = "cancelled" if cancelled else ("failed" if error else "success")
+        escalated = escalation is not None
+        status = "cancelled" if cancelled else ("escalated" if escalated else ("failed" if error else "success"))
         latency = time.time() - step_start
 
         # Record trust outcome
@@ -228,7 +237,14 @@ class Orchestrator:
                 task, tools_used, key_paths, step_output[:300],
             )
 
-        summary = "Task cancelled" if cancelled else ("Direct execution complete" if not error else "Direct execution failed")
+        # Guardrail summary
+        if self.guardrail_engine.violation_count > 0:
+            yield {"type": "guardrail_summary", **self.guardrail_engine.summary()}
+
+        summary = ("Task cancelled" if cancelled
+                   else "Escalated to human" if escalated
+                   else "Direct execution complete" if not error
+                   else "Direct execution failed")
         yield {"type": "done", "summary": summary,
                "firewall": self._firewall.stats(),
                "kernel": self._kernel.summary()}
@@ -407,6 +423,10 @@ class Orchestrator:
                 break
 
         # ── Summary ─────────────────────────────────────────────────────
+        # Guardrail summary
+        if self.guardrail_engine.violation_count > 0:
+            yield {"type": "guardrail_summary", **self.guardrail_engine.summary()}
+
         if self.cancel_event.is_set():
             summary = f"Cancelled after {len(results)}/{len(steps)} steps"
         else:
@@ -484,6 +504,7 @@ class Orchestrator:
                 model=effective_model,
                 tool_filter=tool_filter,
                 task_goal=task_goal,
+                guardrail_engine=self.guardrail_engine,
             )
             if self._toll_relay:
                 gen = self._toll_relay.meter(
@@ -495,6 +516,7 @@ class Orchestrator:
             step_output = ""
             tools_used = []
             error = None
+            escalation = None
 
             try:
                 while True:
@@ -522,13 +544,17 @@ class Orchestrator:
                     elif msg.get("type") == "cancelled":
                         error = "Cancelled"
                         break
+                    elif msg.get("type") == "escalation":
+                        escalation = msg
+                        break
             except StopIteration as e:
                 if e.value:
                     step_output = e.value
 
             latency = time.time() - step_start
             cancelled = self.cancel_event.is_set()
-            status = "cancelled" if cancelled else ("failed" if error else "success")
+            escalated = escalation is not None
+            status = "cancelled" if cancelled else ("escalated" if escalated else ("failed" if error else "success"))
 
             # ── Trust Update ─────────────────────────────────────────────
             self._trust.record_outcome(
@@ -554,7 +580,7 @@ class Orchestrator:
                     was_reassigned = True
                     continue  # retry with fallback model
 
-            # Step completed (success, final failure, or cancelled)
+            # Step completed (success, final failure, escalated, or cancelled)
             return StepResult(
                 step_number=step.step_number,
                 status=status,

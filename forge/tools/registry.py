@@ -46,6 +46,7 @@ TOOL_CATEGORIES = {
                    "email_add_domain", "email_verify_domain", "email_list_aliases",
                    "email_create_alias", "email_get_logs", "email_block_sender",
                    "email_get_analytics"},
+    "escalation": {"escalate_to_human"},
 }
 
 # Reverse map: tool_name → category
@@ -55,7 +56,7 @@ for _cat, _tools in TOOL_CATEGORIES.items():
         TOOL_TO_CATEGORY[_t] = _cat
 
 # Core tools always included (cheap, universally useful)
-CORE_TOOLS = {"read_file", "write_file", "list_directory", "find_files", "grep_files", "run_command"}
+CORE_TOOLS = {"read_file", "write_file", "list_directory", "find_files", "grep_files", "run_command", "escalate_to_human"}
 
 
 def resolve_tools_for_step(tools_needed: list[str]) -> set[str]:
@@ -160,6 +161,10 @@ class ToolRegistry:
                 return result
             return json.dumps(result, default=str)
         except Exception as e:
+            # Re-raise EscalationError so the executor can handle it
+            from forge.tools.escalation import EscalationError
+            if isinstance(e, EscalationError):
+                raise
             log.exception("Tool %s failed", name)
             return json.dumps({"error": f"{type(e).__name__}: {e}"})
 

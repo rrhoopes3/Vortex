@@ -5,7 +5,7 @@
 A 16-agent research council plans your task. A tool-wielding executor carries it out. 40+ client-side tools. 4 AI providers. Real-time streaming. Live cost tracking. ARC-Relay email integration. And a BattleBot Arena where AI teams fight to the death while Zeus narrates.
 
 ![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue)
-![Tests](https://img.shields.io/badge/tests-279%20passing-green)
+![Tests](https://img.shields.io/badge/tests-368%20passing-green)
 
 ---
 
@@ -56,6 +56,48 @@ Five techniques from the [OpenDev paper](https://arxiv.org/abs/2603.05344):
 | **Session Memory** | Learns from completed tasks, recalls relevant knowledge for new ones |
 | **Instruction Reminders** | Re-injects task goal every 3 iterations to prevent drift |
 | **Auto Model Routing** | Classifies complexity, picks cheap/fast vs powerful model automatically |
+| **Concurrent Guardrails** | Input/output guardrails run in parallel — block dangerous commands, sensitive paths, credential leakage |
+| **Escalation Tool** | Agent can escalate to human when stuck, uncertain, or facing high-risk decisions |
+
+### Guardrail Layer
+
+Concurrent guardrails run alongside the executor, validating tool calls before execution and scanning outputs after. Inspired by [OpenAI's Practical Guide to Building Agents](https://openai.com/business/guides-and-resources/a-practical-guide-to-building-ai-agents/).
+
+| Guardrail | Type | Severity | What it catches |
+|---|---|---|---|
+| **Dangerous Commands** | Input | Block | `rm -rf /`, `curl|bash`, `mkfs`, `shutdown`, fork bombs |
+| **Sensitive Paths** | Input | Block | `/etc/shadow`, SSH keys, `.env.production`, AWS credentials |
+| **Credential Leakage** | Output | Warning | API keys, tokens, private keys, PATs in tool output |
+| **Output Length** | Output | Warning | Unusually large outputs (>100K chars, possible data exfiltration) |
+
+Custom guardrails can be added via `guardrail_engine.add_input_guardrail()` / `add_output_guardrail()`.
+
+### Escalation Tool
+
+The `escalate_to_human` tool is always available (part of CORE_TOOLS). When the agent calls it, execution pauses and a structured escalation event is emitted with:
+- **reason**: Why the agent needs human input
+- **category**: `ambiguity` | `risk` | `error` | `expertise`
+- **context**: Current state, attempted approaches, relevant files
+
+### Eval Framework
+
+Structured evaluation harness for scoring end-to-end agent task performance across 5 dimensions:
+
+| Dimension | Weight | What it measures |
+|---|---|---|
+| **Completion** | 30% | Did all steps succeed? |
+| **Correctness** | 30% | Does output contain expected content? |
+| **Efficiency** | 15% | Tool calls within budget? |
+| **Cost** | 10% | USD spent within budget? |
+| **Safety** | 15% | Guardrail violations? |
+
+```python
+from forge.eval import EvalRunner, SMOKE_EVALS
+
+runner = EvalRunner(sandbox_path="/tmp/eval", direct_mode=True)
+report = runner.run_suite(SMOKE_EVALS)
+print(report.summary())
+```
 
 ---
 
@@ -125,8 +167,9 @@ The executor routes to 4 different AI backends. Model list is served from the ba
 | **Archive** | `zip_files`, `extract_archive` |
 | **Clipboard** | `copy_to_clipboard`, `read_clipboard` |
 | **Email** | `email_check_dmarc`, `email_check_health`, `email_list_domains`, `email_add_domain`, `email_verify_domain`, `email_list_aliases`, `email_create_alias`, `email_get_logs`, `email_block_sender`, `email_get_analytics` |
+| **Escalation** | `escalate_to_human` (always available — graceful human handoff) |
 
-Lazy tool discovery means only the tools relevant to each step are injected into context. Core tools (read, write, list, find, grep, shell) are always available.
+Lazy tool discovery means only the tools relevant to each step are injected into context. Core tools (read, write, list, find, grep, shell, escalate) are always available.
 
 ---
 
