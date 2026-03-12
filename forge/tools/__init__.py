@@ -2,7 +2,7 @@ from .registry import ToolRegistry
 from . import (
     filesystem, shell, browser, http, python_repl,
     git_ops, search, clipboard, image, database, archive,
-    email,
+    email, escalation,
 )
 
 
@@ -21,4 +21,5 @@ def create_registry() -> ToolRegistry:
     database.register(reg)
     archive.register(reg)
     email.register(reg)
+    escalation.register(reg)
     return reg

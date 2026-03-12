@@ -19,6 +19,8 @@ from xai_sdk.tools import get_tool_call_type
 
 from forge.config import EXECUTOR_MODEL, EXECUTOR_MAX_ITERATIONS, LMSTUDIO_BASE_URL
 from forge.tools.registry import ToolRegistry
+from forge.tools.escalation import EscalationError
+from forge.guardrails import GuardrailEngine
 from forge.providers import detect_provider, run_anthropic, run_openai, calculate_cost
 
 log = logging.getLogger("forge.executor")
@@ -53,6 +55,7 @@ def execute_step(
     max_iterations: int = 0,
     tool_filter: set[str] | None = None,
     task_goal: str = "",
+    guardrail_engine: GuardrailEngine | None = None,
 ) -> Generator[dict, None, str]:
     """
     Execute a single plan step using the reasoning model + client-side tools.
@@ -87,6 +90,7 @@ def execute_step(
             registry=registry, sandbox_path=sandbox_path,
             cancel_event=cancel_event, max_iterations=iteration_limit,
             tool_filter=tool_filter, task_goal=task_goal,
+            guardrail_engine=guardrail_engine,
         ))
     elif provider == "openai":
         return (yield from run_openai(
@@ -94,6 +98,7 @@ def execute_step(
             registry=registry, sandbox_path=sandbox_path,
             cancel_event=cancel_event, max_iterations=iteration_limit,
             tool_filter=tool_filter, task_goal=task_goal,
+            guardrail_engine=guardrail_engine,
         ))
     elif provider == "lmstudio":
         # Strip "lmstudio:" prefix; use "default" if nothing after it
@@ -103,6 +108,7 @@ def execute_step(
             registry=registry, sandbox_path=sandbox_path,
             cancel_event=cancel_event, max_iterations=iteration_limit,
             base_url=LMSTUDIO_BASE_URL, tool_filter=tool_filter, task_goal=task_goal,
+            guardrail_engine=guardrail_engine,
         ))
 
     # ── xAI provider (original path) ────────────────────────────────
@@ -213,10 +219,34 @@ def execute_step(
             except json.JSONDecodeError:
                 args = {}
 
+            # ── Input Guardrails (concurrent, pre-execution) ─────────
+            if guardrail_engine:
+                violations = guardrail_engine.check_input(func_name, args)
+                for v in violations:
+                    yield {"type": "guardrail_violation", "guardrail": v.guardrail_name,
+                           "severity": v.severity, "message": v.message}
+                if guardrail_engine.has_blocking_violation(violations):
+                    error_msg = f"Guardrail blocked: {violations[0].message}"
+                    chat.append(tool_result(json.dumps({"error": error_msg}), tool_call_id=tc.id))
+                    continue
+
             yield {"type": "tool_call", "name": func_name, "args": args}
             log.info("Tool call: %s(%s)", func_name, args)
 
-            result = registry.execute(func_name, args, sandbox_path=sandbox_path)
+            # ── Execute with escalation handling ─────────────────────
+            try:
+                result = registry.execute(func_name, args, sandbox_path=sandbox_path)
+            except EscalationError as esc:
+                yield {"type": "escalation", "reason": esc.reason,
+                       "category": esc.category, "context": esc.context}
+                return full_output
+
+            # ── Output Guardrails (concurrent, post-execution) ───────
+            if guardrail_engine:
+                out_violations = guardrail_engine.check_output(result)
+                for v in out_violations:
+                    yield {"type": "guardrail_violation", "guardrail": v.guardrail_name,
+                           "severity": v.severity, "message": v.message}
 
             # Truncate large results for display
             display_result = result[:500] + "..." if len(result) > 500 else result

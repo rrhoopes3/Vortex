@@ -23,7 +23,7 @@ class ExecutionPlan(BaseModel):
 
 class StepResult(BaseModel):
     step_number: int
-    status: Literal["success", "failed", "skipped", "cancelled"] = "success"
+    status: Literal["success", "failed", "skipped", "cancelled", "escalated"] = "success"
     output: str = ""
     tools_used: list[str] = Field(default_factory=list)
     error: str | None = None

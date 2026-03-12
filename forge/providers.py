@@ -94,6 +94,7 @@ def run_anthropic(
     max_iterations: int,
     tool_filter: set[str] | None = None,
     task_goal: str = "",
+    guardrail_engine=None,
 ) -> Generator[dict, None, str]:
     """Run Anthropic Messages API with tool-calling loop."""
     try:
@@ -180,10 +181,37 @@ def run_anthropic(
                 yield {"type": "cancelled", "content": "Step cancelled"}
                 return full_output
 
+            # ── Input Guardrails ─────────────────────────────────────
+            if guardrail_engine:
+                violations = guardrail_engine.check_input(tu.name, tu.input)
+                for v in violations:
+                    yield {"type": "guardrail_violation", "guardrail": v.guardrail_name,
+                           "severity": v.severity, "message": v.message}
+                if guardrail_engine.has_blocking_violation(violations):
+                    tool_results.append({
+                        "type": "tool_result", "tool_use_id": tu.id,
+                        "content": f"Guardrail blocked: {violations[0].message}",
+                    })
+                    continue
+
             yield {"type": "tool_call", "name": tu.name, "args": tu.input}
             log.info("Tool call: %s(%s)", tu.name, tu.input)
 
-            result = registry.execute(tu.name, tu.input, sandbox_path=sandbox_path)
+            # ── Execute with escalation handling ─────────────────────
+            from forge.tools.escalation import EscalationError
+            try:
+                result = registry.execute(tu.name, tu.input, sandbox_path=sandbox_path)
+            except EscalationError as esc:
+                yield {"type": "escalation", "reason": esc.reason,
+                       "category": esc.category, "context": esc.context}
+                return full_output
+
+            # ── Output Guardrails ────────────────────────────────────
+            if guardrail_engine:
+                out_violations = guardrail_engine.check_output(result)
+                for v in out_violations:
+                    yield {"type": "guardrail_violation", "guardrail": v.guardrail_name,
+                           "severity": v.severity, "message": v.message}
 
             display_result = result[:500] + "..." if len(result) > 500 else result
             yield {"type": "tool_result", "name": tu.name, "result": display_result}
@@ -215,6 +243,7 @@ def run_openai(
     api_key: str | None = None,
     tool_filter: set[str] | None = None,
     task_goal: str = "",
+    guardrail_engine=None,
 ) -> Generator[dict, None, str]:
     """Run OpenAI Chat Completions API with tool-calling loop."""
     try:
@@ -352,10 +381,37 @@ def run_openai(
             except json.JSONDecodeError:
                 args = {}
 
+            # ── Input Guardrails ─────────────────────────────────────
+            if guardrail_engine:
+                violations = guardrail_engine.check_input(func_name, args)
+                for v in violations:
+                    yield {"type": "guardrail_violation", "guardrail": v.guardrail_name,
+                           "severity": v.severity, "message": v.message}
+                if guardrail_engine.has_blocking_violation(violations):
+                    messages.append({
+                        "role": "tool", "tool_call_id": tc["id"],
+                        "content": f"Guardrail blocked: {violations[0].message}",
+                    })
+                    continue
+
             yield {"type": "tool_call", "name": func_name, "args": args}
             log.info("Tool call: %s(%s)", func_name, args)
 
-            result = registry.execute(func_name, args, sandbox_path=sandbox_path)
+            # ── Execute with escalation handling ─────────────────────
+            from forge.tools.escalation import EscalationError
+            try:
+                result = registry.execute(func_name, args, sandbox_path=sandbox_path)
+            except EscalationError as esc:
+                yield {"type": "escalation", "reason": esc.reason,
+                       "category": esc.category, "context": esc.context}
+                return full_output
+
+            # ── Output Guardrails ────────────────────────────────────
+            if guardrail_engine:
+                out_violations = guardrail_engine.check_output(result)
+                for v in out_violations:
+                    yield {"type": "guardrail_violation", "guardrail": v.guardrail_name,
+                           "severity": v.severity, "message": v.message}
 
             display_result = result[:500] + "..." if len(result) > 500 else result
             yield {"type": "tool_result", "name": func_name, "result": display_result}
