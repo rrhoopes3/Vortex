@@ -13,6 +13,9 @@ class PlanStep(BaseModel):
         description="Tools likely needed: read_file, write_file, run_command, etc.",
     )
     expected_output: str = ""
+    # Delegation metadata (populated by delegation framework)
+    contract_id: str = ""
+    verification_criteria: list[str] = Field(default_factory=list)
 
 
 class ExecutionPlan(BaseModel):
@@ -27,6 +30,13 @@ class StepResult(BaseModel):
     output: str = ""
     tools_used: list[str] = Field(default_factory=list)
     error: str | None = None
+    # Delegation metadata
+    contract_id: str = ""
+    delegatee_model: str = ""
+    was_reassigned: bool = False
+    reassigned_from: str = ""
+    trust_score_after: float | None = None
+    latency_seconds: float = 0.0
 
 
 class TaskResult(BaseModel):
@@ -37,3 +47,5 @@ class TaskResult(BaseModel):
     plan_raw: str = ""
     results: list[StepResult] = Field(default_factory=list)
     final_summary: str = ""
+    # Delegation metadata
+    accountability_chain: dict | None = None  # from AccountabilityChain.summary()

@@ -219,8 +219,12 @@ def classify_task_complexity(task: str) -> str:
     return "moderate"
 
 
-def auto_select_model(task: str) -> str:
-    """Auto-select the best executor model based on task complexity.
+def auto_select_model(task: str, trust_ledger=None) -> str:
+    """Auto-select the best executor model based on task complexity and trust.
+
+    When a TrustLedger is provided, also considers historical trust scores
+    to avoid routing to models that have been underperforming
+    (cross-pollinated from arXiv:2602.11865 §4.2 trust calibration).
 
     Returns the model ID string.
     """
@@ -233,6 +237,21 @@ def auto_select_model(task: str) -> str:
     else:
         # Moderate: use the fast reasoning model (good balance)
         model = FAST_MODEL
+
+    # Trust-aware override: if the chosen model has low trust, swap
+    if trust_ledger is not None:
+        from forge.delegation import TRUST_REASSIGNMENT_THRESHOLD
+        trust = trust_ledger.get_trust(model)
+        if trust < TRUST_REASSIGNMENT_THRESHOLD:
+            # Pick the alternative tier
+            alt = POWER_MODEL if model == FAST_MODEL else FAST_MODEL
+            alt_trust = trust_ledger.get_trust(alt)
+            if alt_trust >= TRUST_REASSIGNMENT_THRESHOLD:
+                log.info(
+                    "Trust override: %s (trust=%.3f) → %s (trust=%.3f)",
+                    model, trust, alt, alt_trust,
+                )
+                model = alt
 
     log.info("Auto-routing: task complexity=%s → model=%s", complexity, model)
     return model
