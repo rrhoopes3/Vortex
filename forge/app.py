@@ -358,6 +358,37 @@ def get_pack(name):
     return jsonify(pack.to_dict())
 
 
+@app.route("/api/packs/<name>/eval", methods=["POST"])
+def run_pack_eval(name):
+    """Run golden eval for a capability pack.
+
+    Optional JSON body:
+      - chaos: bool (enable chaos mode, default false)
+      - models: list[str] (run benchmark across models instead of default)
+    """
+    from forge.evals.runner import PackEvalRunner, ChaosConfig
+
+    registry = get_pack_registry()
+    pack = registry.get(name)
+    if not pack:
+        return jsonify({"error": f"Unknown pack: {name}"}), 404
+
+    data = request.get_json(silent=True) or {}
+    chaos_enabled = data.get("chaos", False)
+    benchmark_models = data.get("models", [])
+
+    chaos = ChaosConfig(enabled=chaos_enabled)
+    runner = PackEvalRunner(chaos=chaos)
+
+    if benchmark_models:
+        from forge.evals.golden import PACK_GOLDEN_MAP
+        result = runner.run_benchmark(name, benchmark_models)
+        return jsonify(result.to_dict())
+
+    report = runner.run_pack_eval(name)
+    return jsonify(report.summary())
+
+
 # ── Models & Cost Endpoints ─────────────────────────────────────────────────
 
 @app.route("/api/models")
