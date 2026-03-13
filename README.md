@@ -5,7 +5,7 @@
 A 16-agent research council plans your task. A tool-wielding executor carries it out. 40+ client-side tools. 5 AI providers. Real-time streaming. Live cost tracking. ARC-Relay email integration. Generative UI with sandboxed widgets. And an Arena where AI teams fight to the death while Zeus narrates — or collaborate while the Muses judge.
 
 ![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue)
-![Tests](https://img.shields.io/badge/tests-637%20passing-green)
+![Tests](https://img.shields.io/badge/tests-781%20passing-green)
 
 ---
 
@@ -213,6 +213,7 @@ Lazy tool discovery means only the tools relevant to each step are injected into
 | **Sandbox** toggle | Restricts file/shell ops to a directory (defaults to repo root) |
 | **Direct Mode** toggle | Skips the planner, sends task straight to executor |
 | **Agents** slider | Number of planner agents (4, 8, 12, or 16) |
+| **Pack** dropdown | Capability pack with readiness indicators |
 | **Model** dropdown | Executor model (populated from backend) |
 | **Cost ticker** | Live session cost in USD (click to reset) |
 | **KILL** button | Cancels a running task immediately |
@@ -228,6 +229,9 @@ Lazy tool discovery means only the tools relevant to each step are injected into
 | `GET` | `/api/stream/<id>` | SSE stream of task progress |
 | `POST` | `/api/kill/<id>` | Cancel a running task |
 | `POST` | `/api/arena` | Launch arena match (combat or collab) |
+| `GET` | `/api/packs` | List capability packs with readiness |
+| `GET` | `/api/packs/<name>` | Single pack details |
+| `POST` | `/api/packs/<name>/eval` | Run golden eval for a pack |
 | `GET` | `/api/models` | Available models with pricing |
 | `GET` | `/api/cost` | Session cost and limits |
 | `POST` | `/api/cost/reset` | Reset cost counter |
