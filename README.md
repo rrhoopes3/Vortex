@@ -137,8 +137,15 @@ print(report.summary())
 ### 1. Install
 
 ```bash
-pip install -r requirements.txt
+pip install -e .
 playwright install chromium  # optional, for browser automation
+```
+
+For Robinhood trading support, install the optional trading extras in the same
+environment you use to launch the app:
+
+```bash
+pip install -e .[trading]
 ```
 
 ### 2. Configure

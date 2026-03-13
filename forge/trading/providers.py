@@ -18,6 +18,8 @@ import urllib.request
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
+from forge.trading_deps import require_provider_dependencies
+
 log = logging.getLogger("forge.trading.providers")
 
 
@@ -317,6 +319,7 @@ class RobinhoodProvider(DataProvider):
             return
         if not self._username or not self._password:
             raise RuntimeError("Robinhood credentials not configured (need FORGE_ROBINHOOD_USER + FORGE_ROBINHOOD_PASS)")
+        require_provider_dependencies("robinhood")
         import robin_stocks.robinhood as r
         r.login(self._username, self._password)
         self._logged_in = True
@@ -569,6 +572,7 @@ class RobinhoodCryptoAPIProvider(DataProvider):
     def _request(self, method: str, path: str, body: str = "") -> dict:
         if not self._api_key or not self._api_secret:
             raise RuntimeError("Robinhood Crypto API key not configured (need FORGE_ROBINHOOD_API_KEY + FORGE_ROBINHOOD_API_SECRET)")
+        require_provider_dependencies("robinhood-crypto")
         url = f"{self._base}{path}"
         headers = self._make_headers(method, path, body)
         req = urllib.request.Request(url, method=method, headers=headers)

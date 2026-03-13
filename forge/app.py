@@ -55,10 +55,18 @@ if MARKETPLACE_ENABLED:
 
 # ── Trading Module ──────────────────────────────────────────────────────
 if TRADING_ENABLED:
+    from forge.trading import check_trading_readiness
     from forge.trading.endpoints import trading_bp
     app.register_blueprint(trading_bp)
-    log.info("Trading module enabled (provider=%s)",
-             os.getenv("FORGE_TRADING_PROVIDER", "yfinance"))
+    trading_readiness = check_trading_readiness()
+    log.info(
+        "Trading module enabled (provider=%s, broker=%s, state=%s)",
+        trading_readiness["provider"],
+        trading_readiness["broker"],
+        trading_readiness["state"],
+    )
+    for issue in trading_readiness["issues"]:
+        log.warning("Trading readiness: %s", issue)
 
 # ── Email Agent + Webhook ────────────────────────────────────────────────
 _email_agent = None
@@ -143,6 +151,11 @@ def run_task(task_id: str, task: str, q: Queue, cancel_event: threading.Event,
 @app.route("/")
 def index():
     return send_from_directory("static", "index.html")
+
+
+@app.route("/favicon.ico")
+def favicon():
+    return Response(status=204)
 
 
 @app.route("/api/task", methods=["POST"])

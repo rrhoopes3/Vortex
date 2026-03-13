@@ -1,22 +1,20 @@
-"""
-Flask Blueprint for trading API endpoints.
+"""Flask Blueprint for trading API endpoints."""
 
-All routes prefixed with /api/trading/.
-"""
 from __future__ import annotations
 
 import json
 import logging
 
-from flask import Blueprint, jsonify, request, Response
+from flask import Blueprint, Response, jsonify, request
+
+from forge.trading import check_trading_readiness
 from forge.trading.engine import get_engine
+from forge.trading_deps import get_provider_dependency_status
 
 log = logging.getLogger("forge.trading.endpoints")
 
 trading_bp = Blueprint("trading", __name__, url_prefix="/api/trading")
 
-
-# ── PCR Data ─────────────────────────────────────────────────────────────────
 
 @trading_bp.route("/pcr/<ticker>")
 def get_pcr(ticker: str):
@@ -59,11 +57,16 @@ def get_quote(ticker: str):
     """Get current price quote."""
     provider = request.args.get("provider", "").strip()
     q = get_engine().get_quote(ticker, provider=provider)
-    return jsonify({
-        "ticker": q.ticker, "price": q.price,
-        "change": q.change, "change_pct": q.change_pct,
-        "volume": q.volume, "timestamp": q.timestamp,
-    })
+    return jsonify(
+        {
+            "ticker": q.ticker,
+            "price": q.price,
+            "change": q.change,
+            "change_pct": q.change_pct,
+            "volume": q.volume,
+            "timestamp": q.timestamp,
+        }
+    )
 
 
 @trading_bp.route("/sentiment", methods=["POST"])
@@ -77,8 +80,6 @@ def analyze_sentiment():
     result = get_engine().analyze_sentiment(tickers, provider=provider)
     return jsonify(result)
 
-
-# ── Alerts ───────────────────────────────────────────────────────────────────
 
 @trading_bp.route("/alerts")
 def get_alerts():
@@ -116,8 +117,6 @@ def remove_alert(alert_id: str):
     return jsonify({"status": "removed", "alert_id": alert_id})
 
 
-# ── History ──────────────────────────────────────────────────────────────────
-
 @trading_bp.route("/history/<ticker>")
 def get_history(ticker: str):
     """Get PCR history for a ticker."""
@@ -125,8 +124,6 @@ def get_history(ticker: str):
     records = get_engine().get_history(ticker, expiry)
     return jsonify({"ticker": ticker, "records": records})
 
-
-# ── SSE Stream ───────────────────────────────────────────────────────────────
 
 @trading_bp.route("/stream")
 def trading_stream():
@@ -144,87 +141,134 @@ def trading_stream():
         finally:
             engine.unsubscribe(q)
 
-    return Response(generate(), mimetype="text/event-stream", headers={
-        "Cache-Control": "no-cache",
-        "X-Accel-Buffering": "no",
-    })
+    return Response(
+        generate(),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
-
-# ── Config ───────────────────────────────────────────────────────────────────
 
 @trading_bp.route("/config")
 def get_config():
-    """Return trading configuration with per-provider capabilities."""
+    """Return trading config, readiness, and per-provider capability state."""
     from forge.config import (
-        TRADING_ENABLED, TRADING_DEFAULT_PROVIDER, TRADING_PAPER_MODE,
-        TRADING_TRADIER_API_KEY, TRADING_TRADIER_ACCOUNT_ID,
-        TRADING_ROBINHOOD_USER, TRADING_ROBINHOOD_PASS,
-        TRADING_ROBINHOOD_API_KEY, TRADING_ROBINHOOD_API_SECRET,
+        TRADING_DEFAULT_PROVIDER,
+        TRADING_ENABLED,
+        TRADING_PAPER_MODE,
+        TRADING_ROBINHOOD_API_KEY,
+        TRADING_ROBINHOOD_API_SECRET,
+        TRADING_ROBINHOOD_PASS,
+        TRADING_ROBINHOOD_USER,
+        TRADING_TRADIER_ACCOUNT_ID,
+        TRADING_TRADIER_API_KEY,
     )
 
+    readiness = check_trading_readiness()
     rh_legacy = bool(TRADING_ROBINHOOD_USER and TRADING_ROBINHOOD_PASS)
     rh_crypto_api = bool(TRADING_ROBINHOOD_API_KEY and TRADING_ROBINHOOD_API_SECRET)
     tradier_configured = bool(TRADING_TRADIER_API_KEY)
     tradier_can_trade = bool(TRADING_TRADIER_API_KEY and TRADING_TRADIER_ACCOUNT_ID)
+    rh_legacy_deps = get_provider_dependency_status("robinhood")
+    rh_crypto_deps = get_provider_dependency_status("robinhood-crypto")
+    rh_legacy_ready = rh_legacy and rh_legacy_deps["available"]
+    rh_crypto_ready = rh_crypto_api and rh_crypto_deps["available"]
 
-    return jsonify({
-        "enabled": TRADING_ENABLED,
-        "default_provider": TRADING_DEFAULT_PROVIDER,
-        "paper_mode": TRADING_PAPER_MODE,
-        "providers": {
-            "yfinance": {
-                "configured": True,
-                "mode": "free",
-                "label": "Yahoo Finance (Free, Delayed)",
-                "capabilities": {
-                    "stocks": {"quotes": True, "trade": False},
-                    "options": {"chains": True, "trade": False},
-                    "crypto": {"quotes": False, "trade": False},
+    return jsonify(
+        {
+            "enabled": TRADING_ENABLED,
+            "default_provider": TRADING_DEFAULT_PROVIDER,
+            "paper_mode": TRADING_PAPER_MODE,
+            "readiness": readiness,
+            "providers": {
+                "yfinance": {
+                    "configured": True,
+                    "available": True,
+                    "missing_dependencies": [],
+                    "issues": [],
+                    "mode": "free",
+                    "label": "Yahoo Finance (Free, Delayed)",
+                    "capabilities": {
+                        "stocks": {"quotes": True, "trade": False},
+                        "options": {"chains": True, "trade": False},
+                        "crypto": {"quotes": False, "trade": False},
+                    },
+                    "data_quality": "delayed ~15min",
+                    "auth": "none",
                 },
-                "data_quality": "delayed ~15min",
-                "auth": "none",
-            },
-            "tradier": {
-                "configured": tradier_configured,
-                "mode": "sandbox" if not tradier_can_trade else "live",
-                "label": "Tradier" + (" (Sandbox)" if not tradier_can_trade else " (Live)"),
-                "capabilities": {
-                    "stocks": {"quotes": True, "trade": tradier_can_trade},
-                    "options": {"chains": True, "trade": tradier_can_trade},
-                    "crypto": {"quotes": False, "trade": False},
+                "tradier": {
+                    "configured": tradier_configured,
+                    "available": True,
+                    "missing_dependencies": [],
+                    "issues": (
+                        []
+                        if tradier_can_trade
+                        else (
+                            ["Set FORGE_TRADIER_API_KEY to enable Tradier market data"]
+                            if not tradier_configured
+                            else [
+                                "Set FORGE_TRADIER_ACCOUNT_ID to enable live Tradier order routing"
+                            ]
+                        )
+                    ),
+                    "mode": "sandbox" if not tradier_can_trade else "live",
+                    "label": "Tradier" + (" (Sandbox)" if not tradier_can_trade else " (Live)"),
+                    "capabilities": {
+                        "stocks": {"quotes": tradier_configured, "trade": tradier_can_trade},
+                        "options": {"chains": tradier_configured, "trade": tradier_can_trade},
+                        "crypto": {"quotes": False, "trade": False},
+                    },
+                    "data_quality": "real-time",
+                    "auth": "api_key",
+                    "env_vars": ["FORGE_TRADIER_API_KEY", "FORGE_TRADIER_ACCOUNT_ID"],
                 },
-                "data_quality": "real-time",
-                "auth": "api_key",
-                "env_vars": ["FORGE_TRADIER_API_KEY", "FORGE_TRADIER_ACCOUNT_ID"],
-            },
-            "robinhood": {
-                "configured": rh_legacy,
-                "mode": "legacy",
-                "label": "Robinhood (Full Access)",
-                "capabilities": {
-                    "stocks": {"quotes": True, "trade": rh_legacy},
-                    "options": {"chains": True, "trade": rh_legacy},
-                    "crypto": {"quotes": True, "trade": rh_legacy},
+                "robinhood": {
+                    "configured": rh_legacy,
+                    "available": rh_legacy_deps["available"],
+                    "missing_dependencies": rh_legacy_deps["missing_dependencies"],
+                    "issues": (
+                        ([] if rh_legacy else [
+                            "Set FORGE_ROBINHOOD_USER and FORGE_ROBINHOOD_PASS to enable Robinhood"
+                        ])
+                        + ([rh_legacy_deps["issue"]] if rh_legacy_deps["issue"] else [])
+                    ),
+                    "mode": "legacy",
+                    "label": "Robinhood (Full Access)",
+                    "capabilities": {
+                        "stocks": {"quotes": rh_legacy_ready, "trade": rh_legacy_ready},
+                        "options": {"chains": rh_legacy_ready, "trade": rh_legacy_ready},
+                        "crypto": {"quotes": rh_legacy_ready, "trade": rh_legacy_ready},
+                    },
+                    "data_quality": "real-time",
+                    "auth": "username/password",
+                    "env_vars": ["FORGE_ROBINHOOD_USER", "FORGE_ROBINHOOD_PASS"],
                 },
-                "data_quality": "real-time",
-                "auth": "username/password",
-                "env_vars": ["FORGE_ROBINHOOD_USER", "FORGE_ROBINHOOD_PASS"],
-            },
-            "robinhood-crypto": {
-                "configured": rh_crypto_api,
-                "mode": "api-key",
-                "label": "Robinhood Crypto API",
-                "capabilities": {
-                    "stocks": {"quotes": False, "trade": False},
-                    "options": {"chains": False, "trade": False},
-                    "crypto": {"quotes": True, "trade": rh_crypto_api},
+                "robinhood-crypto": {
+                    "configured": rh_crypto_api,
+                    "available": rh_crypto_deps["available"],
+                    "missing_dependencies": rh_crypto_deps["missing_dependencies"],
+                    "issues": (
+                        ([] if rh_crypto_api else [
+                            "Set FORGE_ROBINHOOD_API_KEY and FORGE_ROBINHOOD_API_SECRET to enable Robinhood Crypto API"
+                        ])
+                        + ([rh_crypto_deps["issue"]] if rh_crypto_deps["issue"] else [])
+                    ),
+                    "mode": "api-key",
+                    "label": "Robinhood Crypto API",
+                    "capabilities": {
+                        "stocks": {"quotes": False, "trade": False},
+                        "options": {"chains": False, "trade": False},
+                        "crypto": {"quotes": rh_crypto_ready, "trade": rh_crypto_ready},
+                    },
+                    "data_quality": "real-time",
+                    "auth": "api_key",
+                    "env_vars": [
+                        "FORGE_ROBINHOOD_API_KEY",
+                        "FORGE_ROBINHOOD_API_SECRET",
+                    ],
                 },
-                "data_quality": "real-time",
-                "auth": "api_key",
-                "env_vars": ["FORGE_ROBINHOOD_API_KEY", "FORGE_ROBINHOOD_API_SECRET"],
             },
-        },
-    })
+        }
+    )
 
 
 @trading_bp.route("/provider", methods=["POST"])
@@ -239,30 +283,35 @@ def switch_provider():
     if provider not in valid:
         return jsonify({"error": f"Unknown provider: {provider}. Valid: {sorted(valid)}"}), 400
 
-    # Validate the provider has credentials
     if provider == "tradier" and not cfg.TRADING_TRADIER_API_KEY:
-        return jsonify({"error": "Cannot switch to Tradier — FORGE_TRADIER_API_KEY not set"}), 400
-    if provider == "robinhood" and not (cfg.TRADING_ROBINHOOD_USER and cfg.TRADING_ROBINHOOD_PASS):
-        return jsonify({"error": "Cannot switch to Robinhood Legacy — credentials not set"}), 400
-    if provider == "robinhood-crypto" and not (cfg.TRADING_ROBINHOOD_API_KEY and cfg.TRADING_ROBINHOOD_API_SECRET):
-        return jsonify({"error": "Cannot switch to Robinhood Crypto API — API key not set"}), 400
+        return jsonify({"error": "Cannot switch to Tradier; FORGE_TRADIER_API_KEY not set"}), 400
+    if provider == "robinhood" and not (
+        cfg.TRADING_ROBINHOOD_USER and cfg.TRADING_ROBINHOOD_PASS
+    ):
+        return jsonify({"error": "Cannot switch to Robinhood; credentials not set"}), 400
+    if provider == "robinhood-crypto" and not (
+        cfg.TRADING_ROBINHOOD_API_KEY and cfg.TRADING_ROBINHOOD_API_SECRET
+    ):
+        return jsonify({"error": "Cannot switch to Robinhood Crypto API; API key not set"}), 400
 
-    # Hot-swap the provider and reset the broker singleton
+    dep_status = get_provider_dependency_status(provider)
+    if not dep_status["available"]:
+        return jsonify({"error": dep_status["issue"]}), 400
+
     cfg.TRADING_DEFAULT_PROVIDER = provider
     with broker_mod._broker_lock:
-        broker_mod._broker = None  # force re-creation on next get_broker()
+        broker_mod._broker = None
 
     log.info("Trading provider switched to: %s", provider)
     return jsonify({"status": "ok", "provider": provider})
 
-
-# ── Portfolio (Phase 3) ─────────────────────────────────────────────────────
 
 @trading_bp.route("/portfolio")
 def get_portfolio():
     """Get current portfolio positions and P&L."""
     try:
         from forge.trading.portfolio import get_portfolio_manager
+
         pm = get_portfolio_manager()
         return jsonify(pm.get_summary())
     except ImportError:
@@ -271,10 +320,11 @@ def get_portfolio():
 
 @trading_bp.route("/order", methods=["POST"])
 def place_order():
-    """Place a trade order (stocks, options, or crypto)."""
+    """Place a trade order."""
     try:
-        from forge.trading.brokers import get_broker
         from forge.config import TRADING_DEFAULT_PROVIDER, TRADING_PAPER_MODE
+        from forge.trading.brokers import get_broker
+
         data = request.get_json() or {}
         asset_type = data.get("asset_type", "stock").strip()
         ticker = data.get("ticker", "").strip()
@@ -282,14 +332,21 @@ def place_order():
         quantity = float(data.get("quantity", 0))
         order_type = data.get("order_type", "market").strip()
         price = float(data.get("price", 0)) if data.get("price") else None
-        duration = data.get("duration", "day").strip()
 
         if not ticker or not side or quantity <= 0:
             return jsonify({"error": "ticker, side, and positive quantity required"}), 400
 
         broker = get_broker()
-        log.info("Order: asset=%s ticker=%s side=%s qty=%s broker=%s provider=%s paper=%s",
-                 asset_type, ticker, side, quantity, broker.name, TRADING_DEFAULT_PROVIDER, TRADING_PAPER_MODE)
+        log.info(
+            "Order: asset=%s ticker=%s side=%s qty=%s broker=%s provider=%s paper=%s",
+            asset_type,
+            ticker,
+            side,
+            quantity,
+            broker.name,
+            TRADING_DEFAULT_PROVIDER,
+            TRADING_PAPER_MODE,
+        )
 
         if asset_type == "option":
             expiry = data.get("expiry", "").strip()
@@ -300,7 +357,7 @@ def place_order():
             if not hasattr(broker, "place_option_order"):
                 return jsonify({"error": f"Broker '{broker.name}' does not support options trading"}), 400
             result = broker.place_option_order(
-                ticker, expiry, strike, option_type, side, int(quantity), order_type, price,
+                ticker, expiry, strike, option_type, side, int(quantity), order_type, price
             )
         elif asset_type == "crypto":
             if not hasattr(broker, "place_crypto_order"):
@@ -312,13 +369,25 @@ def place_order():
 
         if "error" in result:
             log.warning("Order failed: %s", result)
-            return jsonify({**result, "_debug": {
-                "broker": broker.name,
-                "provider": TRADING_DEFAULT_PROVIDER,
-                "paper_mode": TRADING_PAPER_MODE,
-                "asset_type": asset_type,
-                "ticker": ticker,
-            }}), 502
+            lower_error = str(result.get("error", "")).lower()
+            status = 400 if (
+                "requires the optional package" in lower_error or "not configured" in lower_error
+            ) else 502
+            return (
+                jsonify(
+                    {
+                        **result,
+                        "_debug": {
+                            "broker": broker.name,
+                            "provider": TRADING_DEFAULT_PROVIDER,
+                            "paper_mode": TRADING_PAPER_MODE,
+                            "asset_type": asset_type,
+                            "ticker": ticker,
+                        },
+                    }
+                ),
+                status,
+            )
         return jsonify(result)
     except Exception as e:
         log.exception("Order endpoint exception")
@@ -330,6 +399,7 @@ def get_orders():
     """Get order history."""
     try:
         from forge.trading.portfolio import get_portfolio_manager
+
         pm = get_portfolio_manager()
         return jsonify(pm.get_orders())
     except ImportError:

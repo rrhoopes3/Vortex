@@ -1855,6 +1855,7 @@ const tradingState = {
     tradeSide: "buy",
     assetType: "stock",
     providerCaps: null,
+    tradingConfig: null,
     pcrHistory: [],
     alerts: [],
     sseSource: null,
@@ -1880,21 +1881,11 @@ function initTrading() {
 
     refreshBtn.addEventListener("click", () => loadPCRData());
 
-    // Provider switch — hot-swap backend + refresh data
-    providerSelect.addEventListener("change", async () => {
-        const provider = providerSelect.value;
-        try {
-            await fetch("/api/trading/provider", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ provider }),
-            });
-        } catch (e) {
-            console.warn("Provider switch failed:", e);
-        }
+    // Market-data provider switch only.
+    providerSelect.addEventListener("change", () => {
+        fetchTradingCaps();
         loadExpirations();
         loadPCRData();
-        fetchTradingCaps();
         // Reset option expirations for new provider
         const optExp = document.getElementById("trade-option-expiry");
         if (optExp) optExp.innerHTML = '<option value="">Select expiry...</option>';
@@ -1902,18 +1893,46 @@ function initTrading() {
 
     // Auto-select active provider from backend config
     fetch("/api/trading/config").then(r => r.json()).then(cfg => {
-        if (cfg.default_provider && providerSelect.querySelector(`option[value="${cfg.default_provider}"]`)) {
+        tradingState.tradingConfig = cfg;
+        const defaultInfo = cfg.providers?.[cfg.default_provider];
+        if (
+            cfg.default_provider &&
+            defaultInfo?.configured &&
+            defaultInfo?.available !== false &&
+            providerSelect.querySelector(`option[value="${cfg.default_provider}"]`)
+        ) {
             providerSelect.value = cfg.default_provider;
         }
-        // Disable unconfigured providers
+
         for (const [key, info] of Object.entries(cfg.providers || {})) {
             const opt = providerSelect.querySelector(`option[value="${key}"]`);
-            if (opt && !info.configured) {
+            if (!opt) continue;
+            const usable = info.configured && info.available !== false;
+            if (!usable) {
                 opt.disabled = true;
-                opt.textContent += " (not configured)";
+                const reason = info.available === false ? "missing dependency" : "not configured";
+                if (!opt.textContent.includes(`(${reason})`)) {
+                    opt.textContent += ` (${reason})`;
+                }
             }
         }
-    }).catch(() => {});
+
+        if (providerSelect.selectedOptions[0]?.disabled) {
+            const firstUsable = Array.from(providerSelect.options).find(option => !option.disabled);
+            if (firstUsable) providerSelect.value = firstUsable.value;
+        }
+        fetchTradingCaps(cfg);
+        loadExpirations();
+        loadPCRData();
+        loadTradingAlerts();
+        loadPortfolio();
+    }).catch(() => {
+        fetchTradingCaps();
+        loadExpirations();
+        loadPCRData();
+        loadTradingAlerts();
+        loadPortfolio();
+    });
 
     tickerSelect.addEventListener("change", () => {
         tradingState.currentTicker = tickerSelect.value;
@@ -1981,9 +2000,6 @@ function initTrading() {
         optionExpiry.addEventListener("focus", () => loadOptionExpirations());
     }
 
-    // Fetch provider capabilities to enable/disable asset tabs
-    fetchTradingCaps();
-
     // Chart mode switching
     document.querySelectorAll(".chart-mode-btns .filter-btn").forEach(btn => {
         btn.addEventListener("click", () => {
@@ -1996,12 +2012,6 @@ function initTrading() {
 
     // Connect SSE stream
     connectTradingStream();
-
-    // Initial data load
-    loadExpirations();
-    loadPCRData();
-    loadTradingAlerts();
-    loadPortfolio();
 }
 
 async function loadExpirations() {
@@ -2262,11 +2272,13 @@ function updateTradeFieldsVisibility() {
     }
 }
 
-async function fetchTradingCaps() {
+async function fetchTradingCaps(cfgOverride = null) {
     try {
-        const cfg = await fetchJson("/api/trading/config");
+        const cfg = cfgOverride || await fetchJson("/api/trading/config");
+        tradingState.tradingConfig = cfg;
         const provider = cfg.default_provider;
-        const caps = cfg.providers?.[provider]?.capabilities || {};
+        const executionInfo = cfg.providers?.[provider] || {};
+        const caps = executionInfo.capabilities || {};
         tradingState.providerCaps = caps;
 
         // Enable/disable asset tabs based on provider capabilities
@@ -2294,8 +2306,45 @@ async function fetchTradingCaps() {
         const badge = document.getElementById("paper-badge");
         if (badge) {
             const isTrade = caps.stocks?.trade || caps.options?.trade || caps.crypto?.trade;
-            badge.textContent = cfg.paper_mode ? "PAPER" : (isTrade ? "LIVE" : "PAPER");
-            badge.className = "paper-badge" + (cfg.paper_mode ? "" : (isTrade ? " live" : ""));
+            const readiness = cfg.readiness || {};
+            if (cfg.paper_mode) {
+                badge.textContent = "PAPER";
+                badge.className = "paper-badge";
+            } else if (readiness.state === "unavailable") {
+                badge.textContent = "UNAVAILABLE";
+                badge.className = "paper-badge unavailable";
+            } else {
+                badge.textContent = isTrade ? "LIVE" : "PAPER";
+                badge.className = "paper-badge" + (isTrade ? " live" : "");
+            }
+        }
+
+        const note = document.getElementById("trade-broker-note");
+        const submitBtn = document.getElementById("trade-submit-btn");
+        if (note && submitBtn) {
+            const selectedDataProvider = document.getElementById("trading-provider")?.value || "";
+            const selectedDataInfo = cfg.providers?.[selectedDataProvider] || {};
+            const readiness = cfg.readiness || {};
+            const executionLabel = executionInfo.label || provider || "Primary broker";
+            const dataLabel = selectedDataInfo.label || selectedDataProvider || "Current data provider";
+            const readinessIssue = readiness.issues?.[0] || "";
+
+            if (cfg.paper_mode) {
+                note.textContent = `Orders are in paper mode. Market data is using ${dataLabel}.`;
+                note.className = "trade-broker-note";
+                submitBtn.disabled = false;
+                submitBtn.title = "";
+            } else if (readiness.state === "unavailable") {
+                note.textContent = `Orders route via ${executionLabel}, but it is currently unavailable. ${readinessIssue}`;
+                note.className = "trade-broker-note error";
+                submitBtn.disabled = true;
+                submitBtn.title = readinessIssue || `${executionLabel} is unavailable`;
+            } else {
+                note.textContent = `Orders route via ${executionLabel}. Market data is using ${dataLabel}.`;
+                note.className = "trade-broker-note";
+                submitBtn.disabled = false;
+                submitBtn.title = "";
+            }
         }
     } catch (e) {
         console.warn("Failed to fetch trading caps:", e);

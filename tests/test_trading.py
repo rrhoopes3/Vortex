@@ -438,6 +438,9 @@ class TestTradingEndpoints:
         assert "enabled" in data
         assert "default_provider" in data
         assert "providers" in data
+        assert "readiness" in data
+        assert "available" in data["providers"]["robinhood"]
+        assert "issues" in data["providers"]["robinhood-crypto"]
 
     def test_alerts_empty(self, client):
         r = client.get("/api/trading/alerts")
@@ -471,6 +474,33 @@ class TestTradingEndpoints:
             "ticker": "", "side": "buy", "quantity": 0,
         })
         assert r.status_code == 400
+
+    def test_order_dependency_error_returns_400(self, client, monkeypatch):
+        from forge.trading import brokers as broker_mod
+
+        class DummyBroker:
+            name = "robinhood-crypto"
+
+            def place_crypto_order(self, ticker, side, quantity):
+                return {
+                    "error": (
+                        "RuntimeError: Robinhood Crypto API requires the optional package "
+                        "'cryptography'. Install the trading extras and run The Forge from "
+                        "that environment's Python."
+                    )
+                }
+
+        monkeypatch.setattr(broker_mod, "get_broker", lambda: DummyBroker())
+
+        r = client.post("/api/trading/order", json={
+            "asset_type": "crypto",
+            "ticker": "DOGE",
+            "side": "buy",
+            "quantity": 1,
+        })
+        assert r.status_code == 400
+        data = r.get_json()
+        assert "cryptography" in data["error"]
 
     def test_orders_endpoint(self, client):
         r = client.get("/api/trading/orders")
@@ -674,6 +704,48 @@ class TestProviderReadiness:
              cfg.TRADING_TRADIER_API_KEY, cfg.TRADING_TRADIER_ACCOUNT_ID) = orig
 
 
+    def test_readiness_robinhood_crypto_missing_dependency(self, monkeypatch):
+        """Robinhood crypto without cryptography should be unavailable."""
+        import forge.config as cfg
+        import forge.trading as trading_mod
+
+        orig = (
+            cfg.TRADING_ENABLED,
+            cfg.TRADING_PAPER_MODE,
+            cfg.TRADING_DEFAULT_PROVIDER,
+            cfg.TRADING_ROBINHOOD_API_KEY,
+            cfg.TRADING_ROBINHOOD_API_SECRET,
+        )
+        cfg.TRADING_ENABLED = True
+        cfg.TRADING_PAPER_MODE = False
+        cfg.TRADING_DEFAULT_PROVIDER = "robinhood-crypto"
+        cfg.TRADING_ROBINHOOD_API_KEY = "key"
+        cfg.TRADING_ROBINHOOD_API_SECRET = "secret"
+        monkeypatch.setattr(
+            trading_mod,
+            "get_provider_dependency_status",
+            lambda provider: {
+                "provider": provider,
+                "available": False,
+                "missing_dependencies": ["cryptography"],
+                "issue": "Robinhood Crypto API requires the optional package 'cryptography'.",
+            },
+        )
+
+        try:
+            result = trading_mod.check_trading_readiness()
+            assert result["state"] == "unavailable"
+            assert any("cryptography" in issue for issue in result["issues"])
+        finally:
+            (
+                cfg.TRADING_ENABLED,
+                cfg.TRADING_PAPER_MODE,
+                cfg.TRADING_DEFAULT_PROVIDER,
+                cfg.TRADING_ROBINHOOD_API_KEY,
+                cfg.TRADING_ROBINHOOD_API_SECRET,
+            ) = orig
+
+
 class TestProviderCaching:
     """Regression tests for provider singleton caching behavior."""
 
@@ -740,6 +812,21 @@ class TestProviderCaching:
         assert p1 is p2
 
         _providers.pop("robinhood-crypto", None)
+
+
+class TestTradingDependencyChecks:
+    def test_missing_dependency_status(self, monkeypatch):
+        import forge.trading_deps as deps
+
+        def fake_find_spec(name):
+            return None if name == "cryptography" else object()
+
+        monkeypatch.setattr(deps.importlib.util, "find_spec", fake_find_spec)
+
+        status = deps.get_provider_dependency_status("robinhood-crypto")
+        assert status["available"] is False
+        assert status["missing_dependencies"] == ["cryptography"]
+        assert "cryptography" in status["issue"]
 
 
 class TestConfiguredProviderSelection:

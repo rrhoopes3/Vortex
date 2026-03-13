@@ -312,7 +312,7 @@
                 <!-- Provider + Ticker Selection -->
                 <div class="trading-controls">
                     <label class="field">
-                        <span>Provider</span>
+                        <span>Market Data</span>
                         <select id="trading-provider">
                             <option value="robinhood">Robinhood Legacy (Stocks + Options + Crypto)</option>
                             <option value="robinhood-crypto">Robinhood Crypto API (Crypto Only)</option>
@@ -416,6 +416,7 @@
                 <!-- Trade Panel -->
                 <div class="trading-section">
                     <h4>Trade <span class="paper-badge" id="paper-badge">PAPER</span></h4>
+                    <div id="trade-broker-note" class="trade-broker-note"></div>
 
                     <!-- Asset type tabs -->
                     <div class="trade-asset-tabs" id="trade-asset-tabs">

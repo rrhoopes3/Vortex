@@ -39,6 +39,7 @@ dev = [
 trading = [
     "yfinance>=0.2",
     "robin_stocks>=3.0",
+    "cryptography>=42.0",
 ]
 
 [project.scripts]

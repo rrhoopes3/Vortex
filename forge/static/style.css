@@ -1516,6 +1516,22 @@ input[type="range"] {
     color: var(--signal);
 }
 
+.paper-badge.unavailable {
+    background: rgba(255, 106, 106, 0.18);
+    color: var(--danger);
+}
+
+.trade-broker-note {
+    margin: 0 0 10px;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    color: var(--muted);
+}
+
+.trade-broker-note.error {
+    color: var(--danger);
+}
+
 .alert-config {
     display: flex;
     gap: 6px;
