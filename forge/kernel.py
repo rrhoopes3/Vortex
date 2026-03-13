@@ -23,11 +23,10 @@ with a structured scheduling approach.
 from __future__ import annotations
 
 import logging
+import math
 import threading
 import time
 from dataclasses import dataclass, field
-
-from forge.config import COST_LIMIT_PER_TASK, COST_LIMIT_PER_SESSION
 
 log = logging.getLogger("forge.kernel")
 
@@ -62,15 +61,15 @@ class TokenAccount:
         return self.input_tokens + self.output_tokens
 
     @property
-    def input_remaining(self) -> int:
+    def input_remaining(self) -> int | float:
         if self.budget_input == 0:
-            return float("inf")
+            return math.inf
         return max(0, self.budget_input - self.input_tokens)
 
     @property
-    def output_remaining(self) -> int:
+    def output_remaining(self) -> int | float:
         if self.budget_output == 0:
-            return float("inf")
+            return math.inf
         return max(0, self.budget_output - self.output_tokens)
 
     @property
@@ -159,6 +158,12 @@ class TokenBudgetScheduler:
     def get_task_usage(self, task_id: str) -> TokenAccount | None:
         """Get usage stats for a specific task."""
         return self._tasks.get(task_id)
+
+    @property
+    def task_count(self) -> int:
+        """Number of active tasks."""
+        with self._lock:
+            return len(self._tasks)
 
     @property
     def session_usage(self) -> TokenAccount:
@@ -256,7 +261,7 @@ class RateLimiter:
         self._windows: dict[str, list[float]] = {}
 
     def acquire(self, provider: str) -> RateLimitVerdict:
-        """Check if a request is allowed under the rate limit.
+        """Check if a request is allowed and reserve a slot in the rate limit window.
 
         Returns a verdict indicating whether to proceed or wait.
         Automatically cleans up old timestamps.
@@ -289,6 +294,31 @@ class RateLimiter:
                 reason=f"Rate limit for {provider}: {current_count}/{limit} requests/min",
             )
 
+    def check(self, provider: str) -> RateLimitVerdict:
+        """Check if a request would be allowed without reserving a slot.
+
+        Use this for pre-flight checks. Call acquire() when actually making the request.
+        """
+        limit = self._limits.get(provider, 60)
+        now = time.time()
+        window_start = now - 60.0
+
+        with self._lock:
+            timestamps = self._windows.get(provider, [])
+            active = [t for t in timestamps if t > window_start]
+            current_count = len(active)
+
+            if current_count < limit:
+                return RateLimitVerdict(allowed=True, wait_seconds=0.0)
+
+            oldest = active[0]
+            wait = (oldest + 60.0) - now
+            return RateLimitVerdict(
+                allowed=False,
+                wait_seconds=max(0.0, wait),
+                reason=f"Rate limit for {provider}: {current_count}/{limit} requests/min",
+            )
+
     def record(self, provider: str):
         """Record a request (if not using acquire)."""
         with self._lock:
@@ -303,6 +333,9 @@ class RateLimiter:
         with self._lock:
             timestamps = self._windows.get(provider, [])
             active = [t for t in timestamps if t > window_start]
+            # Prune stale entries to prevent unbounded growth
+            if provider in self._windows:
+                self._windows[provider] = active
             limit = self._limits.get(provider, 60)
             return {
                 "provider": provider,
@@ -364,7 +397,7 @@ class AgentKernel:
                 wait_seconds=0.0,
             )
 
-        rate = self.rate_limiter.acquire(provider)
+        rate = self.rate_limiter.check(provider)
         if not rate.allowed:
             return KernelVerdict(
                 allowed=False,
@@ -392,7 +425,7 @@ class AgentKernel:
                 "output": self.tokens.session_usage.output_tokens,
                 "total": self.tokens.session_usage.total_tokens,
             },
-            "active_tasks": len(self.tokens._tasks),
+            "active_tasks": self.tokens.task_count,
         }
 
 

@@ -10,6 +10,7 @@ Supported providers:
   - anthropic → Anthropic Messages API
   - openai  → OpenAI Chat Completions API
   - lmstudio → OpenAI-compatible local server
+  - ollama   → Ollama local server (OpenAI-compatible)
 """
 from __future__ import annotations
 import json
@@ -17,7 +18,7 @@ import logging
 import threading
 from typing import Generator
 
-from forge.config import ANTHROPIC_API_KEY, OPENAI_API_KEY, LMSTUDIO_BASE_URL, EXECUTOR_MODELS
+from forge.config import ANTHROPIC_API_KEY, OPENAI_API_KEY, LMSTUDIO_BASE_URL, OLLAMA_BASE_URL, EXECUTOR_MODELS
 from forge.tools.registry import ToolRegistry
 
 log = logging.getLogger("forge.providers")
@@ -50,6 +51,8 @@ def detect_provider(model: str) -> str:
         return "openai"
     if model.startswith("lmstudio:"):
         return "lmstudio"
+    if model.startswith("ollama:"):
+        return "ollama"
     return "xai"
 
 
@@ -205,6 +208,12 @@ def run_anthropic(
                 yield {"type": "escalation", "reason": esc.reason,
                        "category": esc.category, "context": esc.context}
                 return full_output
+
+            # ── Generative UI interception ────────────────────────────
+            from forge.generative_ui import intercept_widget_result
+            widget_event, result = intercept_widget_result(result)
+            if widget_event:
+                yield widget_event
 
             # ── Output Guardrails ────────────────────────────────────
             if guardrail_engine:
@@ -405,6 +414,12 @@ def run_openai(
                 yield {"type": "escalation", "reason": esc.reason,
                        "category": esc.category, "context": esc.context}
                 return full_output
+
+            # ── Generative UI interception ────────────────────────────
+            from forge.generative_ui import intercept_widget_result
+            widget_event, result = intercept_widget_result(result)
+            if widget_event:
+                yield widget_event
 
             # ── Output Guardrails ────────────────────────────────────
             if guardrail_engine:

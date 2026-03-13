@@ -82,15 +82,15 @@ class TollRelay:
                 msg_type = message_type or _MSG_TYPE_MAP.get(msg.get("type", ""), "other")
                 rate = self.rate_engine.get_rate(msg_type)
 
-                if rate and rate.base_rate_usd > 0:
+                token_count = _estimate_tokens(msg) if rate else 0
+                toll_amount = self.rate_engine.calculate(
+                    rate, token_count, self._session_counters.get(session_key, 0),
+                ) if rate else 0.0
+
+                if toll_amount > 0:
                     hop_counter += 1
                     self._session_counters[session_key] = (
                         self._session_counters.get(session_key, 0) + 1
-                    )
-                    token_count = _estimate_tokens(msg)
-
-                    toll_amount = self.rate_engine.calculate(
-                        rate, token_count, self._session_counters[session_key],
                     )
                     creator_cut = round(toll_amount * (rate.creator_rake_pct / 100.0), 8)
 

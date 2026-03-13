@@ -262,15 +262,15 @@ class TestRateEngine:
         assert result == pytest.approx(0.001)
 
     def test_calculate_with_tokens(self, rate_engine):
-        rate = rate_engine.get_rate("llm_response")
+        rate = rate_engine.get_rate("token_usage")
         result = rate_engine.calculate(rate, token_count=1000)
-        # base (0.0005) + 1000 * 0.000002 = 0.0025
-        assert result == pytest.approx(0.0025)
+        # base (0.001) + 1000 * 0.000002 = 0.003
+        assert result == pytest.approx(0.003)
 
     def test_free_message_types(self, rate_engine):
         rate = rate_engine.get_rate("status_update")
         assert rate.base_rate_usd == 0.0
-        rate2 = rate_engine.get_rate("token_usage")
+        rate2 = rate_engine.get_rate("llm_response")
         assert rate2.base_rate_usd == 0.0
 
     def test_custom_rate_override(self):
@@ -338,7 +338,7 @@ class TestTollRelay:
 
     def test_meter_yields_toll_events(self, relay):
         msgs = [
-            {"type": "content", "content": "hello world " * 20},
+            {"type": "tool_call", "name": "read_file", "args": {}, "content": "hello world " * 20},
         ]
         gen = relay.meter(self._make_generator(msgs), "sender", "receiver", session_id="test")
         results = list(gen)
@@ -350,7 +350,7 @@ class TestTollRelay:
 
     def test_meter_yields_summary_at_end(self, relay):
         msgs = [
-            {"type": "content", "content": "hello " * 50},
+            {"type": "tool_call", "name": "read_file", "args": {}, "content": "hello " * 50},
         ]
         gen = relay.meter(self._make_generator(msgs), "sender", "receiver", session_id="test_sum")
         results = list(gen)
@@ -361,7 +361,7 @@ class TestTollRelay:
     def test_free_messages_not_tolled(self, relay):
         msgs = [
             {"type": "status", "content": "Starting..."},
-            {"type": "token_usage", "cost_usd": 0.01},
+            {"type": "content", "content": "Free response"},
         ]
         gen = relay.meter(self._make_generator(msgs), "sender", "receiver", session_id="test_free")
         results = list(gen)

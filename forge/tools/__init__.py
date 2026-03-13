@@ -22,4 +22,7 @@ def create_registry() -> ToolRegistry:
     archive.register(reg)
     email.register(reg)
     escalation.register(reg)
+    # Generative UI — interactive widget rendering
+    from forge.generative_ui import register_widget_tools
+    register_widget_tools(reg)
     return reg

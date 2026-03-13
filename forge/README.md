@@ -14,7 +14,7 @@ The Forge is a two-tier AI agent system:
 2. **Executor** &mdash; A single agent carries out each step using 30+ client-side tools (file I/O, shell, git, browser automation, HTTP, database, and more).
 
 It also ships with:
-- **BattleBot Arena** &mdash; Pit two AI teams against each other in a sandboxed deathmatch with Zeus as Arena Master.
+- **Arena** &mdash; 15 battle scenarios across two modes: adversarial combat (Zeus judges) and collaborative building (the Muses judge).
 - **Presidential Council** &mdash; A CLI think tank where 16 US Presidents debate modern problems.
 
 ### Context Engineering (OpenDev-Inspired)
@@ -53,6 +53,7 @@ XAI_API_KEY=your-xai-api-key-here
 ANTHROPIC_API_KEY=           # optional, for Claude models
 OPENAI_API_KEY=              # optional, for GPT models
 LMSTUDIO_BASE_URL=http://localhost:1234/v1  # optional, for local models
+OLLAMA_BASE_URL=http://localhost:11434/v1   # optional, for Ollama models
 ```
 
 Only `XAI_API_KEY` is required. The other providers are optional.
@@ -108,6 +109,7 @@ Type a task in the input bar and hit **FORGE**. The system will:
 | GPT-4o Mini | OpenAI | $0.15 / $0.60 |
 | o3-mini | OpenAI | $1.10 / $4.40 |
 | LM Studio (Local) | Local | Free |
+| Ollama | Local | Free |
 
 **Auto routing** classifies your task as simple, moderate, or complex and picks the right model:
 - Simple/moderate tasks &rarr; Grok 4.1 Fast Reasoning (cheap)
@@ -137,16 +139,35 @@ With **lazy tool discovery**, only the tools relevant to each step are injected 
 
 ---
 
-## BattleBot Arena
+## Arena — Combat & Collaboration
 
-Click the **ARENA** button in the web UI to launch a deathmatch:
+Click the **ARENA** button in the web UI. Pick two models and a scenario from the dropdown.
 
-1. **Pick fighters** &mdash; Choose models for Red and Blue teams
-2. **Round 1: Recon** &mdash; Both teams scout the arena sandbox
-3. **Round 2: Weapon Forge** &mdash; Teams build scripts, tools, and weapons
-4. **Round 3: Combat** &mdash; Turn-based battle with tool execution
-5. **Sudden Death** &mdash; If scores are tied
-6. **Judgment** &mdash; Zeus and the Pantheon score creativity, execution, damage, and style
+### Combat Mode (10 scenarios)
+
+Adversarial deathmatch judged by Zeus and the 16-agent Pantheon:
+
+1. **Round 1: Recon & Intel** &mdash; Both teams scout the arena sandbox in parallel
+2. **Round 2: Weapon Forge** &mdash; Teams build scripts, tools, and weapons in parallel
+3. **Round 3: Direct Combat** &mdash; Turn-based battle with tool execution
+4. **Sudden Death** &mdash; If scores are within 10 points
+5. **Judgment** &mdash; Zeus scores creativity, execution, damage, and style
+
+Scenarios: Classic Deathmatch, Capture the Flag, Exploit & Fortify, Survival Horror, Pictionary, Roast Battle, Puzzle Race, Exquisite Corpse, Code Golf, Widget Wars.
+
+### Collaboration Mode (5 scenarios)
+
+Cooperative building judged by Calliope and the 16-agent Muse council:
+
+1. **Round 1: Discovery** &mdash; Both agents read the brief and coordinate in parallel
+2. **Round 2: Build** &mdash; Each agent builds their part of the project in parallel
+3. **Round 3: Integration** &mdash; Turn-based merging and polishing
+4. **Final Polish** &mdash; If scores are close, one more refinement round
+5. **Judgment** &mdash; Muses score creativity, execution, synergy, and style
+
+Scenarios: Pair Programming, Story Time, Startup Pitch, World Building, Hackathon.
+
+Each scenario seeds the sandbox with role-specific briefs, project materials, and division-of-labor instructions. The frontend auto-adapts &mdash; button says "BUILD" instead of "FIGHT", header says "THE FORGE STUDIO", and the result shows a combined team score.
 
 Enable **TTS** for dramatic live commentary read aloud.
 
@@ -194,7 +215,7 @@ Grok/
     orchestrator.py             # Planner -> Executor pipeline
     planner.py                  # 16-agent research council
     executor.py                 # Single-agent tool-calling loop
-    providers.py                # Anthropic/OpenAI/LM Studio adapters
+    providers.py                # Anthropic/OpenAI/LM Studio/Ollama adapters
     context_engine.py           # Context compaction, session memory, auto routing
     models.py                   # Pydantic data models
     memory.py                   # Task persistence (JSON)
@@ -212,8 +233,8 @@ Grok/
       archive.py                # ZIP/TAR operations
       clipboard.py              # System clipboard
     arena/
-      runner.py                 # Arena deathmatch orchestrator
-      sandbox.py                # Arena sandbox setup
+      runner.py                 # Arena orchestrator (combat + collab, 15 scenarios)
+      sandbox.py                # Arena sandbox setup + scenario seeding
     static/
       index.html                # SPA frontend
       style.css                 # Dark theme UI

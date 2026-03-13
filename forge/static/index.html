@@ -3,116 +3,295 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>The Forge — Grok 4.20 Agent</title>
+    <title>The Forge | Agent Runtime Console</title>
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
-    <header>
-        <div class="logo">THE FORGE</div>
-        <div class="subtitle">Grok 4.20 Autonomous Agent</div>
-        <div class="sandbox-controls">
-            <label class="sandbox-toggle" title="Restrict file/shell access to a directory">
-                <input type="checkbox" id="sandbox-toggle" checked>
-                <span class="toggle-slider"></span>
-                <span class="toggle-label">Sandbox</span>
-            </label>
-            <input type="text" id="sandbox-path" value="" placeholder="Sandbox directory..." title="Root directory for sandboxed operations">
+    <header class="topbar">
+        <div class="brand-block">
+            <div class="logo">THE FORGE</div>
         </div>
-        <div class="status" id="status">Ready</div>
+        <nav class="tab-bar" id="tab-bar">
+            <button class="tab-btn active" data-tab="console">Console</button>
+            <button class="tab-btn" data-tab="history">History</button>
+            <button class="tab-btn" data-tab="memory">Memory</button>
+            <button class="tab-btn" data-tab="safety">Safety</button>
+            <button class="tab-btn" data-tab="runtime">Runtime</button>
+        </nav>
+        <div class="feature-badges" id="feature-badges"></div>
+        <div class="status-pill" id="status">Ready</div>
     </header>
-    <div class="settings-bar">
-        <label class="direct-toggle" title="Skip the multi-agent planner and send task straight to executor">
-            <input type="checkbox" id="direct-toggle">
-            <span class="toggle-slider"></span>
-            <span class="toggle-label">Direct Mode</span>
-        </label>
-        <div class="agent-control" id="agent-control">
-            <label for="agent-slider">Agents</label>
-            <input type="range" id="agent-slider" min="4" max="16" step="4" value="16">
-            <span class="agent-count" id="agent-count">16</span>
-        </div>
-        <div class="model-control">
-            <label for="model-select">Model</label>
-            <select id="model-select">
-                <option value="">Loading...</option>
-            </select>
-        </div>
-        <div class="cost-ticker" id="cost-ticker" title="Session cost (click to reset)">
-            <span class="cost-label">$</span><span class="cost-value" id="cost-value">0.000000</span>
-        </div>
-        <button id="arena-btn" class="arena-btn" title="Launch BattleBot Arena — two AI teams deathmatch!">ARENA</button>
-    </div>
-    <!-- Arena model pickers (hidden until arena button clicked) -->
-    <div class="arena-setup hidden" id="arena-setup">
-        <div class="arena-setup-inner">
-            <span class="arena-setup-title">ARENA SETUP</span>
-            <div class="arena-team-pick">
-                <label class="team-red">RED</label>
-                <select id="red-model"></select>
-            </div>
-            <span class="arena-vs">VS</span>
-            <div class="arena-team-pick">
-                <label class="team-blue">BLUE</label>
-                <select id="blue-model"></select>
-            </div>
-            <label class="tts-toggle" title="Arena Master commentary read aloud">
-                <input type="checkbox" id="tts-toggle">
-                <span class="toggle-slider"></span>
-                <span class="toggle-label">TTS</span>
-            </label>
-            <button id="arena-go-btn" class="arena-go-btn">FIGHT!</button>
-            <button id="arena-cancel-btn" class="arena-cancel-btn">Cancel</button>
-        </div>
-    </div>
-    <main>
-        <aside class="sidebar">
-            <h3>Task History</h3>
-            <div id="history-list"></div>
-        </aside>
-        <section class="arena-view hidden" id="arena-view">
-            <div class="arena-header">
-                <div class="arena-team-info">
-                    <span class="team-name team-red">RED TEAM</span>
-                    <div class="score-bar"><span class="score-fill score-red" id="score-red"></span></div>
-                    <span class="score-num" id="score-red-num">0</span>
+
+    <!-- ── TAB: Console (default) ─────────────────────────────────── -->
+    <div class="tab-content active" id="tab-console">
+        <section class="control-deck">
+            <div class="control-row">
+                <label class="toggle-field" title="Restrict file and shell access to a directory">
+                    <span>Sandbox</span>
+                    <span class="switch">
+                        <input type="checkbox" id="sandbox-toggle" checked>
+                        <span class="switch-track"></span>
+                    </span>
+                </label>
+
+                <label class="field" title="Root directory for sandboxed operations">
+                    <span>Sandbox Path</span>
+                    <input type="text" id="sandbox-path" value="" placeholder="Sandbox directory...">
+                </label>
+
+                <label class="toggle-field" title="Skip the planner and send the task straight to the executor">
+                    <span>Direct Mode</span>
+                    <span class="switch">
+                        <input type="checkbox" id="direct-toggle">
+                        <span class="switch-track"></span>
+                    </span>
+                </label>
+
+                <label class="field" id="agent-control">
+                    <span>Agents</span>
+                    <div class="slider-row">
+                        <input type="range" id="agent-slider" min="4" max="16" step="4" value="16">
+                        <strong id="agent-count">16</strong>
+                    </div>
+                </label>
+
+                <label class="field">
+                    <span>Executor</span>
+                    <select id="model-select">
+                        <option value="">Loading...</option>
+                    </select>
+                </label>
+
+                <div class="deck-metrics">
+                    <span class="deck-metric"><em>Cost</em> <strong id="session-cost">$0.00</strong></span>
+                    <span class="deck-metric"><em>Toll</em> <strong id="session-toll">$0.00</strong></span>
+                    <span class="deck-metric"><em>Task</em> <strong id="task-cost">$0.00</strong></span>
+                    <span class="deck-metric"><em>Limit</em> <strong id="cost-limits">-</strong></span>
                 </div>
-                <div class="arena-round-info">
-                    <span class="round-label" id="round-label">READY</span>
-                </div>
-                <div class="arena-team-info">
-                    <span class="team-name team-blue">BLUE TEAM</span>
-                    <div class="score-bar"><span class="score-fill score-blue" id="score-blue"></span></div>
-                    <span class="score-num" id="score-blue-num">0</span>
-                </div>
-            </div>
-            <div class="arena-commentary" id="arena-commentary">
-                <div class="commentary-text" id="commentary-text">Awaiting Arena Master...</div>
-            </div>
-            <div class="arena-teams">
-                <div class="arena-team-log">
-                    <div class="team-log-header team-red">RED TEAM</div>
-                    <div class="team-log-content" id="red-log"></div>
-                </div>
-                <div class="arena-team-log">
-                    <div class="team-log-header team-blue">BLUE TEAM</div>
-                    <div class="team-log-content" id="blue-log"></div>
-                </div>
+
+                <button id="arena-btn" class="ghost-btn" title="Open Arena — AI Gladiatorial Combat">Arena</button>
+                <button id="reset-cost-btn" class="ghost-btn small-btn" title="Reset spend">Reset</button>
             </div>
         </section>
-        <section class="chat-area">
-            <div class="messages" id="messages">
-                <div class="msg status">
-                    The Forge is ready. Describe a task and the 16-agent planner will research and strategize, then the executor will carry it out with tools.
+
+        <!-- Live run status bar -->
+        <div class="live-bar" id="live-bar">
+            <span><em>ID</em> <strong id="meta-task-id">-</strong></span>
+            <span><em>Mode</em> <strong id="meta-mode">Planner</strong></span>
+            <span><em>Step</em> <strong id="meta-step">-</strong></span>
+            <span><em>Model</em> <strong id="meta-model">-</strong></span>
+            <span><em>Delegatee</em> <strong id="meta-delegatee">-</strong></span>
+            <span><em>Latency</em> <strong id="meta-latency">-</strong></span>
+            <span><em>Trust</em> <strong id="meta-trust">-</strong></span>
+            <span><em>Guardrails</em> <strong id="meta-guardrails">0</strong></span>
+            <span><em>Firewall</em> <strong id="meta-firewall">0</strong></span>
+            <span><em>Tokens</em> <strong id="meta-tokens">0</strong></span>
+            <span><em>Hops</em> <strong id="meta-hops">-</strong></span>
+        </div>
+
+        <main class="workspace">
+            <section class="panel main-panel">
+                <div class="panel-header">
+                    <div>
+                        <h3 id="workspace-title">Forge Console</h3>
+                        <p class="panel-subtitle" id="workspace-subtitle">Planner, executor, guardrails, and task output stream here.</p>
+                    </div>
+                    <button id="back-to-forge-btn" class="ghost-btn hidden">Back To Forge</button>
                 </div>
-            </div>
-            <div class="input-bar">
-                <input type="text" id="task-input" placeholder="Describe a task for The Forge..." autofocus>
-                <button id="submit-btn">FORGE</button>
-                <button id="kill-btn" class="kill-btn hidden">KILL</button>
-            </div>
-        </section>
-    </main>
+
+                <div class="arena-setup hidden" id="arena-setup">
+                    <div class="arena-setup-inner">
+                        <div class="arena-copy">
+                            <strong>THE FORGE ARENA</strong>
+                            <span>Two AI gladiators enter. One leaves victorious. Zeus judges all.</span>
+                        </div>
+                        <label class="field arena-field">
+                            <span>Red Team</span>
+                            <select id="red-model"></select>
+                        </label>
+                        <label class="field arena-field">
+                            <span>Blue Team</span>
+                            <select id="blue-model"></select>
+                        </label>
+                        <label class="field arena-field">
+                            <span>Scenario</span>
+                            <select id="arena-scenario">
+                                <optgroup label="Combat">
+                                    <option value="classic">Classic Deathmatch</option>
+                                    <option value="ctf">Capture the Flag</option>
+                                    <option value="exploit">Exploit &amp; Fortify</option>
+                                    <option value="survival">Survival Horror</option>
+                                </optgroup>
+                                <optgroup label="Party Games">
+                                    <option value="pictionary">Pictionary</option>
+                                    <option value="roast_battle">Roast Battle</option>
+                                    <option value="puzzle_race">Puzzle Race</option>
+                                    <option value="art_collab">Exquisite Corpse</option>
+                                </optgroup>
+                                <optgroup label="Creative">
+                                    <option value="code_golf">Code Golf</option>
+                                    <option value="widget_wars">Widget Wars</option>
+                                </optgroup>
+                                <optgroup label="Collaboration">
+                                    <option value="pair_prog">Pair Programming</option>
+                                    <option value="story_time">Story Time</option>
+                                    <option value="startup">Startup Pitch</option>
+                                    <option value="world_build">World Building</option>
+                                    <option value="hackathon">Hackathon</option>
+                                </optgroup>
+                            </select>
+                        </label>
+                        <label class="toggle-field arena-toggle" title="Speak arena commentary aloud">
+                            <span>TTS</span>
+                            <span class="switch">
+                                <input type="checkbox" id="tts-toggle">
+                                <span class="switch-track"></span>
+                            </span>
+                        </label>
+                        <button id="arena-go-btn" class="accent-btn">FIGHT</button>
+                        <button id="arena-cancel-btn" class="ghost-btn">Retreat</button>
+                    </div>
+                </div>
+
+                <section class="arena-view hidden" id="arena-view">
+                    <div class="arena-header">
+                        <div class="arena-team-info">
+                            <span class="team-name team-red">Red Team</span>
+                            <div class="score-bar"><span class="score-fill score-red" id="score-red"></span></div>
+                            <span class="score-num" id="score-red-num">0</span>
+                        </div>
+                        <div class="arena-round-info">
+                            <span class="round-label" id="round-label">Ready</span>
+                        </div>
+                        <div class="arena-team-info">
+                            <span class="team-name team-blue">Blue Team</span>
+                            <div class="score-bar"><span class="score-fill score-blue" id="score-blue"></span></div>
+                            <span class="score-num" id="score-blue-num">0</span>
+                        </div>
+                    </div>
+                    <div class="arena-commentary" id="arena-commentary">
+                        <div class="commentary-text" id="commentary-text">The gods grow restless. Choose your fighters.</div>
+                    </div>
+                    <div class="arena-teams">
+                        <div class="arena-team-log">
+                            <div class="team-log-header team-red">Red Team Log</div>
+                            <div class="team-log-content" id="red-log"></div>
+                        </div>
+                        <div class="arena-team-log">
+                            <div class="team-log-header team-blue">Blue Team Log</div>
+                            <div class="team-log-content" id="blue-log"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="chat-area" id="chat-area">
+                    <div class="messages" id="messages">
+                        <div class="msg status">The Forge is ready. Submit a task to see planner, executor, delegation, safety, and cost data in one stream.</div>
+                    </div>
+                    <div class="composer">
+                        <textarea id="task-input" rows="2" placeholder="Describe a task for The Forge..."></textarea>
+                        <div class="composer-footer">
+                            <span class="composer-hint">Ctrl/Cmd + Enter runs the task. Shift + Enter adds a new line.</span>
+                            <div class="composer-actions">
+                                <button id="kill-btn" class="kill-btn hidden">Kill</button>
+                                <button id="submit-btn" class="accent-btn">Forge Task</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </section>
+        </main>
+    </div>
+
+    <!-- ── TAB: History ───────────────────────────────────────────── -->
+    <div class="tab-content" id="tab-history">
+        <div class="tab-layout-split">
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>Task History</h3>
+                    <button id="refresh-history-btn" class="ghost-btn small-btn">Refresh</button>
+                </div>
+                <div id="history-list" class="stack-list empty-state">No completed tasks yet.</div>
+            </section>
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>History Detail</h3>
+                </div>
+                <div id="history-detail" class="history-detail empty-state">Select a past task to inspect summary, step outcomes, and delegation hops.</div>
+            </section>
+        </div>
+    </div>
+
+    <!-- ── TAB: Memory ────────────────────────────────────────────── -->
+    <div class="tab-content" id="tab-memory">
+        <div class="tab-layout-single">
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>Session Memory</h3>
+                    <div class="panel-actions">
+                        <button id="refresh-memory-btn" class="ghost-btn small-btn">Refresh</button>
+                        <button id="clear-memory-btn" class="ghost-btn small-btn">Clear</button>
+                    </div>
+                </div>
+                <div id="memory-list" class="stack-list compact empty-state">No session memory stored yet.</div>
+            </section>
+        </div>
+    </div>
+
+    <!-- ── TAB: Safety ────────────────────────────────────────────── -->
+    <div class="tab-content" id="tab-safety">
+        <div class="tab-layout-split">
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>Safety and Delegation</h3>
+                </div>
+                <div id="runtime-events" class="event-feed empty-state">No guardrail, firewall, or escalation events yet.</div>
+            </section>
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>Accountability Chain</h3>
+                </div>
+                <div id="accountability-list" class="stack-list compact empty-state">Waiting for a completed task.</div>
+                <div class="criteria-panel" style="margin-top:14px">
+                    <h4>Verification</h4>
+                    <ul id="verification-list" class="mini-list">
+                        <li>No active step.</li>
+                    </ul>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- ── TAB: Runtime ───────────────────────────────────────────── -->
+    <div class="tab-content" id="tab-runtime">
+        <div class="tab-layout-single">
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>Runtime Configuration</h3>
+                </div>
+                <div class="metric-grid">
+                    <div class="metric">
+                        <span>Planner Model</span>
+                        <strong id="planner-model">-</strong>
+                    </div>
+                    <div class="metric">
+                        <span>Default Executor</span>
+                        <strong id="default-model">-</strong>
+                    </div>
+                    <div class="metric">
+                        <span>Max Iterations</span>
+                        <strong id="max-iterations">-</strong>
+                    </div>
+                    <div class="metric">
+                        <span>Working Dir</span>
+                        <strong id="working-dir">-</strong>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
     <script src="/static/app.js"></script>
 </body>
 </html>

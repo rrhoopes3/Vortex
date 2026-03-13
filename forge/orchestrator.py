@@ -30,7 +30,10 @@ import time
 import uuid
 from typing import Generator
 
-from forge.config import XAI_API_KEY, COST_LIMIT_PER_TASK
+from forge.config import (
+    XAI_API_KEY, COST_LIMIT_PER_TASK,
+    SIGNALS_ENABLED, JUDGE_ENABLED, JUDGE_MODEL, DIRECTIVES_ENABLED,
+)
 from forge.models import PlanStep, StepResult, TaskResult
 from forge.tools import create_registry
 from forge.tools.registry import resolve_tools_for_step
@@ -46,6 +49,7 @@ from forge.delegation import (
 )
 from forge.kernel import AgentKernel
 from forge.firewall import SemanticFirewall
+from forge.vault import AgentVault
 from forge import planner, executor
 from forge.config import TOLL_ENABLED, TOLL_DB_PATH
 
@@ -89,6 +93,7 @@ class Orchestrator:
         self._kernel = AgentKernel()
         self._firewall = SemanticFirewall(block_danger=True)
         self._knowledge_graph = KnowledgeGraph()
+        self._vault_cache: dict[str, AgentVault] = {}
 
         log.info("Forge initialized. Tools: %s | Sandbox: %s | Direct: %s | Agents: %d | Model: %s | Guardrails: %s",
                  self.registry.list_tools(), sandbox_path or "OFF", direct_mode, self.agent_count,
@@ -97,10 +102,16 @@ class Orchestrator:
     def _resolve_model(self, task: str) -> str:
         """Resolve the executor model — supports 'auto' routing."""
         if self.executor_model == "auto":
-            model = auto_select_model(task)
+            model = auto_select_model(task, trust_ledger=self._trust)
             log.info("Auto-routed to model: %s", model)
             return model
         return self.executor_model
+
+    def _get_vault(self, agent_id: str) -> AgentVault:
+        """Get or create a persistent memory vault for an agent."""
+        if agent_id not in self._vault_cache:
+            self._vault_cache[agent_id] = AgentVault(agent_id)
+        return self._vault_cache[agent_id]
 
     @property
     def client(self):
@@ -150,6 +161,13 @@ class Orchestrator:
         if graph_context:
             context += "\n" + graph_context
 
+        # Vault recall: persistent knowledge from previous sessions (Ars Contexta)
+        vault = self._get_vault(routed_model or resolved_model or "default")
+        vault_context = vault.recall_vault_context(task)
+        if vault_context:
+            context += "\n" + vault_context
+            log.info("Injected vault context into direct executor (%d chars)", len(vault_context))
+
         if routed_model != resolved_model:
             yield {"type": "status", "phase": "executing",
                    "content": f"Direct mode — trust-routed from {resolved_model} to {routed_model}"}
@@ -164,6 +182,12 @@ class Orchestrator:
         step_output = ""
         tools_used = []
         error = None
+
+        # ── Signal Extraction (arXiv:2603.10165) ──────────────────────────
+        signal_extractor = None
+        if SIGNALS_ENABLED:
+            from forge.signals import SignalExtractor
+            signal_extractor = SignalExtractor(expected_latency=60.0, step_number=1)
 
         # Only create xAI client if the executor model needs it
         xai_client = self.client if self._needs_xai_client(effective_model) else None
@@ -188,6 +212,8 @@ class Orchestrator:
         try:
             while True:
                 msg = next(gen)
+                if signal_extractor:
+                    signal_extractor.observe(msg)
                 yield msg
                 if msg.get("type") == "content":
                     step_output += msg["content"]
@@ -210,12 +236,16 @@ class Orchestrator:
         status = "cancelled" if cancelled else ("escalated" if escalated else ("failed" if error else "success"))
         latency = time.time() - step_start
 
+        # ── Signal Finalization (arXiv:2603.10165) ────────────────────────
+        step_signals = signal_extractor.finalize(latency) if signal_extractor else None
+
         # Record trust outcome
         if effective_model:
             self._trust.record_outcome(
                 effective_model,
                 success=(status == "success"),
                 latency_seconds=latency,
+                quality_signal=step_signals.aggregate_score if step_signals else None,
             )
 
         result = StepResult(
@@ -235,6 +265,11 @@ class Orchestrator:
             remember_task(task, tools_used, key_paths, step_output[:300])
             self._knowledge_graph.record_task_knowledge(
                 task, tools_used, key_paths, step_output[:300],
+            )
+            vault.process_6rs(
+                task=task, tools_used=tools_used, key_paths=key_paths,
+                outcome=step_output[:300], success=True,
+                latency_seconds=latency, step_count=1,
             )
 
         # Guardrail summary
@@ -282,6 +317,12 @@ class Orchestrator:
         # ── Accountability Chain (paper §3.3) ────────────────────────────
         chain = AccountabilityChain(task_id, task)
 
+        # ── Background PRM Judge (arXiv:2603.10165) ──────────────────────
+        background_judge = None
+        if JUDGE_ENABLED:
+            from forge.judge import BackgroundJudge
+            background_judge = BackgroundJudge(model=JUDGE_MODEL)
+
         # ── Phase 1: Plan (always xAI — multi-agent Pantheon) ────────────
         # Inject session memory + knowledge graph into planner context
         memory_hint = recall_relevant(task)
@@ -293,6 +334,13 @@ class Orchestrator:
         if graph_hint:
             enriched_task = f"{enriched_task}\n\n{graph_hint}"
             log.info("Injected knowledge graph into planner (%d chars)", len(graph_hint))
+
+        # Vault recall: persistent knowledge from previous sessions (Ars Contexta)
+        vault = self._get_vault(resolved_model or "default")
+        vault_hint = vault.recall_vault_context(task)
+        if vault_hint:
+            enriched_task = f"{enriched_task}\n\n{vault_hint}"
+            log.info("Injected vault context into planner (%d chars)", len(vault_hint))
 
         if resolved_model != self.executor_model and self.executor_model == "auto":
             yield {"type": "status", "phase": "planning",
@@ -409,6 +457,10 @@ class Orchestrator:
             all_step_outputs.append(result.output)
             context_so_far += f"\nStep {step.step_number} ({step.title}): {result.output}\n"
 
+            # Submit completed step for background PRM judging
+            if background_judge and result.status in ("success", "failed"):
+                background_judge.submit(step, result, task)
+
             yield {
                 "type": "step_done",
                 "step": step.step_number,
@@ -421,6 +473,31 @@ class Orchestrator:
 
             if self.cancel_event.is_set():
                 break
+
+        # ── Collect Judge Scores + Generate Directives (arXiv:2603.10165) ──
+        judge_scores = []
+        directives = []
+        if background_judge:
+            judge_scores = background_judge.collect()
+            background_judge.shutdown()
+            # Feed judge scores into trust (secondary update)
+            for js in judge_scores:
+                mr = next((r for r in results if r.step_number == js.step_number), None)
+                if mr and mr.delegatee_model:
+                    self._trust.record_outcome(
+                        mr.delegatee_model, success=(js.score >= 5.0),
+                        quality_signal=js.score / 10.0,
+                    )
+
+        if DIRECTIVES_ENABLED:
+            from forge.directives import detect_reassignment_directives
+            directives = detect_reassignment_directives(results, steps, task)
+
+        # Emit judge scores to UI
+        if judge_scores:
+            yield {"type": "judge_scores",
+                   "scores": [{"step": js.step_number, "score": js.score,
+                                "rationale": js.rationale} for js in judge_scores]}
 
         # ── Summary ─────────────────────────────────────────────────────
         # Guardrail summary
@@ -445,6 +522,14 @@ class Orchestrator:
                 remember_task(task, all_tools_used, key_paths, outcome)
                 self._knowledge_graph.record_task_knowledge(
                     task, all_tools_used, key_paths, outcome,
+                )
+                vault.process_6rs(
+                    task=task, tools_used=all_tools_used, key_paths=key_paths,
+                    outcome=outcome, success=(success_count > 0),
+                    latency_seconds=sum(r.latency_seconds for r in results),
+                    step_count=len(results),
+                    directives=directives,
+                    judge_scores=judge_scores,
                 )
 
         yield {"type": "done", "summary": summary,
@@ -491,6 +576,15 @@ class Orchestrator:
             # ── Dynamic Assessor (paper §4.1) ────────────────────────────
             assessor = DelegationAssessor(contract)
 
+            # ── Signal Extraction (arXiv:2603.10165) ──────────────────────
+            signal_extractor = None
+            if SIGNALS_ENABLED:
+                from forge.signals import SignalExtractor
+                signal_extractor = SignalExtractor(
+                    expected_latency=contract.timeout_seconds or 60.0,
+                    step_number=step.step_number,
+                )
+
             xai_client = self.client if self._needs_xai_client(effective_model) else None
 
             gen = executor.execute_step(
@@ -524,6 +618,8 @@ class Orchestrator:
 
                     # Feed message to assessor for real-time monitoring
                     assessor.observe(msg)
+                    if signal_extractor:
+                        signal_extractor.observe(msg)
 
                     # ── Semantic Firewall (arXiv:2603.08938) ──────────
                     if msg.get("type") == "tool_call":
@@ -556,17 +652,27 @@ class Orchestrator:
             escalated = escalation is not None
             status = "cancelled" if cancelled else ("escalated" if escalated else ("failed" if error else "success"))
 
+            # ── Signal Finalization (arXiv:2603.10165) ────────────────────
+            step_signals = signal_extractor.finalize(latency) if signal_extractor else None
+
             # ── Trust Update ─────────────────────────────────────────────
             self._trust.record_outcome(
                 effective_model,
                 success=(status == "success"),
                 latency_seconds=latency,
                 was_reassigned=was_reassigned,
+                quality_signal=step_signals.aggregate_score if step_signals else None,
             )
 
+            # ── Dynamic Assessment verdict (paper §4.1) ─────────────────
+            assessment = assessor.assess()
+            if assessment.concerns:
+                log.info("Assessment concerns (step %d): %s",
+                         step.step_number, "; ".join(assessment.concerns))
+
             # ── Adaptive Reassignment (paper §4.3) ───────────────────────
-            # If step failed and this is the first attempt, try a fallback
-            if status == "failed" and attempt == 0 and not cancelled:
+            # If step failed or assessor recommends reassignment, try a fallback
+            if (status == "failed" or (assessment.should_reassign and status != "success")) and attempt == 0 and not cancelled:
                 fallback = self._router.get_fallback(effective_model)
                 if fallback:
                     yield {

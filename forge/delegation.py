@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -121,7 +122,11 @@ class TrustLedger:
                 for item in data:
                     entry = TrustEntry(**item)
                     self._entries[entry.agent_id] = entry
-            except (json.JSONDecodeError, Exception):
+            except json.JSONDecodeError:
+                log.warning("Corrupted trust ledger at %s — starting fresh", self._path)
+                self._entries = {}
+            except Exception as exc:
+                log.warning("Failed to load trust ledger at %s: %s — starting fresh", self._path, exc)
                 self._entries = {}
 
     def _save(self):
@@ -156,15 +161,26 @@ class TrustLedger:
         success: bool,
         latency_seconds: float = 0.0,
         was_reassigned: bool = False,
+        quality_signal: float | None = None,
     ):
         """Update trust based on a delegation outcome.
 
         Uses EMA: new_trust = α * outcome + (1 - α) * old_trust
+
+        If quality_signal is provided (0.0-1.0), it replaces the binary
+        outcome for richer trust calibration (OpenClaw-RL §PRM).
         """
         entry = self.get_entry(agent_id)
         entry.total_delegations += 1
 
-        if success:
+        if quality_signal is not None:
+            # Continuous signal from SignalExtractor or PRM judge
+            outcome_signal = max(0.0, min(1.0, quality_signal))
+            if success:
+                entry.successes += 1
+            else:
+                entry.failures += 1
+        elif success:
             entry.successes += 1
             outcome_signal = 1.0
         else:
@@ -263,13 +279,20 @@ class AccountabilityChain:
 
     def reassign_hop(self, hop_number: int, new_delegatee: str, new_contract_id: str) -> AccountabilityHop:
         """Mark a hop as reassigned and create a replacement hop."""
+        original_delegator = "orchestrator"
+        found = False
         for hop in self.hops:
             if hop.hop_number == hop_number:
                 hop.status = "reassigned"
                 hop.completed_at = time.time()
                 hop.error = f"Reassigned to {new_delegatee}"
+                original_delegator = hop.delegator
+                found = True
+                break
+        if not found:
+            log.warning("Hop %d not found in chain %s for reassignment", hop_number, self.task_id)
         return self.add_hop(
-            delegator=self.hops[hop_number - 1].delegator if hop_number <= len(self.hops) else "orchestrator",
+            delegator=original_delegator,
             delegatee=new_delegatee,
             contract_id=new_contract_id,
         )
@@ -344,8 +367,12 @@ class DelegationAssessor:
             self.signals.tool_calls += 1
         elif msg_type == "tool_result":
             result = msg.get("result", "")
-            if "error" in result.lower() or "traceback" in result.lower():
-                self.signals.tool_errors += 1
+            result_lower = result.lower()
+            # Check for actual error indicators, not benign mentions like "no errors"
+            if re.search(r"\b(error|exception|traceback)\b", result_lower):
+                # Exclude false positives like "no error", "0 errors", "error_count: 0"
+                if not re.search(r"\b(no\s+errors?|0\s+errors?|error.{0,10}:\s*0)\b", result_lower):
+                    self.signals.tool_errors += 1
         elif msg_type == "error":
             self.signals.error_messages.append(msg.get("content", "")[:200])
 

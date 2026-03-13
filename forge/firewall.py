@@ -114,7 +114,7 @@ DANGEROUS_COMMAND_PATTERNS = [
     # Database operations
     (r"\bDROP\b\s+(TABLE|DATABASE|INDEX)", "Database drop operation"),
     (r"\bTRUNCATE\b", "Database truncate"),
-    (r"\bDELETE\b\s+FROM\b(?!\s+.*\bWHERE\b)", "DELETE without WHERE clause"),
+    (r"\bDELETE\b\s+FROM\b(?!\s[\s\S]*?\bWHERE\b)", "DELETE without WHERE clause"),
 ]
 
 # ── Dangerous Write Patterns ──────────────────────────────────────────────
@@ -209,7 +209,7 @@ class SemanticFirewall:
         if tool_name == "query_sqlite":
             query = args.get("query", "")
             for pattern, description in DANGEROUS_COMMAND_PATTERNS:
-                if pattern.startswith(r"\b(DROP|TRUNCATE|DELETE)") or "DROP" in pattern or "TRUNCATE" in pattern or "DELETE" in pattern:
+                if "DROP" in pattern or "TRUNCATE" in pattern or "DELETE" in pattern:
                     if re.search(pattern, query, re.IGNORECASE):
                         risk = RiskLevel.DANGER
                         concerns.append(f"Dangerous SQL: {description}")
@@ -219,12 +219,23 @@ class SemanticFirewall:
         blocked_reason = ""
 
         if risk == RiskLevel.DANGER and self.block_danger:
-            # Check if this specific tool or pattern is explicitly allowed
+            # Check if this specific tool is explicitly allowed
             if tool_name in self._allowed_danger_tools:
                 blocked = False
             else:
-                blocked = True
-                blocked_reason = "; ".join(concerns) if concerns else f"Dangerous tool: {tool_name}"
+                # Check if all matched patterns are in the allowed set
+                matched_descriptions = {c for c in concerns if c.startswith("Dangerous command pattern:")}
+                if matched_descriptions and self._allowed_danger_patterns:
+                    unallowed = [c for c in matched_descriptions
+                                 if not any(ap in c for ap in self._allowed_danger_patterns)]
+                    if not unallowed and matched_descriptions:
+                        blocked = False  # all matched patterns are explicitly allowed
+                    else:
+                        blocked = True
+                        blocked_reason = "; ".join(concerns) if concerns else f"Dangerous tool: {tool_name}"
+                else:
+                    blocked = True
+                    blocked_reason = "; ".join(concerns) if concerns else f"Dangerous tool: {tool_name}"
 
         verdict = FirewallVerdict(
             risk=risk,

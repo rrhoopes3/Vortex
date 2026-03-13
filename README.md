@@ -2,10 +2,10 @@
 
 **The first autonomous agent OS built on xAI's Grok 4.20 multi-agent beta.**
 
-A 16-agent research council plans your task. A tool-wielding executor carries it out. 40+ client-side tools. 4 AI providers. Real-time streaming. Live cost tracking. ARC-Relay email integration. And a BattleBot Arena where AI teams fight to the death while Zeus narrates.
+A 16-agent research council plans your task. A tool-wielding executor carries it out. 40+ client-side tools. 5 AI providers. Real-time streaming. Live cost tracking. ARC-Relay email integration. Generative UI with sandboxed widgets. And an Arena where AI teams fight to the death while Zeus narrates — or collaborate while the Muses judge.
 
 ![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue)
-![Tests](https://img.shields.io/badge/tests-368%20passing-green)
+![Tests](https://img.shields.io/badge/tests-637%20passing-green)
 
 ---
 
@@ -22,7 +22,7 @@ User Task
 [Single Executor] ──── 40+ client-side tools
     |                   filesystem, shell, git, browser, HTTP,
     |                   Python REPL, SQLite, image, archive, email
-    |                   routes to: xAI | Anthropic | OpenAI | LM Studio
+    |                   routes to: xAI | Anthropic | OpenAI | LM Studio | Ollama
     v
 Result ── streamed live via SSE with cost tracking
 ```
@@ -37,11 +37,42 @@ Result ── streamed live via SSE with cost tracking
 ### Task Engine
 The core loop. Type a task, get a plan, watch it execute with real tools. File I/O, shell commands, git operations, browser automation, HTTP requests, database queries — all streamed live in a dark-themed web UI.
 
-### BattleBot Arena
-Pit two AI teams against each other in a sandboxed deathmatch. Recon, weapon forging, turn-based combat, and a 16-agent Pantheon (Zeus, Athena, Hephaestus, Hermes, Ares, Hades, Apollo) scoring creativity, execution, damage, and style. Enable TTS for dramatic live commentary.
+### Arena — Combat & Collaboration
+
+**15 battle scenarios** across two modes:
+
+**Combat Mode** — Gladiatorial AI deathmatch. Recon, weapon forging, turn-based combat, and a 16-agent Pantheon (Zeus, Athena, Ares, Hephaestus, Hermes, Hades, Apollo) scoring creativity, execution, damage, and style.
+
+| Scenario | Type |
+|---|---|
+| Classic Deathmatch | Open-ended chaos |
+| Capture the Flag | Steal their flag, guard yours |
+| Exploit & Fortify | Build a system, breach theirs |
+| Survival Horror | Reaper deletes random files between turns |
+| Pictionary | Draw your secret word in HTML — no text allowed |
+| Roast Battle | Pure creative writing combat |
+| Puzzle Race | Same multi-part puzzle, first correct solution wins |
+| Exquisite Corpse | One builds top half, other builds bottom, combine |
+| Code Golf | Shortest, most creative solution wins |
+| Widget Wars | Most impressive interactive HTML visualization wins |
+
+**Collaboration Mode** — Two AI agents work together instead of fighting. Judged by Calliope and the Muses (creativity, execution, synergy, style).
+
+| Scenario | What They Build Together |
+|---|---|
+| Pair Programming | Full working app — one architects, one designs UI |
+| Story Time | Co-authored short story — one writes Act 1, other writes Acts 2-3 |
+| Startup Pitch | Complete pitch deck — CTO builds product, CEO builds business |
+| World Building | Fictional universe bible — one builds geography, other populates culture |
+| Hackathon | Working prototype — one builds engine, other builds UI |
+
+Enable **TTS** for dramatic live commentary read aloud.
 
 ### Presidential Council
 A CLI think tank where 16 US Presidents (Washington through Trump) debate modern problems using the Grok 4.20 multi-agent API. Persistent conversation history across sessions.
+
+### Generative UI
+Agents can render interactive HTML widgets directly in the conversation stream. Widgets run in sandboxed iframes with `allow-scripts` only — no access to parent page. Supports expand/collapse, reload, and bidirectional messaging via `postMessage` (ForgeWidget bridge).
 
 ### Live Cost Ticker
 Real-time USD cost tracking in the UI. See exactly what each task costs as it runs. Color-coded (green/amber/red), configurable limits per task and session, click to reset.
@@ -119,9 +150,10 @@ XAI_API_KEY=your-xai-api-key-here
 ANTHROPIC_API_KEY=           # optional
 OPENAI_API_KEY=              # optional
 LMSTUDIO_BASE_URL=http://localhost:1234/v1  # optional
+OLLAMA_BASE_URL=http://localhost:11434/v1   # optional
 ```
 
-Only `XAI_API_KEY` is required. Other providers are optional.
+Only `XAI_API_KEY` is required. Other providers are optional. Ollama uses the same OpenAI-compatible adapter as LM Studio.
 
 ### 3. Run
 
@@ -134,7 +166,7 @@ python lads_war_room.py      # Presidential Council CLI
 
 ## Multi-Provider Support
 
-The executor routes to 4 different AI backends. Model list is served from the backend — the UI populates dynamically, no hardcoded dropdowns.
+The executor routes to 5 different AI backends. Model list is served from the backend — the UI populates dynamically, no hardcoded dropdowns.
 
 | Model | Provider | Cost (in/out per 1M tokens) |
 |---|---|---|
@@ -148,6 +180,7 @@ The executor routes to 4 different AI backends. Model list is served from the ba
 | GPT-4o Mini | OpenAI | $0.15 / $0.60 |
 | o3-mini | OpenAI | $1.10 / $4.40 |
 | LM Studio | Local | Free |
+| Ollama | Local | Free |
 
 ---
 
@@ -194,7 +227,7 @@ Lazy tool discovery means only the tools relevant to each step are injected into
 | `POST` | `/api/task` | Submit a task (returns `task_id`) |
 | `GET` | `/api/stream/<id>` | SSE stream of task progress |
 | `POST` | `/api/kill/<id>` | Cancel a running task |
-| `POST` | `/api/arena` | Launch arena deathmatch |
+| `POST` | `/api/arena` | Launch arena match (combat or collab) |
 | `GET` | `/api/models` | Available models with pricing |
 | `GET` | `/api/cost` | Session cost and limits |
 | `POST` | `/api/cost/reset` | Reset cost counter |
@@ -232,8 +265,9 @@ Grok/
     orchestrator.py             # Planner -> Executor pipeline
     planner.py                  # 16-agent research council
     executor.py                 # Single-agent tool-calling loop
-    providers.py                # Multi-provider adapters + cost calculation
+    providers.py                # Multi-provider adapters (xAI, Anthropic, OpenAI, LM Studio, Ollama)
     context_engine.py           # Context compaction, session memory, auto routing
+    generative_ui.py            # Widget rendering via sandboxed iframes
     models.py                   # Pydantic data models
     memory.py                   # Task persistence (JSON)
     tools/
@@ -253,8 +287,8 @@ Grok/
       solana_watcher.py         # Background USDC deposit watcher
       endpoints.py              # Internal toll dashboard endpoints
     arena/
-      runner.py                 # Arena deathmatch orchestrator
-      sandbox.py                # Arena sandbox setup
+      runner.py                 # Arena orchestrator (combat + collab modes, 15 scenarios)
+      sandbox.py                # Arena sandbox setup + scenario seeding
     agents/
       email_agent.py            # Autonomous email agent (triage, auto-block, DNS alerts)
       email_webhook.py          # Flask Blueprint for ARC-Relay webhooks

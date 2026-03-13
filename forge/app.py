@@ -34,7 +34,9 @@ from forge.config import (
     EXECUTOR_MODELS, COST_LIMIT_PER_TASK, COST_LIMIT_PER_SESSION,
     SHELL_WORKING_DIR, TOLL_ENABLED, MARKETPLACE_ENABLED, SOLANA_WATCHER_ENABLED,
     EMAIL_AGENT_ENABLED, ARCRELAY_WEBHOOK_SECRET, ARCRELAY_API_KEY,
-    ARCRELAY_API_URL, EMAIL_AGENT_MODEL,
+    ARCRELAY_API_URL, EMAIL_AGENT_MODEL, EXECUTOR_MODEL, PLANNER_MODEL,
+    PLANNER_AGENT_COUNT, EXECUTOR_MAX_ITERATIONS,
+    USER_CORRECTION_ENABLED, GENERATIVE_UI_ENABLED,
 )
 from forge.toll.endpoints import toll_bp
 from forge.toll.public_api import public_bp
@@ -135,7 +137,26 @@ def submit_task():
     agent_count = data.get("agent_count", 16)
     executor_model = data.get("executor_model", "").strip()
 
+    # ── User Correction Detection (arXiv:2603.10165) ────────────────────
+    if USER_CORRECTION_ENABLED:
+        from forge.signals import correction_detector
+        resubmission = correction_detector.detect_resubmission(task)
+        if resubmission:
+            log.info("Correction signal: %s", resubmission.description)
+            from forge.context_engine import KnowledgeGraph
+            _kg = KnowledgeGraph()
+            _kg.record_correction(
+                resubmission.original_task_id,
+                resubmission.signal_type,
+                resubmission.description,
+            )
+
     task_id = str(uuid.uuid4())[:8]
+
+    if USER_CORRECTION_ENABLED:
+        from forge.signals import correction_detector as _cd
+        _cd.record_task(task, task_id)
+
     q = Queue()
     cancel_event = threading.Event()
     task_queues[task_id] = q
@@ -166,6 +187,12 @@ def kill_task(task_id):
 
     cancel_event.set()
     log.info("Task %s kill signal sent", task_id)
+
+    # ── User Correction Detection (arXiv:2603.10165) ────────────────────
+    if USER_CORRECTION_ENABLED:
+        from forge.signals import correction_detector
+        correction_detector.record_kill(task_id)
+
     return jsonify({"status": "kill_signal_sent", "task_id": task_id})
 
 
@@ -201,6 +228,7 @@ def submit_arena():
     data = request.get_json() or {}
     red_model = data.get("red_model", "").strip()
     blue_model = data.get("blue_model", "").strip()
+    scenario = data.get("scenario", "classic").strip()
 
     task_id = f"arena-{str(uuid.uuid4())[:8]}"
     q = Queue()
@@ -210,17 +238,17 @@ def submit_arena():
 
     thread = threading.Thread(
         target=run_arena,
-        args=(task_id, q, cancel_event, red_model, blue_model),
+        args=(task_id, q, cancel_event, red_model, blue_model, scenario),
         daemon=True,
     )
     thread.start()
 
-    log.info("Arena %s launched: Red=%s Blue=%s", task_id, red_model or "default", blue_model or "default")
+    log.info("Arena %s launched: Red=%s Blue=%s Scenario=%s", task_id, red_model or "default", blue_model or "default", scenario)
     return jsonify({"task_id": task_id})
 
 
 def run_arena(task_id: str, q: Queue, cancel_event: threading.Event,
-              red_model: str = "", blue_model: str = ""):
+              red_model: str = "", blue_model: str = "", scenario: str = "classic"):
     """Background thread that runs the arena and pushes messages to a queue."""
     try:
         from forge.arena.runner import ArenaRunner
@@ -228,6 +256,7 @@ def run_arena(task_id: str, q: Queue, cancel_event: threading.Event,
             cancel_event=cancel_event,
             red_model=red_model,
             blue_model=blue_model,
+            scenario=scenario,
         )
         for msg in runner.run():
             q.put(msg)
@@ -281,15 +310,40 @@ def get_config():
     """Return default config for frontend initialization."""
     return jsonify({
         "default_sandbox_path": str(SHELL_WORKING_DIR),
+        "defaults": {
+            "planner_model": PLANNER_MODEL,
+            "executor_model": EXECUTOR_MODEL,
+            "agent_count": PLANNER_AGENT_COUNT,
+            "max_iterations": EXECUTOR_MAX_ITERATIONS,
+        },
+        "limits": {
+            "task_cost_usd": COST_LIMIT_PER_TASK,
+            "session_cost_usd": COST_LIMIT_PER_SESSION,
+        },
+        "features": {
+            "arena": True,
+            "memory": True,
+            "planner": True,
+            "toll": TOLL_ENABLED,
+            "marketplace": MARKETPLACE_ENABLED,
+            "email_agent": EMAIL_AGENT_ENABLED,
+            "solana_watcher": SOLANA_WATCHER_ENABLED,
+            "generative_ui": GENERATIVE_UI_ENABLED,
+        },
+        "runtime": {
+            "working_dir": str(SHELL_WORKING_DIR),
+            "email_agent_model": EMAIL_AGENT_MODEL if EMAIL_AGENT_ENABLED else "",
+        },
     })
 
 
 @app.route("/api/cost")
 def get_cost():
     """Return current session cost and limits."""
-    with session_cost_lock:
+    with session_cost_lock, session_toll_lock:
         return jsonify({
             "session_cost": round(session_cost_usd, 6),
+            "session_toll": round(session_toll_usd, 6),
             "task_limit": COST_LIMIT_PER_TASK,
             "session_limit": COST_LIMIT_PER_SESSION,
         })
@@ -298,10 +352,11 @@ def get_cost():
 @app.route("/api/cost/reset", methods=["POST"])
 def reset_cost():
     """Reset session cost counter."""
-    global session_cost_usd
-    with session_cost_lock:
+    global session_cost_usd, session_toll_usd
+    with session_cost_lock, session_toll_lock:
         session_cost_usd = 0.0
-    return jsonify({"status": "reset", "session_cost": 0.0})
+        session_toll_usd = 0.0
+    return jsonify({"status": "reset", "session_cost": 0.0, "session_toll": 0.0})
 
 
 def track_cost(msg: dict, task_id: str = ""):

@@ -108,6 +108,11 @@ class AgentProfile(BaseModel):
     capabilities: list[str] = Field(default_factory=list)
     is_public: bool = True
     created_at: str = Field(default_factory=_now_iso)
+    # Vault-enriched fields (Ars Contexta cross-pollination)
+    specializations: list[str] = Field(default_factory=list)
+    expertise_areas: list[dict] = Field(default_factory=list)
+    total_tasks_completed: int = 0
+    vault_stats: dict = Field(default_factory=dict)
 
 
 class Invoice(BaseModel):

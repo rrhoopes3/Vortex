@@ -6,6 +6,7 @@ Supports multiple providers:
   - Anthropic (claude-*): Anthropic Messages API
   - OpenAI (gpt-*, o3-*): OpenAI Chat Completions API
   - LM Studio (lmstudio:*): OpenAI-compatible local server
+  - Ollama (ollama:*): Ollama local server (OpenAI-compatible)
 """
 from __future__ import annotations
 import json
@@ -17,7 +18,7 @@ from xai_sdk import Client
 from xai_sdk.chat import user, tool_result
 from xai_sdk.tools import get_tool_call_type
 
-from forge.config import EXECUTOR_MODEL, EXECUTOR_MAX_ITERATIONS, LMSTUDIO_BASE_URL
+from forge.config import EXECUTOR_MODEL, EXECUTOR_MAX_ITERATIONS, LMSTUDIO_BASE_URL, OLLAMA_BASE_URL
 from forge.tools.registry import ToolRegistry
 from forge.tools.escalation import EscalationError
 from forge.guardrails import GuardrailEngine
@@ -110,6 +111,16 @@ def execute_step(
             base_url=LMSTUDIO_BASE_URL, tool_filter=tool_filter, task_goal=task_goal,
             guardrail_engine=guardrail_engine,
         ))
+    elif provider == "ollama":
+        # Strip "ollama:" prefix; use "default" if nothing after it
+        ollama_model = use_model.split(":", 1)[1] if ":" in use_model else "default"
+        return (yield from run_openai(
+            model=ollama_model, system_prompt=EXECUTOR_SYSTEM, user_prompt=prompt,
+            registry=registry, sandbox_path=sandbox_path,
+            cancel_event=cancel_event, max_iterations=iteration_limit,
+            base_url=OLLAMA_BASE_URL, tool_filter=tool_filter, task_goal=task_goal,
+            guardrail_engine=guardrail_engine,
+        ))
 
     # ── xAI provider (original path) ────────────────────────────────
     chat = client.chat.create(
@@ -194,7 +205,7 @@ def execute_step(
                 try:
                     call_type = get_tool_call_type(tc)
                 except Exception:
-                    call_type = "client_side_tool"
+                    call_type = "unknown"
                 if call_type == "client_side_tool":
                     tool_calls.append(tc)
 
@@ -213,7 +224,11 @@ def execute_step(
                 yield {"type": "cancelled", "content": "Step cancelled"}
                 return full_output
 
-            func_name = tc.function.name
+            func = getattr(tc, "function", None)
+            if func is None or not getattr(func, "name", None):
+                log.warning("Skipping tool call with missing function/name: %s", tc)
+                continue
+            func_name = func.name
             try:
                 args = json.loads(tc.function.arguments)
             except json.JSONDecodeError:
@@ -240,6 +255,12 @@ def execute_step(
                 yield {"type": "escalation", "reason": esc.reason,
                        "category": esc.category, "context": esc.context}
                 return full_output
+
+            # ── Generative UI interception ────────────────────────────
+            from forge.generative_ui import intercept_widget_result
+            widget_event, result = intercept_widget_result(result)
+            if widget_event:
+                yield widget_event
 
             # ── Output Guardrails (concurrent, post-execution) ───────
             if guardrail_engine:

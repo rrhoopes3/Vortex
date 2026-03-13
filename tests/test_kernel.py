@@ -220,7 +220,9 @@ class TestAgentKernel:
     def test_pre_request_rate_blocked(self):
         k = AgentKernel(rate_limits={"test": 1})
         k.tokens.allocate_task("t1")
-        k.pre_request_check("t1", "test")
+        # Simulate an actual request consuming a rate limit slot
+        k.rate_limiter.acquire("test")
+        # Pre-flight check should now see the limit is exceeded
         verdict = k.pre_request_check("t1", "test")
         assert not verdict.allowed
         assert verdict.wait_seconds > 0

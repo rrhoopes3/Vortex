@@ -11,11 +11,11 @@ _DEFAULT_RATES: dict[str, TollRate] = {
     "plan_request": TollRate(message_type="plan_request", base_rate_usd=0.001),
     "plan_content": TollRate(message_type="plan_content", base_rate_usd=0.0005, per_token_rate=0.000001),
     "step_execution": TollRate(message_type="step_execution", base_rate_usd=0.002),
-    "llm_response": TollRate(message_type="llm_response", base_rate_usd=0.0005, per_token_rate=0.000002),
+    "llm_response": TollRate(message_type="llm_response", base_rate_usd=0.0, per_token_rate=0.0),  # metered via token_usage instead
     "tool_invocation": TollRate(message_type="tool_invocation", base_rate_usd=0.001),
     "tool_result": TollRate(message_type="tool_result", base_rate_usd=0.0003),
     "status_update": TollRate(message_type="status_update", base_rate_usd=0.0),
-    "token_usage": TollRate(message_type="token_usage", base_rate_usd=0.0),
+    "token_usage": TollRate(message_type="token_usage", base_rate_usd=0.001, per_token_rate=0.000002),
     "other": TollRate(message_type="other", base_rate_usd=0.0001),
 }
 

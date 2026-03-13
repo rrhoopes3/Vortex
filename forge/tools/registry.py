@@ -47,6 +47,7 @@ TOOL_CATEGORIES = {
                    "email_create_alias", "email_get_logs", "email_block_sender",
                    "email_get_analytics"},
     "escalation": {"escalate_to_human"},
+    "generative_ui": {"render_widget"},
 }
 
 # Reverse map: tool_name → category
@@ -111,7 +112,7 @@ class ToolRegistry:
         """
         if only is None:
             return list(self._definitions)
-        return [d for d in self._definitions if d.name in only]
+        return [d for d in self._definitions if d.function.name in only]
 
     def get_raw_tools(self, only: set[str] | None = None) -> list[dict]:
         """Return raw tool schemas {name, description, parameters} for non-xAI providers.

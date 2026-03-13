@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time as _time
 from pathlib import Path
 from forge.config import DATA_DIR
 
@@ -81,7 +82,11 @@ def _load_memories() -> list[dict]:
         return []
     try:
         return json.loads(MEMORY_FILE.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, Exception):
+    except json.JSONDecodeError:
+        log.warning("Corrupted session memory at %s — starting fresh", MEMORY_FILE)
+        return []
+    except Exception as exc:
+        log.warning("Failed to load session memory: %s — starting fresh", exc)
         return []
 
 
@@ -298,8 +303,10 @@ class KnowledgeGraph:
             for n in data.get("nodes", []):
                 self._nodes[n["id"]] = KGNode(**n)
             self._edges = [KGEdge(**e) for e in data.get("edges", [])]
-        except (json.JSONDecodeError, Exception):
-            pass
+        except json.JSONDecodeError:
+            log.warning("Corrupted knowledge graph at %s — starting fresh", self._path)
+        except Exception as exc:
+            log.warning("Failed to load knowledge graph: %s — starting fresh", exc)
 
     def _save(self):
         # Trim to limits
@@ -334,7 +341,6 @@ class KnowledgeGraph:
 
     def add_node(self, node_id: str, kind: str, label: str = "", **properties):
         """Add or update a node in the graph."""
-        import time as _time
         if node_id in self._nodes:
             self._nodes[node_id].last_seen = _time.time()
             self._nodes[node_id].properties.update(properties)
@@ -350,7 +356,7 @@ class KnowledgeGraph:
         """Add or strengthen a relationship edge."""
         for e in self._edges:
             if e.source == source and e.target == target and e.relation == relation:
-                e.weight += 0.5  # strengthen existing edge
+                e.weight = min(e.weight + 0.5, 10.0)  # strengthen existing edge, cap at 10
                 return
         self._edges.append(KGEdge(
             source=source, target=target, relation=relation, weight=weight,
@@ -480,6 +486,24 @@ class KnowledgeGraph:
         lines.append("[END KNOWLEDGE GRAPH]\n")
         return "\n".join(lines)
 
+    def record_correction(self, original_task_id: str, signal_type: str, description: str):
+        """Record a user correction as a negative-weight edge.
+
+        OpenClaw-RL (arXiv:2603.10165): user kills and resubmissions create
+        negative edges that inform future context recall.
+        """
+        correction_id = f"correction:{signal_type}:{original_task_id}"
+        task_id = f"task:{original_task_id}"
+        self.add_node(correction_id, "correction", description)
+        # Use add_edge with negative weight to signal dissatisfaction
+        # add_edge normally strengthens, so we insert directly
+        self._edges.append(KGEdge(
+            source=task_id, target=correction_id,
+            relation="user_corrected", weight=-1.0,
+        ))
+        self._save()
+        log.info("Correction recorded: %s → %s (%s)", task_id, correction_id, description)
+
     @property
     def node_count(self) -> int:
         return len(self._nodes)
@@ -499,7 +523,7 @@ class KGNode:
         self.kind = kind
         self.label = label or id
         self.properties = properties or {}
-        self.last_seen = last_seen or __import__("time").time()
+        self.last_seen = last_seen if last_seen is not None and last_seen != 0.0 else _time.time()
 
 
 class KGEdge:

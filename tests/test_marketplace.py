@@ -146,13 +146,15 @@ class TestRequireAPIKey:
 
 class TestRegistration:
     def test_register_agent(self, client):
+        import uuid
+        bot_name = f"cool-bot-{uuid.uuid4().hex[:8]}"
         r = client.post("/api/v1/agents/register", json={
-            "name": "my-cool-bot",
+            "name": bot_name,
             "owner": "test",
         })
         assert r.status_code == 201
         data = r.get_json()
-        assert data["agent_id"] == "ext_my-cool-bot"
+        assert data["agent_id"] == f"ext_{bot_name}"
         assert data["api_key"].startswith("forge_")
         assert "wallet" in data
 
@@ -161,21 +163,26 @@ class TestRegistration:
         assert r.status_code == 400
 
     def test_register_duplicate_rejected(self, client):
-        client.post("/api/v1/agents/register", json={"name": "dup-bot"})
-        r = client.post("/api/v1/agents/register", json={"name": "dup-bot"})
+        import uuid
+        dup_name = f"dup-bot-{uuid.uuid4().hex[:8]}"
+        client.post("/api/v1/agents/register", json={"name": dup_name})
+        r = client.post("/api/v1/agents/register", json={"name": dup_name})
         assert r.status_code == 409
         assert "already_registered" in r.get_json()["error"]
 
     def test_register_sanitizes_name(self, client):
+        import uuid
+        suffix = uuid.uuid4().hex[:8]
         r = client.post("/api/v1/agents/register", json={
-            "name": "My Bot!@#$%",
+            "name": f"My Bot!@#$%{suffix}",
         })
         assert r.status_code == 201
         data = r.get_json()
         assert data["agent_id"].startswith("ext_my-bot")
 
     def test_register_default_balance(self, client):
-        r = client.post("/api/v1/agents/register", json={"name": "balance-bot"})
+        import uuid
+        r = client.post("/api/v1/agents/register", json={"name": f"balance-bot-{uuid.uuid4().hex[:8]}"})
         data = r.get_json()
         assert data["wallet"]["balance_usd"] > 0
 
@@ -224,7 +231,8 @@ class TestTollGate:
     def test_402_when_broke(self, client):
         """Agent with zero balance gets 402."""
         # Register an agent
-        r = client.post("/api/v1/agents/register", json={"name": "broke-bot"})
+        import uuid
+        r = client.post("/api/v1/agents/register", json={"name": f"broke-bot-{uuid.uuid4().hex[:8]}"})
         data = r.get_json()
         api_key = data["api_key"]
         agent_id = data["agent_id"]
@@ -255,7 +263,8 @@ class TestTollGate:
 
     def test_402_includes_invoice_id(self, client):
         """402 response includes a unique invoice ID."""
-        r = client.post("/api/v1/agents/register", json={"name": "invoice-bot"})
+        import uuid
+        r = client.post("/api/v1/agents/register", json={"name": f"invoice-bot-{uuid.uuid4().hex[:8]}"})
         data = r.get_json()
         api_key = data["api_key"]
         agent_id = data["agent_id"]
@@ -307,7 +316,8 @@ class TestTaskSubmission:
     def test_result_not_owned(self, client, registered_agent):
         """Can't access another agent's task result."""
         # Register a second agent
-        r2 = client.post("/api/v1/agents/register", json={"name": "other-bot"})
+        import uuid
+        r2 = client.post("/api/v1/agents/register", json={"name": f"other-bot-{uuid.uuid4().hex[:8]}"})
         other_key = r2.get_json()["api_key"]
 
         r = client.get("/api/v1/tasks/ext-fake123/result",

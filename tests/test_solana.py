@@ -429,7 +429,7 @@ class TestInvoicePersistence:
         app.config["TESTING"] = True
         with app.test_client() as client:
             # Register agent
-            r = client.post("/api/v1/agents/register", json={"name": "inv-persist-bot"})
+            r = client.post("/api/v1/agents/register", json={"name": f"inv-persist-bot-{__import__('uuid').uuid4().hex[:8]}"})
             data = r.get_json()
             api_key = data["api_key"]
             agent_id = data["agent_id"]
@@ -464,7 +464,7 @@ class TestInvoicePersistence:
         from forge.app import app
         app.config["TESTING"] = True
         with app.test_client() as client:
-            r = client.post("/api/v1/agents/register", json={"name": "memo-bot"})
+            r = client.post("/api/v1/agents/register", json={"name": f"memo-bot-{__import__('uuid').uuid4().hex[:8]}"})
             data = r.get_json()
             api_key = data["api_key"]
             agent_id = data["agent_id"]
@@ -500,7 +500,7 @@ class TestDepositStatus:
         from forge.app import app
         app.config["TESTING"] = True
         with app.test_client() as client:
-            r = client.post("/api/v1/agents/register", json={"name": "status-bot"})
+            r = client.post("/api/v1/agents/register", json={"name": f"status-bot-{__import__('uuid').uuid4().hex[:8]}"})
             data = r.get_json()
             api_key = data["api_key"]
             agent_id = data["agent_id"]
@@ -521,7 +521,7 @@ class TestDepositStatus:
         from forge.app import app
         app.config["TESTING"] = True
         with app.test_client() as client:
-            r = client.post("/api/v1/agents/register", json={"name": "status-404-bot"})
+            r = client.post("/api/v1/agents/register", json={"name": f"status-404-bot-{__import__('uuid').uuid4().hex[:8]}"})
             api_key = r.get_json()["api_key"]
 
             r = client.get("/api/v1/wallet/deposit/status/inv_doesnotexist",
@@ -533,8 +533,8 @@ class TestDepositStatus:
         app.config["TESTING"] = True
         with app.test_client() as client:
             # Register two agents
-            r1 = client.post("/api/v1/agents/register", json={"name": "agent-a-stat"})
-            r2 = client.post("/api/v1/agents/register", json={"name": "agent-b-stat"})
+            r1 = client.post("/api/v1/agents/register", json={"name": f"agent-a-stat-{__import__('uuid').uuid4().hex[:8]}"})
+            r2 = client.post("/api/v1/agents/register", json={"name": f"agent-b-stat-{__import__('uuid').uuid4().hex[:8]}"})
             key_b = r2.get_json()["api_key"]
             agent_a_id = r1.get_json()["agent_id"]
 

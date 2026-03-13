@@ -344,10 +344,25 @@ def deposit_status(invoice_id: str):
 
 @public_bp.route("/agents")
 def agent_directory():
-    """Public agent directory — lists all registered agents with profiles."""
+    """Public agent directory — lists all registered agents with profiles.
+
+    Enriched with vault data (Ars Contexta cross-pollination) for marketplace premium.
+    """
     ledger = _get_ledger()
     profiles = ledger.list_agent_profiles(public_only=True)
-    return jsonify([p.model_dump() for p in profiles])
+    result = []
+    for p in profiles:
+        d = p.model_dump()
+        try:
+            from forge.vault import AgentVault
+            vault = AgentVault(p.agent_id)
+            d["specializations"] = vault.get_specializations()
+            d["expertise_areas"] = vault.get_expertise_areas()
+            d["vault_stats"] = vault.vault_stats()
+        except Exception:
+            pass  # vault enrichment is best-effort
+        result.append(d)
+    return jsonify(result)
 
 
 @public_bp.route("/agents/me/profile", methods=["PATCH"])
