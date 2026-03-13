@@ -3,11 +3,13 @@ Flask web server for The Forge.
 
 Routes:
   GET  /                  → serves the SPA
-  POST /api/task          → submit a task, returns task_id
+  POST /api/task          → submit a task, returns task_id (optional "pack" field)
   POST /api/arena         → launch arena deathmatch, returns task_id
   GET  /api/stream/<id>   → SSE stream of task progress
   POST /api/kill/<id>     → cancel a running task
   GET  /api/history       → recent completed tasks
+  GET  /api/packs         → list all capability packs with readiness
+  GET  /api/packs/<name>  → single pack details
 """
 import sys
 import os
@@ -41,6 +43,7 @@ from forge.config import (
 )
 from forge.toll.endpoints import toll_bp
 from forge.toll.public_api import public_bp
+from forge.packs import get_registry as get_pack_registry
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
 log = logging.getLogger("forge.app")
@@ -86,7 +89,7 @@ task_costs: dict[str, float] = {}  # task_id → accumulated cost
 
 def run_task(task_id: str, task: str, q: Queue, cancel_event: threading.Event,
              sandbox_path: str = "", direct_mode: bool = False, agent_count: int = 16,
-             executor_model: str = ""):
+             executor_model: str = "", pack: str = ""):
     """Background thread that runs the orchestrator and pushes messages to a queue."""
     task_costs[task_id] = 0.0
     run_log = RunLog(task_id)
@@ -98,6 +101,7 @@ def run_task(task_id: str, task: str, q: Queue, cancel_event: threading.Event,
             cancel_event=cancel_event,
             executor_model=executor_model,
             task_id=task_id,
+            pack=pack,
         )
         gen = orch.run(task)
         result = None
@@ -154,6 +158,7 @@ def submit_task():
     direct_mode = data.get("direct_mode", False)
     agent_count = data.get("agent_count", 16)
     executor_model = data.get("executor_model", "").strip()
+    pack = data.get("pack", "").strip()
 
     # ── User Correction Detection (arXiv:2603.10165) ────────────────────
     if USER_CORRECTION_ENABLED:
@@ -188,6 +193,7 @@ def submit_task():
             "direct_mode": direct_mode,
             "agent_count": agent_count,
             "executor_model": executor_model,
+            "pack": pack,
         },
         daemon=True,
     )
@@ -331,6 +337,25 @@ def clear_memory():
     if MEMORY_FILE.exists():
         MEMORY_FILE.unlink()
     return jsonify({"status": "cleared"})
+
+
+# ── Capability Packs ─────────────────────────────────────────────────────────
+
+@app.route("/api/packs")
+def list_packs():
+    """Return all capability packs with readiness status."""
+    registry = get_pack_registry()
+    return jsonify(registry.to_dict())
+
+
+@app.route("/api/packs/<name>")
+def get_pack(name):
+    """Return a single pack with readiness status."""
+    registry = get_pack_registry()
+    pack = registry.get(name)
+    if not pack:
+        return jsonify({"error": f"Unknown pack: {name}"}), 404
+    return jsonify(pack.to_dict())
 
 
 # ── Models & Cost Endpoints ─────────────────────────────────────────────────

@@ -1,0 +1,17 @@
+"""Trading capability pack — market analysis, portfolio management, trade execution."""
+from forge.packs import CapabilityPack, PackBudget
+
+TRADING_PACK = CapabilityPack(
+    name="trading",
+    description="Market analysis, portfolio tracking, PCR dashboard, trade execution",
+    tools=["trading", "http", "python", "filesystem"],
+    default_model="grok-4-1-fast-reasoning",
+    fallback_models=["gpt-4o", "claude-sonnet-4-20250514"],
+    guardrail_profile="strict",
+    budget=PackBudget(max_cost_usd=1.0, max_steps=5, max_iterations_per_step=10),
+    ui_panels=["output", "trading_dashboard", "portfolio"],
+    env_required=["FORGE_TRADIER_API_KEY"],
+    env_optional=["FORGE_TRADIER_ACCOUNT_ID"],
+    deps_required=["yfinance"],
+    feature_flag="TRADING_ENABLED",
+)

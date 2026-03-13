@@ -204,23 +204,27 @@ Lock in the f6c6412 fixes with explicit test cases:
 3. Merge xenodochial-tu to main
 4. Confirm tests pass
 
-### Phase 2: Foundation (1 cycle)
-1. Create `forge/packs/__init__.py` — `CapabilityPack` dataclass, `PackRegistry`
-2. Create `forge/readiness.py` — `ReadinessReport`, probe logic
-3. Wire `PackRegistry` into orchestrator (optional `pack` param on `run_task`)
-4. Add `GET /api/packs` endpoint
+### Phase 2: Foundation — DONE (Claude, feature/capability-packs)
+1. ~~Create `forge/packs/__init__.py` — `CapabilityPack` dataclass, `PackRegistry`~~
+2. ~~`ReadinessReport` + probe logic (integrated into CapabilityPack.check_readiness)~~
+3. ~~Wire `PackRegistry` into orchestrator (optional `pack` param on `run_task`)~~
+4. ~~Add `GET /api/packs` and `GET /api/packs/<name>` endpoints~~
 
-### Phase 3: Pack Definitions (1 cycle)
-1. Define all 6 packs (research, builder, ops, trading, arena, email)
-2. Implement readiness checks per pack
-3. Add pack selector to frontend
-4. Write tests for pack loading, readiness checks, tool filtering
+### Phase 3: Pack Definitions — DONE (Claude, feature/capability-packs)
+1. ~~Define all 6 packs (research, builder, ops, trading, arena, email)~~
+2. ~~Implement readiness checks per pack (env, deps, feature flags, provider keys)~~
+3. Add pack selector to frontend (TODO)
+4. ~~Write tests for pack loading, readiness checks, tool filtering (32 tests passing)~~
 
 ### Phase 4: Golden Evals (1 cycle)
 1. Write golden eval cases for each pack
 2. Extend EvalRunner to support pack-scoped runs
 3. Add `GET /api/packs/<name>/eval` endpoint
 4. Run cross-provider benchmarks, store baselines
+5. **Chaos mode** (from Grok): Add a `chaos_mode` flag to EvalRunner that injects
+   random provider timeouts and failures, simulating Grok-4.20 beta instability
+6. **Arena evals** (from Grok): Add arena-specific eval cases (combat smoke test,
+   TTS commentary verification, marketplace relay invoke + toll deduction)
 
 ---
 

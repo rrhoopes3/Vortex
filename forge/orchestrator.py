@@ -38,6 +38,7 @@ from forge.models import PlanStep, StepResult, TaskResult
 from forge.tools import create_registry
 from forge.tools.registry import resolve_tools_for_step
 from forge.providers import detect_provider
+from forge.packs import get_registry as get_pack_registry, CapabilityPack
 from forge.guardrails import GuardrailEngine
 from forge.context_engine import (
     compact_context, recall_relevant, remember_task,
@@ -67,7 +68,27 @@ class Orchestrator:
         task_id: str = "",
         toll_sender: str = "",
         guardrails_enabled: bool = True,
+        pack: str = "",
     ):
+        # ── Capability Pack (if specified) ────────────────────────────────
+        self._pack: CapabilityPack | None = None
+        if pack:
+            pack_obj = get_pack_registry().get(pack)
+            if pack_obj:
+                self._pack = pack_obj
+                # Pack overrides: model, guardrails
+                if not executor_model and pack_obj.default_model:
+                    executor_model = pack_obj.default_model
+                if pack_obj.guardrail_profile == "strict":
+                    guardrails_enabled = True
+                elif pack_obj.guardrail_profile == "permissive":
+                    guardrails_enabled = False
+                log.info("Pack '%s' active: model=%s, guardrails=%s, budget=$%.2f/%d steps",
+                         pack_obj.name, executor_model, pack_obj.guardrail_profile,
+                         pack_obj.budget.max_cost_usd, pack_obj.budget.max_steps)
+            else:
+                log.warning("Unknown pack '%s' — ignoring", pack)
+
         self._client = None  # xAI Client created lazily — only when needed
         self._toll_sender = toll_sender  # external agent ID for billing
         self._toll_relay = None
@@ -192,6 +213,11 @@ class Orchestrator:
         # Only create xAI client if the executor model needs it
         xai_client = self.client if self._needs_xai_client(effective_model) else None
 
+        # Pack-based tool filtering for direct mode
+        pack_tool_filter = None
+        if self._pack:
+            pack_tool_filter = resolve_tools_for_step(self._pack.tools)
+
         gen = executor.execute_step(
             client=xai_client,
             registry=self.registry,
@@ -203,6 +229,7 @@ class Orchestrator:
             model=effective_model,
             task_goal=task,
             guardrail_engine=self.guardrail_engine,
+            tool_filter=pack_tool_filter,
         )
         if self._toll_relay:
             gen = self._toll_relay.meter(gen, sender=self._toll_sender or "orchestrator",
@@ -421,6 +448,14 @@ class Orchestrator:
                 tool_filter = resolve_tools_for_step(step.tools_needed)
                 log.info("Step %d: lazy discovery → %d tools (from %s)",
                          step.step_number, len(tool_filter), step.tools_needed)
+
+            # Intersect with pack allowlist if active
+            if self._pack:
+                pack_tools = resolve_tools_for_step(self._pack.tools)
+                if tool_filter:
+                    tool_filter = tool_filter & pack_tools
+                else:
+                    tool_filter = pack_tools
 
             yield {
                 "type": "step_start",
