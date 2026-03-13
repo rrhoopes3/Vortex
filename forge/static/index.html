@@ -194,8 +194,19 @@
                 </section>
 
                 <section class="chat-area" id="chat-area">
-                    <div class="messages" id="messages">
-                        <div class="msg status">The Forge is ready. Submit a task to see planner, executor, delegation, safety, and cost data in one stream.</div>
+                    <div class="split-panes">
+                        <div class="pane-dialogue">
+                            <div class="pane-header">Dialogue</div>
+                            <div class="messages" id="messages">
+                                <div class="msg status">The Forge is ready. Submit a task.</div>
+                            </div>
+                        </div>
+                        <div class="pane-technical">
+                            <div class="pane-header">Technical</div>
+                            <div class="messages" id="messages-technical">
+                                <div class="msg status">Tool calls, toll events, and guardrails appear here.</div>
+                            </div>
+                        </div>
                     </div>
                     <div class="composer">
                         <textarea id="task-input" rows="2" placeholder="Describe a task for The Forge..."></textarea>

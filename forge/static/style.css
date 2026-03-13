@@ -454,6 +454,45 @@ button.stack-item:hover {
     flex: 1;
 }
 
+.split-panes {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    gap: 10px;
+}
+
+.pane-dialogue,
+.pane-technical {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.02);
+    overflow: hidden;
+}
+
+.pane-header {
+    padding: 6px 12px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.03);
+    flex-shrink: 0;
+}
+
+.pane-dialogue .pane-header {
+    color: var(--accent-strong);
+}
+
+.pane-technical .pane-header {
+    color: var(--blue);
+}
+
 .messages {
     flex: 1;
     min-height: 0;
@@ -461,6 +500,7 @@ button.stack-item:hover {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    padding: 10px;
     padding-right: 4px;
 }
 
@@ -1195,6 +1235,15 @@ input[type="range"] {
 
     .composer-actions button {
         flex: 1;
+    }
+
+    .split-panes {
+        flex-direction: column;
+    }
+
+    .pane-dialogue,
+    .pane-technical {
+        min-height: 200px;
     }
 }
 

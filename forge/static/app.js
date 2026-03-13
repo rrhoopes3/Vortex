@@ -1,5 +1,11 @@
+const TECHNICAL_TYPES = new Set([
+    "tool-call", "tool-result", "toll", "toll-summary",
+    "guardrail", "guardrail-summary", "firewall", "token-usage",
+]);
+
 const els = {
     messages: document.getElementById("messages"),
+    messagesTechnical: document.getElementById("messages-technical"),
     taskInput: document.getElementById("task-input"),
     submitBtn: document.getElementById("submit-btn"),
     killBtn: document.getElementById("kill-btn"),
@@ -1272,8 +1278,10 @@ function addMessage(type, content, options = {}) {
         div.textContent = content;
     }
 
-    els.messages.appendChild(div);
-    scrollToBottom();
+    const target = (TECHNICAL_TYPES.has(type) && els.messagesTechnical)
+        ? els.messagesTechnical : els.messages;
+    target.appendChild(div);
+    scrollToBottom(false, target);
     return div;
 }
 
@@ -1356,14 +1364,13 @@ function renderMarkdown(text) {
     return escapeHtml(text || "").replace(/\n/g, "<br>");
 }
 
-function isNearBottom() {
-    const el = els.messages;
+function isNearBottom(el) {
     return el.scrollHeight - el.scrollTop - el.clientHeight < 80;
 }
 
-function scrollToBottom(force = false) {
-    if (force || isNearBottom()) {
-        els.messages.scrollTop = els.messages.scrollHeight;
+function scrollToBottom(force = false, target = els.messages) {
+    if (force || isNearBottom(target)) {
+        target.scrollTop = target.scrollHeight;
     }
 }
 
