@@ -126,6 +126,7 @@ def build_widget_html(
     libraries: list[str] | None = None,
     width: str = "100%",
     height: str = "400px",
+    widget_id: str = "",
 ) -> str:
     """Build a complete, self-contained HTML document for a widget iframe.
 
@@ -156,7 +157,8 @@ def build_widget_html(
 
     lib_html = "\n    ".join(lib_tags)
 
-    widget_id = hashlib.md5(f"{title}-{time.time()}".encode()).hexdigest()[:8]
+    if not widget_id:
+        widget_id = hashlib.md5(f"{title}-{time.time()}".encode()).hexdigest()[:8]
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -299,6 +301,8 @@ def handle_render_widget(
     if widget_type not in WIDGET_TYPES:
         return {"error": f"Unknown widget type: {widget_type}. Valid: {', '.join(WIDGET_TYPES.keys())}"}
 
+    widget_id = hashlib.md5(f"{title}-{time.time()}".encode()).hexdigest()[:8]
+
     full_html = build_widget_html(
         widget_type=widget_type,
         title=title,
@@ -308,9 +312,8 @@ def handle_render_widget(
         libraries=libraries,
         width=width,
         height=height,
+        widget_id=widget_id,
     )
-
-    widget_id = hashlib.md5(f"{title}-{time.time()}".encode()).hexdigest()[:8]
 
     return {
         "_widget": True,

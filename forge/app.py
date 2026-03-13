@@ -30,6 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from forge.orchestrator import Orchestrator
 from forge.memory import save_task, get_recent_tasks
 from forge.models import TaskResult
+from forge.run_log import RunLog, load_run_events, load_run_meta, get_run_artifacts
 from forge.config import (
     EXECUTOR_MODELS, COST_LIMIT_PER_TASK, COST_LIMIT_PER_SESSION,
     SHELL_WORKING_DIR, TOLL_ENABLED, MARKETPLACE_ENABLED, SOLANA_WATCHER_ENABLED,
@@ -81,6 +82,7 @@ def run_task(task_id: str, task: str, q: Queue, cancel_event: threading.Event,
              executor_model: str = ""):
     """Background thread that runs the orchestrator and pushes messages to a queue."""
     task_costs[task_id] = 0.0
+    run_log = RunLog(task_id)
     try:
         orch = Orchestrator(
             sandbox_path=sandbox_path,
@@ -95,6 +97,7 @@ def run_task(task_id: str, task: str, q: Queue, cancel_event: threading.Event,
         try:
             while True:
                 msg = next(gen)
+                run_log.append(msg)
                 track_cost(msg, task_id)
                 track_toll(msg)
                 q.put(msg)
@@ -107,10 +110,18 @@ def run_task(task_id: str, task: str, q: Queue, cancel_event: threading.Event,
         if result:
             task_results[task_id] = result
             save_task(result)
+            run_log.finalize({
+                "task": task,
+                "mode": "direct" if direct_mode else "planned",
+                "executor_model": executor_model,
+                "summary": result.final_summary,
+                "step_count": len(result.results),
+            })
 
     except Exception as e:
         log.exception("Task %s failed", task_id)
         q.put({"type": "error", "content": f"{type(e).__name__}: {e}"})
+        run_log.finalize({"task": task, "error": str(e)})
     finally:
         task_costs.pop(task_id, None)
         q.put(None)  # sentinel
@@ -250,6 +261,7 @@ def submit_arena():
 def run_arena(task_id: str, q: Queue, cancel_event: threading.Event,
               red_model: str = "", blue_model: str = "", scenario: str = "classic"):
     """Background thread that runs the arena and pushes messages to a queue."""
+    run_log = RunLog(task_id)
     try:
         from forge.arena.runner import ArenaRunner
         runner = ArenaRunner(
@@ -259,10 +271,18 @@ def run_arena(task_id: str, q: Queue, cancel_event: threading.Event,
             scenario=scenario,
         )
         for msg in runner.run():
+            run_log.append(msg)
             q.put(msg)
+        run_log.finalize({
+            "mode": "arena",
+            "scenario": scenario,
+            "red_model": red_model,
+            "blue_model": blue_model,
+        })
     except Exception as e:
         log.exception("Arena %s failed", task_id)
         q.put({"type": "error", "content": f"{type(e).__name__}: {e}"})
+        run_log.finalize({"mode": "arena", "error": str(e)})
     finally:
         q.put(None)
 
@@ -270,6 +290,24 @@ def run_arena(task_id: str, q: Queue, cancel_event: threading.Event,
 @app.route("/api/history")
 def history():
     return jsonify(get_recent_tasks())
+
+
+@app.route("/api/runs/<task_id>")
+def get_run(task_id):
+    """Return the full event log for a task run."""
+    events = load_run_events(task_id)
+    if not events:
+        return jsonify({"error": "Run log not found"}), 404
+    meta = load_run_meta(task_id)
+    return jsonify({"task_id": task_id, "meta": meta, "events": events})
+
+
+@app.route("/api/runs/<task_id>/artifacts")
+def get_artifacts(task_id):
+    """Return artifacts (widgets, etc.) from a run."""
+    kind = request.args.get("kind", "")
+    artifacts = get_run_artifacts(task_id, kind=kind)
+    return jsonify(artifacts)
 
 
 @app.route("/api/memory")

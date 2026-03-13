@@ -196,11 +196,17 @@ class BackgroundJudge:
 
     def collect(self) -> list[JudgeScore]:
         """Drain all available results. Waits up to 5s for pending work."""
-        import time
-        # Wait for worker to finish all queued items (with timeout)
-        deadline = time.time() + 5.0
-        while not self._work_queue.empty() and time.time() < deadline:
-            time.sleep(0.1)
+        # join() blocks until task_done() has been called for every enqueued item,
+        # meaning the worker has finished scoring AND published the result.
+        done = threading.Event()
+
+        def _wait_for_join():
+            self._work_queue.join()
+            done.set()
+
+        waiter = threading.Thread(target=_wait_for_join, daemon=True)
+        waiter.start()
+        waiter.join(timeout=5.0)
 
         scores = []
         while True:

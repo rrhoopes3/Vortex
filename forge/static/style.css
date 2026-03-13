@@ -1197,3 +1197,161 @@ input[type="range"] {
         flex: 1;
     }
 }
+
+/* ── Run Inspector ────────────────────────────────────────────────────── */
+
+.inspector-panel {
+    min-width: 0;
+}
+
+.inspector-filters {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.filter-btn {
+    font: inherit;
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.filter-btn.active {
+    background: rgba(242, 167, 75, 0.15);
+    border-color: rgba(242, 167, 75, 0.3);
+    color: var(--accent-bright);
+}
+
+.inspector-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 8px;
+    margin-bottom: 14px;
+    padding: 10px;
+    background: var(--bg-panel);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
+.inspector-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.inspector-stat em {
+    font-style: normal;
+    font-size: 0.65rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.inspector-stat strong {
+    font-size: 0.85rem;
+    color: var(--text);
+}
+
+.inspector-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: calc(100vh - 260px);
+    overflow-y: auto;
+}
+
+.inspector-event {
+    padding: 6px 10px;
+    border-radius: 6px;
+    border-left: 3px solid var(--border);
+    background: var(--bg-panel);
+    font-size: 0.78rem;
+    line-height: 1.4;
+    transition: opacity 0.15s ease;
+}
+
+.inspector-event.filtered-out {
+    display: none;
+}
+
+.inspector-event .ev-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.inspector-event .ev-type {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.06);
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.inspector-event .ev-time {
+    font-size: 0.6rem;
+    color: rgba(255,255,255,0.25);
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+.inspector-event .ev-body {
+    margin-top: 3px;
+    color: var(--muted);
+    word-break: break-word;
+}
+
+.inspector-event .ev-body pre {
+    margin: 4px 0 0;
+    padding: 6px 8px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 4px;
+    font-size: 0.72rem;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    max-height: 120px;
+}
+
+/* Event type colors */
+.inspector-event[data-cat="step"]    { border-left-color: var(--accent); }
+.inspector-event[data-cat="tool"]    { border-left-color: var(--blue); }
+.inspector-event[data-cat="safety"]  { border-left-color: var(--danger); }
+.inspector-event[data-cat="widget"]  { border-left-color: var(--signal); }
+.inspector-event[data-cat="score"]   { border-left-color: #f5c35b; }
+.inspector-event[data-cat="status"]  { border-left-color: rgba(255,255,255,0.15); }
+.inspector-event[data-cat="content"] { border-left-color: rgba(255,255,255,0.08); }
+.inspector-event[data-cat="arena"]   { border-left-color: #a78bfa; }
+.inspector-event[data-cat="cost"]    { border-left-color: #63c7b2; }
+
+.inspector-event[data-cat="step"] .ev-type    { color: var(--accent-bright); }
+.inspector-event[data-cat="tool"] .ev-type    { color: var(--blue); }
+.inspector-event[data-cat="safety"] .ev-type  { color: var(--danger); }
+.inspector-event[data-cat="widget"] .ev-type  { color: var(--signal); }
+.inspector-event[data-cat="score"] .ev-type   { color: #f5c35b; }
+.inspector-event[data-cat="arena"] .ev-type   { color: #a78bfa; }
+.inspector-event[data-cat="cost"] .ev-type    { color: #63c7b2; }
+
+/* Widget preview in inspector */
+.inspector-widget-preview {
+    margin-top: 6px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.inspector-widget-preview iframe {
+    width: 100%;
+    height: 200px;
+    border: none;
+    background: transparent;
+}

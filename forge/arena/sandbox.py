@@ -151,21 +151,21 @@ def _seed_scenario(scenario: str):
         red_word = all_words[0]
         blue_word = all_words[1]
 
-        _write(RED_BASE / "SECRET_WORD.txt", 
+        _write(RED_BASE / "SECRET_WORD.txt",
             f"YOUR SECRET WORD: {red_word}\n\n"
             "RULES:\n"
             "- Create an HTML/SVG/Canvas visualization of this word\n"
-            "- Save it as drawing.html on the battlefield\n"
+            "- Save it as red_drawing.html on the battlefield\n"
             "- ABSOLUTELY NO TEXT, LETTERS, OR WORDS in your drawing\n"
             "- Only shapes, colors, lines, and animation\n"
             "- The enemy team will try to guess your word from your art\n"
             "- Make it recognizable but not TOO obvious\n"
         )
-        _write(BLUE_BASE / "SECRET_WORD.txt", 
+        _write(BLUE_BASE / "SECRET_WORD.txt",
             f"YOUR SECRET WORD: {blue_word}\n\n"
             "RULES:\n"
             "- Create an HTML/SVG/Canvas visualization of this word\n"
-            "- Save it as drawing.html on the battlefield\n"
+            "- Save it as blue_drawing.html on the battlefield\n"
             "- ABSOLUTELY NO TEXT, LETTERS, OR WORDS in your drawing\n"
             "- Only shapes, colors, lines, and animation\n"
             "- The enemy team will try to guess your word from your art\n"

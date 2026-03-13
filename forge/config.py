@@ -81,10 +81,12 @@ FORGE_DIR = Path(__file__).resolve().parent
 DATA_DIR = FORGE_DIR / "data"
 TASKS_FILE = DATA_DIR / "tasks.json"
 CONVERSATIONS_DIR = DATA_DIR / "conversations"
+RUNS_DIR = DATA_DIR / "runs"
 
 # Ensure data dirs exist
 DATA_DIR.mkdir(exist_ok=True)
 CONVERSATIONS_DIR.mkdir(exist_ok=True)
+RUNS_DIR.mkdir(exist_ok=True)
 VAULTS_DIR = DATA_DIR / "vaults"
 VAULTS_DIR.mkdir(exist_ok=True)
 

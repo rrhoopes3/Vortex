@@ -214,11 +214,19 @@
                 </div>
                 <div id="history-list" class="stack-list empty-state">No completed tasks yet.</div>
             </section>
-            <section class="panel">
+            <section class="panel inspector-panel">
                 <div class="panel-header">
-                    <h3>History Detail</h3>
+                    <h3>Run Inspector</h3>
+                    <div class="inspector-filters" id="inspector-filters" style="display:none">
+                        <button class="filter-btn active" data-filter="all">All</button>
+                        <button class="filter-btn" data-filter="steps">Steps</button>
+                        <button class="filter-btn" data-filter="tools">Tools</button>
+                        <button class="filter-btn" data-filter="safety">Safety</button>
+                        <button class="filter-btn" data-filter="widgets">Widgets</button>
+                        <button class="filter-btn" data-filter="scores">Scores</button>
+                    </div>
                 </div>
-                <div id="history-detail" class="history-detail empty-state">Select a past task to inspect summary, step outcomes, and delegation hops.</div>
+                <div id="history-detail" class="history-detail empty-state">Select a past task to inspect the full event stream, tool calls, widgets, costs, and safety data.</div>
             </section>
         </div>
     </div>

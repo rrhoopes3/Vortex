@@ -20,6 +20,7 @@ const els = {
     featureBadges: document.getElementById("feature-badges"),
     historyList: document.getElementById("history-list"),
     historyDetail: document.getElementById("history-detail"),
+    inspectorFilters: document.getElementById("inspector-filters"),
     memoryList: document.getElementById("memory-list"),
     sessionCost: document.getElementById("session-cost"),
     sessionToll: document.getElementById("session-toll"),
@@ -462,13 +463,29 @@ function renderHistory() {
     });
 }
 
-function renderHistoryDetail(task) {
+async function renderHistoryDetail(task) {
     if (!task) {
         els.historyDetail.className = "history-detail empty-state";
-        els.historyDetail.textContent = "Select a past task to inspect summary, step outcomes, and delegation hops.";
+        els.historyDetail.textContent = "Select a past task to inspect the full event stream, tool calls, widgets, costs, and safety data.";
+        els.inspectorFilters.style.display = "none";
         return;
     }
 
+    // Try to load the full run log for rich inspector view
+    try {
+        const run = await fetchJson(`/api/runs/${task.task_id}`);
+        if (run && !run.error && Array.isArray(run.events) && run.events.length) {
+            renderRunInspector(task, run.events, run.meta);
+            return;
+        }
+    } catch (_) {
+        // No run log — fall back to legacy view
+    }
+    renderHistoryDetailLegacy(task);
+}
+
+function renderHistoryDetailLegacy(task) {
+    els.inspectorFilters.style.display = "none";
     const results = Array.isArray(task.results) ? task.results : [];
     const uniqueTools = Array.from(new Set(results.flatMap((result) => result.tools_used || [])));
     const stepsHtml = results.length
@@ -517,6 +534,264 @@ function renderHistoryDetail(task) {
         </div>
         ${chainHtml}
     `;
+}
+
+// ── Run Inspector — Full Event Timeline ─────────────────────────────────────
+
+const EVENT_CATEGORIES = {
+    status:              "status",
+    plan_content:        "step",
+    step_start:          "step",
+    step_done:           "step",
+    content:             "content",
+    tool_call:           "tools",
+    tool_result:         "tools",
+    guardrail_violation: "safety",
+    guardrail_summary:   "safety",
+    firewall_block:      "safety",
+    escalation:          "safety",
+    widget_render:       "widgets",
+    judge_scores:        "scores",
+    token_usage:         "cost",
+    toll_deducted:       "cost",
+    toll_summary:        "cost",
+    done:                "status",
+    cancelled:           "status",
+    error:               "safety",
+    arena_status:        "arena",
+    arena_round_start:   "arena",
+    arena_team_action:   "arena",
+    arena_commentary:    "arena",
+    arena_scores:        "scores",
+    arena_result:        "arena",
+};
+
+function categorizeEvent(evt) {
+    return EVENT_CATEGORIES[evt.type] || "status";
+}
+
+function renderRunInspector(task, events, meta) {
+    els.inspectorFilters.style.display = "";
+
+    // Compute summary stats
+    const stats = {
+        events: events.length,
+        steps: 0,
+        tools: 0,
+        guardrails: 0,
+        firewalls: 0,
+        widgets: 0,
+        scores: 0,
+        costUsd: 0,
+        tokens: 0,
+    };
+    const toolNames = new Set();
+
+    for (const evt of events) {
+        switch (evt.type) {
+            case "step_start": stats.steps++; break;
+            case "tool_call":
+                stats.tools++;
+                if (evt.name) toolNames.add(evt.name);
+                break;
+            case "guardrail_violation": stats.guardrails++; break;
+            case "firewall_block": stats.firewalls++; break;
+            case "widget_render": stats.widgets++; break;
+            case "judge_scores": case "arena_scores": stats.scores++; break;
+            case "token_usage":
+                stats.costUsd += evt.cost_usd || 0;
+                stats.tokens += (evt.input_tokens || 0) + (evt.output_tokens || 0);
+                break;
+        }
+    }
+
+    const durationSec = events.length >= 2
+        ? ((events[events.length - 1].t || 0) - (events[0].t || 0)).toFixed(1)
+        : "-";
+
+    // Build HTML
+    const summaryHtml = `
+        <div class="inspector-summary">
+            <div class="inspector-stat"><em>Events</em><strong>${stats.events}</strong></div>
+            <div class="inspector-stat"><em>Steps</em><strong>${stats.steps}</strong></div>
+            <div class="inspector-stat"><em>Tool Calls</em><strong>${stats.tools}</strong></div>
+            <div class="inspector-stat"><em>Guardrails</em><strong>${stats.guardrails}</strong></div>
+            <div class="inspector-stat"><em>Firewalls</em><strong>${stats.firewalls}</strong></div>
+            <div class="inspector-stat"><em>Widgets</em><strong>${stats.widgets}</strong></div>
+            <div class="inspector-stat"><em>Scores</em><strong>${stats.scores}</strong></div>
+            <div class="inspector-stat"><em>Tokens</em><strong>${stats.tokens.toLocaleString()}</strong></div>
+            <div class="inspector-stat"><em>Cost</em><strong>${formatMoney(stats.costUsd, 4)}</strong></div>
+            <div class="inspector-stat"><em>Duration</em><strong>${durationSec}s</strong></div>
+        </div>
+    `;
+
+    const toolsLine = toolNames.size
+        ? `<div class="history-block"><h4>Tools Used</h4><p>${escapeHtml([...toolNames].join(", "))}</p></div>`
+        : "";
+
+    const t0 = events[0]?.t || 0;
+    const timelineHtml = events.map((evt, i) => {
+        const cat = categorizeEvent(evt);
+        const relTime = t0 ? `+${((evt.t || 0) - t0).toFixed(1)}s` : `#${i}`;
+        const body = formatEventBody(evt);
+        return `
+            <div class="inspector-event" data-cat="${cat}" data-seq="${evt.seq ?? i}">
+                <div class="ev-head">
+                    <span class="ev-type">${escapeHtml(evt.type || "unknown")}</span>
+                    <span class="ev-time">${escapeHtml(relTime)}</span>
+                </div>
+                <div class="ev-body">${body}</div>
+            </div>
+        `;
+    }).join("");
+
+    els.historyDetail.className = "history-detail";
+    els.historyDetail.innerHTML = `
+        <div class="history-block">
+            <div class="history-kicker">${escapeHtml(formatTimestamp(task.timestamp))} | ${escapeHtml(task.task_id || "-")}</div>
+            <h4>${escapeHtml(task.task || "Untitled task")}</h4>
+            <p>${escapeHtml(task.final_summary || "No summary stored.")}</p>
+        </div>
+        ${summaryHtml}
+        ${toolsLine}
+        <div class="inspector-timeline">${timelineHtml}</div>
+    `;
+
+    // Wire filter buttons
+    bindInspectorFilters();
+}
+
+function formatEventBody(evt) {
+    switch (evt.type) {
+        case "status":
+        case "arena_status":
+        case "cancelled":
+            return escapeHtml(evt.content || "");
+
+        case "plan_content":
+        case "content":
+            return `<pre>${escapeHtml(truncate(evt.content || "", 300))}</pre>`;
+
+        case "step_start":
+            return `<strong>Step ${evt.step}: ${escapeHtml(evt.title || "")}</strong>`
+                + (evt.description ? `<br>${escapeHtml(evt.description)}` : "")
+                + (evt.delegatee ? `<br><em>Delegatee:</em> ${escapeHtml(evt.delegatee)}` : "");
+
+        case "step_done": {
+            const parts = [`Step ${evt.step} ${evt.status || "done"}`];
+            if (evt.delegatee) parts.push(evt.delegatee);
+            if (evt.latency_s) parts.push(`${evt.latency_s}s`);
+            if (evt.trust_score != null) parts.push(`trust ${Number(evt.trust_score).toFixed(2)}`);
+            if (evt.was_reassigned) parts.push("reassigned");
+            return escapeHtml(parts.join(" | "));
+        }
+
+        case "tool_call":
+            return `<strong>${escapeHtml(evt.name || "tool")}</strong>`
+                + `<pre>${escapeHtml(truncate(JSON.stringify(evt.args || {}, null, 2), 200))}</pre>`;
+
+        case "tool_result":
+            return `<pre>${escapeHtml(truncate(evt.result || "", 300))}</pre>`;
+
+        case "guardrail_violation":
+            return `<strong>${escapeHtml(evt.severity || "warning")}</strong> ${escapeHtml(evt.guardrail || "")} — ${escapeHtml(evt.message || "")}`;
+
+        case "guardrail_summary":
+            return `${evt.total_violations || 0} violations | ${evt.blocks || 0} blocks | ${evt.warnings || 0} warnings`;
+
+        case "firewall_block":
+            return `<strong>${escapeHtml(evt.tool || "tool")}</strong> blocked — ${escapeHtml(evt.reason || "")}`;
+
+        case "escalation":
+            return `<strong>${escapeHtml(evt.category || "general")}</strong> — ${escapeHtml(evt.reason || "")}`;
+
+        case "widget_render":
+            return `<strong>${escapeHtml(evt.title || "Widget")}</strong> (${escapeHtml(evt.widget_type || "custom")})`
+                + `<div class="inspector-widget-preview"><iframe sandbox="allow-scripts" srcdoc="${escapeAttr(evt.html || "<p>Empty</p>")}" title="${escapeAttr(evt.title || "Widget")}"></iframe></div>`;
+
+        case "judge_scores":
+            if (Array.isArray(evt.scores)) {
+                return evt.scores.map(s =>
+                    `Step ${s.step ?? "?"}: ${s.score ?? "-"}/10 — ${escapeHtml(truncate(s.reasoning || "", 100))}`
+                ).join("<br>");
+            }
+            return escapeHtml(JSON.stringify(evt.scores || evt));
+
+        case "token_usage":
+            return `${escapeHtml(evt.model || "-")} | in: ${(evt.input_tokens || 0).toLocaleString()} out: ${(evt.output_tokens || 0).toLocaleString()} | ${formatMoney(evt.cost_usd || 0, 6)}`;
+
+        case "toll_deducted":
+            return `${formatMoney(evt.toll_usd || 0, 6)} | ${escapeHtml(evt.sender || "-")} → ${escapeHtml(evt.receiver || "-")}`;
+
+        case "toll_summary":
+            return `${evt.total_messages || 0} messages | ${formatMoney(evt.total_tolls_usd || 0, 6)} tolls`;
+
+        case "done":
+            return escapeHtml(evt.summary || "Task complete");
+
+        case "arena_round_start":
+            return `<strong>Round ${evt.round}: ${escapeHtml(evt.name || "")}</strong>`;
+
+        case "arena_team_action":
+            return `<strong class="team-${escapeHtml(evt.team || "red")}">${escapeHtml((evt.team || "").toUpperCase())}</strong> [${escapeHtml(evt.action_type || "action")}] ${escapeHtml(truncate(evt.content || "", 200))}`;
+
+        case "arena_commentary":
+            return escapeHtml(truncate(evt.content || "", 300));
+
+        case "arena_scores":
+            return `Red +${evt.red_score || 0} (${evt.red_total || 0}) | Blue +${evt.blue_score || 0} (${evt.blue_total || 0})`;
+
+        case "arena_result":
+            return `<strong>${escapeHtml(evt.winner || "?")}</strong> | Red ${evt.red_total || 0} | Blue ${evt.blue_total || 0}`;
+
+        default:
+            return `<pre>${escapeHtml(truncate(JSON.stringify(evt, null, 2), 200))}</pre>`;
+    }
+}
+
+function escapeAttr(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+}
+
+function bindInspectorFilters() {
+    const filterBtns = els.inspectorFilters.querySelectorAll(".filter-btn");
+    filterBtns.forEach(btn => {
+        // Replace with fresh clone to remove old listeners
+        const fresh = btn.cloneNode(true);
+        btn.parentNode.replaceChild(fresh, btn);
+        fresh.addEventListener("click", () => {
+            filterBtns.forEach(b => b.classList.remove("active"));
+            // Re-query since we replaced nodes
+            els.inspectorFilters.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+            fresh.classList.add("active");
+            applyInspectorFilter(fresh.dataset.filter);
+        });
+    });
+}
+
+function applyInspectorFilter(filter) {
+    const timeline = els.historyDetail.querySelector(".inspector-timeline");
+    if (!timeline) return;
+
+    const events = timeline.querySelectorAll(".inspector-event");
+    events.forEach(el => {
+        if (filter === "all") {
+            el.classList.remove("filtered-out");
+        } else {
+            const cat = el.dataset.cat;
+            // Map filter names to categories
+            const match = (filter === "steps" && (cat === "step" || cat === "content" || cat === "status"))
+                || (filter === "tools" && cat === "tools")
+                || (filter === "safety" && cat === "safety")
+                || (filter === "widgets" && cat === "widgets")
+                || (filter === "scores" && cat === "scores");
+            el.classList.toggle("filtered-out", !match);
+        }
+    });
 }
 
 async function loadMemory() {

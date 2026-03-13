@@ -785,6 +785,10 @@ class ArenaRunner:
             t.join(timeout=5)
             self.combat_log.append(f"Turn {turn} ({team.upper()}): {output[:300]}")
 
+            # Survival mode: reaper deletes random battlefield files between turns
+            if self.scenario_key == "survival":
+                yield from self._reaper_pass(turn)
+
             # Quick master commentary every 2 turns
             if turn % 2 == 0:
                 snap = sandbox.snapshot()
@@ -794,6 +798,29 @@ class ArenaRunner:
                      "blue": self.combat_log[-1] if self.combat_log else ""},
                     snap,
                 )
+
+    def _reaper_pass(self, turn: int) -> Generator[dict, None, None]:
+        """Survival mode: delete 1-3 random files from the battlefield between turns."""
+        import random
+        bf = sandbox.BATTLEFIELD
+        if not bf.exists():
+            return
+        files = [f for f in bf.rglob("*") if f.is_file() and f.name != "REAPER_WARNING.txt"]
+        if not files:
+            return
+        count = min(len(files), random.randint(1, 3))
+        victims = random.sample(files, count)
+        names = []
+        for v in victims:
+            try:
+                v.unlink()
+                names.append(str(v.relative_to(bf)))
+            except OSError:
+                pass
+        if names:
+            msg = f"☠️ REAPER (Turn {turn}): Deleted {', '.join(names)}"
+            self.combat_log.append(msg)
+            yield {"type": "arena_status", "content": msg}
 
     def _run_sudden_death(self) -> Generator[dict, None, None]:
         """Sudden death round — one move each."""
