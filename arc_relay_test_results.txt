@@ -1,0 +1,1 @@
+"Successfully tested ARC-Relay MCP server free tools" 

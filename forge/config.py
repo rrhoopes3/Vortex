@@ -131,19 +131,33 @@ SOLANA_USDC_DECIMALS = 6
 
 # ── Trading ─────────────────────────────────────────────────────────────────
 TRADING_ENABLED = os.getenv("FORGE_TRADING_ENABLED", "true").lower() == "true"
-# Auto-detect best provider: Tradier if API key set, else yfinance fallback
-_trading_provider_env = os.getenv("FORGE_TRADING_PROVIDER", "")
-if _trading_provider_env:
-    TRADING_DEFAULT_PROVIDER = _trading_provider_env
-elif os.getenv("FORGE_TRADIER_API_KEY", ""):
-    TRADING_DEFAULT_PROVIDER = "tradier"
-else:
-    TRADING_DEFAULT_PROVIDER = "yfinance"
+
+# Tradier
 TRADING_TRADIER_API_KEY = os.getenv("FORGE_TRADIER_API_KEY", "")
 TRADING_TRADIER_ACCOUNT_ID = os.getenv("FORGE_TRADIER_ACCOUNT_ID", "")
 TRADING_TRADIER_SANDBOX = os.getenv("FORGE_TRADIER_SANDBOX", "true").lower() == "true"
+
+# Robinhood Legacy (robin_stocks — stocks, options, crypto)
 TRADING_ROBINHOOD_USER = os.getenv("FORGE_ROBINHOOD_USER", "")
 TRADING_ROBINHOOD_PASS = os.getenv("FORGE_ROBINHOOD_PASS", "")
+
+# Robinhood Crypto API (API key — crypto only, no stocks/options)
+TRADING_ROBINHOOD_API_KEY = os.getenv("FORGE_ROBINHOOD_API_KEY", "")
+TRADING_ROBINHOOD_API_SECRET = os.getenv("FORGE_ROBINHOOD_API_SECRET", "")
+
+# Auto-detect best provider
+_trading_provider_env = os.getenv("FORGE_TRADING_PROVIDER", "")
+if _trading_provider_env:
+    TRADING_DEFAULT_PROVIDER = _trading_provider_env
+elif TRADING_ROBINHOOD_USER and TRADING_ROBINHOOD_PASS:
+    TRADING_DEFAULT_PROVIDER = "robinhood"        # full: stocks + options + crypto
+elif TRADING_ROBINHOOD_API_KEY:
+    TRADING_DEFAULT_PROVIDER = "robinhood-crypto"  # crypto-only via API key
+elif TRADING_TRADIER_API_KEY:
+    TRADING_DEFAULT_PROVIDER = "tradier"
+else:
+    TRADING_DEFAULT_PROVIDER = "yfinance"
+
 TRADING_DATA_DIR = DATA_DIR / "trading"
 TRADING_DATA_DIR.mkdir(exist_ok=True)
 TRADING_PAPER_MODE = os.getenv("FORGE_TRADING_PAPER_MODE", "true").lower() == "true"

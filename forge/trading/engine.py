@@ -15,7 +15,7 @@ from pathlib import Path
 from queue import Queue
 
 from forge.trading.providers import (
-    DataProvider, OptionsChainResult, Quote, get_provider,
+    DataProvider, OptionsChainResult, Quote, get_provider_from_config,
 )
 
 log = logging.getLogger("forge.trading.engine")
@@ -154,18 +154,7 @@ class TradingEngine:
     # ── Provider Access ──────────────────────────────────────────────────
 
     def _get_provider(self, provider_name: str = "") -> DataProvider:
-        from forge.config import (
-            TRADING_DEFAULT_PROVIDER, TRADING_TRADIER_API_KEY,
-            TRADING_TRADIER_SANDBOX, TRADING_ROBINHOOD_USER, TRADING_ROBINHOOD_PASS,
-        )
-        name = provider_name or TRADING_DEFAULT_PROVIDER
-        if name == "tradier":
-            return get_provider("tradier", api_key=TRADING_TRADIER_API_KEY,
-                                sandbox=TRADING_TRADIER_SANDBOX)
-        if name == "robinhood":
-            return get_provider("robinhood", username=TRADING_ROBINHOOD_USER,
-                                password=TRADING_ROBINHOOD_PASS)
-        return get_provider("yfinance")
+        return get_provider_from_config(provider_name)
 
     # ── PCR Data ─────────────────────────────────────────────────────────
 

@@ -1,5 +1,11 @@
+const TECHNICAL_TYPES = new Set([
+    "tool-call", "tool-result", "toll", "toll-summary",
+    "guardrail", "guardrail-summary", "firewall", "escalation",
+]);
+
 const els = {
     messages: document.getElementById("messages"),
+    messagesTechnical: document.getElementById("messages-technical"),
     taskInput: document.getElementById("task-input"),
     submitBtn: document.getElementById("submit-btn"),
     killBtn: document.getElementById("kill-btn"),
@@ -1272,7 +1278,10 @@ function addMessage(type, content, options = {}) {
         div.textContent = content;
     }
 
-    els.messages.appendChild(div);
+    // Route to correct pane
+    const target = (TECHNICAL_TYPES.has(type) && els.messagesTechnical)
+        ? els.messagesTechnical : els.messages;
+    target.appendChild(div);
     scrollToBottom();
     return div;
 }
@@ -1356,15 +1365,16 @@ function renderMarkdown(text) {
     return escapeHtml(text || "").replace(/\n/g, "<br>");
 }
 
-function isNearBottom() {
-    const el = els.messages;
+function isNearBottom(el) {
     return el.scrollHeight - el.scrollTop - el.clientHeight < 80;
 }
 
 function scrollToBottom(force = false) {
-    if (force || isNearBottom()) {
-        els.messages.scrollTop = els.messages.scrollHeight;
-    }
+    [els.messages, els.messagesTechnical].forEach(el => {
+        if (el && (force || isNearBottom(el))) {
+            el.scrollTop = el.scrollHeight;
+        }
+    });
 }
 
 function modeFromControls() {
@@ -1715,6 +1725,8 @@ const tradingState = {
     currentExpiry: "",
     chartMode: "line",
     tradeSide: "buy",
+    assetType: "stock",
+    providerCaps: null,
     pcrHistory: [],
     alerts: [],
     sseSource: null,
@@ -1739,6 +1751,42 @@ function initTrading() {
     const priceField = document.getElementById("trade-price-field");
 
     refreshBtn.addEventListener("click", () => loadPCRData());
+
+    // Provider switch — hot-swap backend + refresh data
+    providerSelect.addEventListener("change", async () => {
+        const provider = providerSelect.value;
+        try {
+            await fetch("/api/trading/provider", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ provider }),
+            });
+        } catch (e) {
+            console.warn("Provider switch failed:", e);
+        }
+        loadExpirations();
+        loadPCRData();
+        fetchTradingCaps();
+        // Reset option expirations for new provider
+        const optExp = document.getElementById("trade-option-expiry");
+        if (optExp) optExp.innerHTML = '<option value="">Select expiry...</option>';
+    });
+
+    // Auto-select active provider from backend config
+    fetch("/api/trading/config").then(r => r.json()).then(cfg => {
+        if (cfg.default_provider && providerSelect.querySelector(`option[value="${cfg.default_provider}"]`)) {
+            providerSelect.value = cfg.default_provider;
+        }
+        // Disable unconfigured providers
+        for (const [key, info] of Object.entries(cfg.providers || {})) {
+            const opt = providerSelect.querySelector(`option[value="${key}"]`);
+            if (opt && !info.configured) {
+                opt.disabled = true;
+                opt.textContent += " (not configured)";
+            }
+        }
+    }).catch(() => {});
+
     tickerSelect.addEventListener("change", () => {
         tradingState.currentTicker = tickerSelect.value;
         loadExpirations();
@@ -1779,8 +1827,34 @@ function initTrading() {
     });
 
     orderType.addEventListener("change", () => {
-        priceField.style.display = orderType.value === "limit" ? "" : "none";
+        const val = orderType.value;
+        const show = val === "limit" || val === "stop" || val === "stop_limit";
+        priceField.style.display = show ? "" : "none";
+        const priceLabel = document.getElementById("trade-price-label");
+        if (priceLabel) {
+            priceLabel.textContent = val === "stop" ? "Stop Price" : val === "stop_limit" ? "Stop/Limit" : "Limit Price";
+        }
     });
+
+    // Asset type tab switching
+    document.querySelectorAll(".trade-asset-tab").forEach(tab => {
+        tab.addEventListener("click", () => {
+            if (tab.classList.contains("disabled")) return;
+            document.querySelectorAll(".trade-asset-tab").forEach(t => t.classList.remove("active"));
+            tab.classList.add("active");
+            tradingState.assetType = tab.dataset.asset;
+            updateTradeFieldsVisibility();
+        });
+    });
+
+    // Load option expirations when option expiry dropdown is opened
+    const optionExpiry = document.getElementById("trade-option-expiry");
+    if (optionExpiry) {
+        optionExpiry.addEventListener("focus", () => loadOptionExpirations());
+    }
+
+    // Fetch provider capabilities to enable/disable asset tabs
+    fetchTradingCaps();
 
     // Chart mode switching
     document.querySelectorAll(".chart-mode-btns .filter-btn").forEach(btn => {
@@ -2036,26 +2110,151 @@ async function removeTradingAlert(alertId) {
     }
 }
 
-async function executeTrade() {
+function updateTradeFieldsVisibility() {
+    const asset = tradingState.assetType;
+    // Option fields
+    document.querySelectorAll(".trade-field-option").forEach(el => {
+        el.style.display = asset === "option" ? "" : "none";
+    });
+    // Crypto fields
+    document.querySelectorAll(".trade-field-crypto").forEach(el => {
+        el.style.display = asset === "crypto" ? "" : "none";
+    });
+    // Update qty label
+    const qtyLabel = document.getElementById("trade-qty-label");
+    if (qtyLabel) {
+        qtyLabel.textContent = asset === "option" ? "Contracts" : "Qty";
+    }
+    // Update quantity step
+    const qtyInput = document.getElementById("trade-quantity");
+    if (qtyInput) {
+        qtyInput.step = asset === "crypto" ? "0.001" : "1";
+        qtyInput.min = asset === "crypto" ? "0.0001" : "1";
+        if (asset !== "crypto" && parseFloat(qtyInput.value) < 1) qtyInput.value = "1";
+    }
+}
+
+async function fetchTradingCaps() {
+    try {
+        const cfg = await fetchJson("/api/trading/config");
+        const provider = cfg.default_provider;
+        const caps = cfg.providers?.[provider]?.capabilities || {};
+        tradingState.providerCaps = caps;
+
+        // Enable/disable asset tabs based on provider capabilities
+        document.querySelectorAll(".trade-asset-tab").forEach(tab => {
+            const asset = tab.dataset.asset;
+            let enabled = true;
+            if (asset === "stock" && !caps.stocks?.quotes) enabled = false;
+            if (asset === "option" && !caps.options?.chains) enabled = false;
+            if (asset === "crypto" && !caps.crypto?.quotes) enabled = false;
+            tab.classList.toggle("disabled", !enabled);
+
+            // If active tab became disabled, switch to first enabled
+            if (!enabled && tab.classList.contains("active")) {
+                tab.classList.remove("active");
+                const first = document.querySelector(".trade-asset-tab:not(.disabled)");
+                if (first) {
+                    first.classList.add("active");
+                    tradingState.assetType = first.dataset.asset;
+                }
+            }
+        });
+        updateTradeFieldsVisibility();
+
+        // Update paper badge
+        const badge = document.getElementById("paper-badge");
+        if (badge) {
+            const isTrade = caps.stocks?.trade || caps.options?.trade || caps.crypto?.trade;
+            badge.textContent = cfg.paper_mode ? "PAPER" : (isTrade ? "LIVE" : "PAPER");
+            badge.className = "paper-badge" + (cfg.paper_mode ? "" : (isTrade ? " live" : ""));
+        }
+    } catch (e) {
+        console.warn("Failed to fetch trading caps:", e);
+    }
+}
+
+async function loadOptionExpirations() {
+    const provider = document.getElementById("trading-provider").value;
     const ticker = tradingState.currentTicker;
+    const select = document.getElementById("trade-option-expiry");
+    if (!select || select.options.length > 1) return; // already loaded
+    try {
+        const data = await fetchJson(`/api/trading/expirations/${encodeURIComponent(ticker)}?provider=${provider}`);
+        select.innerHTML = '<option value="">Select expiry...</option>';
+        (data.expirations || []).forEach(exp => {
+            select.innerHTML += `<option value="${escapeHtml(exp)}">${escapeHtml(exp)}</option>`;
+        });
+    } catch (e) {
+        console.warn("Failed to load option expirations:", e);
+    }
+}
+
+async function executeTrade() {
+    const asset = tradingState.assetType;
     const side = tradingState.tradeSide;
     const quantity = document.getElementById("trade-quantity").value;
     const orderType = document.getElementById("trade-order-type").value;
     const price = document.getElementById("trade-price").value;
+    const duration = document.getElementById("trade-duration").value;
     const resultEl = document.getElementById("trade-result");
+
+    // Determine ticker based on asset type
+    let ticker;
+    if (asset === "crypto") {
+        ticker = document.getElementById("trade-crypto-symbol").value;
+    } else {
+        ticker = tradingState.currentTicker;
+    }
+
+    // Build order payload
+    const payload = {
+        asset_type: asset,
+        ticker,
+        side,
+        quantity: parseFloat(quantity),
+        order_type: orderType,
+        duration,
+    };
+    if (price) payload.price = parseFloat(price);
+
+    // Add options fields
+    if (asset === "option") {
+        payload.expiry = document.getElementById("trade-option-expiry").value;
+        payload.strike = parseFloat(document.getElementById("trade-option-strike").value || "0");
+        payload.option_type = document.getElementById("trade-option-type").value;
+
+        if (!payload.expiry || !payload.strike) {
+            resultEl.textContent = "Select expiry and strike for options order";
+            resultEl.className = "trade-result error";
+            return;
+        }
+    }
+
+    // Build confirmation summary
+    let summary;
+    if (asset === "option") {
+        summary = `${side.toUpperCase()} ${quantity} ${ticker} ${payload.expiry} $${payload.strike} ${payload.option_type.toUpperCase()} — ${orderType}`;
+    } else if (asset === "crypto") {
+        summary = `${side.toUpperCase()} ${quantity} ${ticker} — ${orderType}`;
+    } else {
+        summary = `${side.toUpperCase()} ${quantity} ${ticker} — ${orderType}`;
+    }
+    if (price) summary += ` @ $${price}`;
 
     try {
         const result = await fetchJson("/api/trading/order", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ticker, side, quantity: parseFloat(quantity), order_type: orderType, price: price || undefined }),
+            body: JSON.stringify(payload),
         });
 
         if (result.error) {
             resultEl.textContent = result.error;
             resultEl.className = "trade-result error";
         } else {
-            resultEl.textContent = result.message || `${side} ${quantity} ${ticker} — ${result.status}`;
+            const msg = result.message || `${summary} — ${result.status || "submitted"}`;
+            resultEl.textContent = msg;
             resultEl.className = "trade-result success";
             loadPortfolio();
         }

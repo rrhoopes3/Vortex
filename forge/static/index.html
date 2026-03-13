@@ -194,8 +194,19 @@
                 </section>
 
                 <section class="chat-area" id="chat-area">
-                    <div class="messages" id="messages">
-                        <div class="msg status">The Forge is ready. Submit a task to see planner, executor, delegation, safety, and cost data in one stream.</div>
+                    <div class="split-panes">
+                        <div class="pane-dialogue">
+                            <div class="pane-header">Dialogue</div>
+                            <div class="messages" id="messages">
+                                <div class="msg status">The Forge is ready. Submit a task.</div>
+                            </div>
+                        </div>
+                        <div class="pane-technical">
+                            <div class="pane-header">Technical</div>
+                            <div class="messages" id="messages-technical">
+                                <div class="msg status">Tool calls, toll events, and guardrails appear here.</div>
+                            </div>
+                        </div>
                     </div>
                     <div class="composer">
                         <textarea id="task-input" rows="2" placeholder="Describe a task for The Forge..."></textarea>
@@ -303,9 +314,10 @@
                     <label class="field">
                         <span>Provider</span>
                         <select id="trading-provider">
-                            <option value="yfinance">yfinance (Free)</option>
-                            <option value="tradier">Tradier (Real-time)</option>
-                            <option value="robinhood">Robinhood (Crypto)</option>
+                            <option value="robinhood">Robinhood Legacy (Stocks + Options + Crypto)</option>
+                            <option value="robinhood-crypto">Robinhood Crypto API (Crypto Only)</option>
+                            <option value="tradier">Tradier (Real-time, Backup)</option>
+                            <option value="yfinance">Yahoo Finance (Free, Delayed)</option>
                         </select>
                     </label>
                     <label class="field">
@@ -404,28 +416,93 @@
                 <!-- Trade Panel -->
                 <div class="trading-section">
                     <h4>Trade <span class="paper-badge" id="paper-badge">PAPER</span></h4>
+
+                    <!-- Asset type tabs -->
+                    <div class="trade-asset-tabs" id="trade-asset-tabs">
+                        <button class="trade-asset-tab active" data-asset="stock">Stocks</button>
+                        <button class="trade-asset-tab" data-asset="option">Options</button>
+                        <button class="trade-asset-tab" data-asset="crypto">Crypto</button>
+                    </div>
+
                     <div class="trade-controls">
+                        <!-- Side -->
                         <div class="trade-side-btns">
                             <button class="trade-side-btn buy active" id="trade-buy-btn">Buy</button>
                             <button class="trade-side-btn sell" id="trade-sell-btn">Sell</button>
                         </div>
+
+                        <!-- Symbol (crypto mode uses its own list) -->
+                        <label class="field trade-field-crypto" id="trade-crypto-symbol-field" style="display:none">
+                            <span>Symbol</span>
+                            <select id="trade-crypto-symbol">
+                                <option value="BTC">BTC</option>
+                                <option value="ETH">ETH</option>
+                                <option value="SOL">SOL</option>
+                                <option value="DOGE">DOGE</option>
+                                <option value="AVAX">AVAX</option>
+                                <option value="LINK">LINK</option>
+                                <option value="XRP">XRP</option>
+                                <option value="ADA">ADA</option>
+                                <option value="SHIB">SHIB</option>
+                            </select>
+                        </label>
+
+                        <!-- Options fields -->
+                        <label class="field trade-field-option" id="trade-option-expiry-field" style="display:none">
+                            <span>Expiry</span>
+                            <select id="trade-option-expiry">
+                                <option value="">Select...</option>
+                            </select>
+                        </label>
+                        <label class="field trade-field-option" id="trade-option-strike-field" style="display:none">
+                            <span>Strike</span>
+                            <input type="number" id="trade-option-strike" step="0.50" placeholder="0.00">
+                        </label>
+                        <label class="field trade-field-option" id="trade-option-type-field" style="display:none">
+                            <span>Put / Call</span>
+                            <select id="trade-option-type">
+                                <option value="call">Call</option>
+                                <option value="put">Put</option>
+                            </select>
+                        </label>
+
+                        <!-- Quantity -->
                         <label class="field">
-                            <span>Qty</span>
+                            <span id="trade-qty-label">Qty</span>
                             <input type="number" id="trade-quantity" value="1" min="0.01" step="1">
                         </label>
+
+                        <!-- Order type -->
                         <label class="field">
-                            <span>Type</span>
+                            <span>Order</span>
                             <select id="trade-order-type">
                                 <option value="market">Market</option>
                                 <option value="limit">Limit</option>
+                                <option value="stop">Stop</option>
+                                <option value="stop_limit">Stop Limit</option>
                             </select>
                         </label>
+
+                        <!-- Limit/Stop price -->
                         <label class="field" id="trade-price-field" style="display:none">
-                            <span>Price</span>
-                            <input type="number" id="trade-price" step="0.01">
+                            <span id="trade-price-label">Limit Price</span>
+                            <input type="number" id="trade-price" step="0.01" placeholder="0.00">
                         </label>
+
+                        <!-- Duration -->
+                        <label class="field">
+                            <span>Duration</span>
+                            <select id="trade-duration">
+                                <option value="day">Day</option>
+                                <option value="gtc">GTC</option>
+                            </select>
+                        </label>
+
                         <button id="trade-submit-btn" class="accent-btn">Execute</button>
                     </div>
+
+                    <!-- Confirmation area -->
+                    <div id="trade-confirm" class="trade-confirm" style="display:none"></div>
                     <div id="trade-result" class="trade-result"></div>
                 </div>
 

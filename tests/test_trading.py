@@ -327,6 +327,39 @@ class TestPaperBroker:
         broker = PaperBroker()
         assert broker.name == "paper"
 
+    def test_uses_configured_provider_for_quotes(self, monkeypatch):
+        from forge.trading import brokers as broker_mod
+        from forge.trading.brokers import PaperBroker
+        from forge.trading.providers import Quote
+
+        class DummyProvider:
+            def get_quote(self, ticker):
+                assert ticker == "BTC"
+                return Quote(ticker=ticker, price=42000.0, timestamp=time.time())
+
+        class DummyPortfolio:
+            def record_order(self, **kwargs):
+                return {
+                    "order_id": "paper-1",
+                    "ticker": kwargs["ticker"],
+                    "side": kwargs["side"],
+                    "quantity": kwargs["quantity"],
+                    "order_type": kwargs["order_type"],
+                    "fill_price": kwargs["fill_price"],
+                    "status": kwargs["status"],
+                    "broker": kwargs["broker"],
+                }
+
+            def update_position(self, *args, **kwargs):
+                return None
+
+        monkeypatch.setattr(broker_mod, "get_provider_from_config", lambda name="": DummyProvider())
+        monkeypatch.setattr(broker_mod, "get_portfolio_manager", lambda: DummyPortfolio())
+
+        result = PaperBroker(provider_name="robinhood").place_order("BTC", "buy", 0.01)
+        assert result["paper_mode"] is True
+        assert result["fill_price"] == 42000.0
+
 
 # ── Trading Tools Registration ───────────────────────────────────────────────
 
@@ -679,3 +712,52 @@ class TestProviderCaching:
         assert p1 is p2
 
         _providers.pop("yfinance", None)
+
+    def test_partial_robinhood_not_cached(self):
+        """Robinhood should not cache until both username and password exist."""
+        from forge.trading.providers import get_provider, _providers
+        _providers.pop("robinhood", None)
+
+        get_provider("robinhood", username="user-only", password="")
+        assert "robinhood" not in _providers
+
+    def test_partial_robinhood_crypto_not_cached(self):
+        """Robinhood crypto provider should not cache until key and secret exist."""
+        from forge.trading.providers import get_provider, _providers
+        _providers.pop("robinhood-crypto", None)
+
+        get_provider("robinhood-crypto", api_key="key-only", api_secret="")
+        assert "robinhood-crypto" not in _providers
+
+    def test_configured_robinhood_crypto_is_cached(self):
+        """Robinhood crypto provider should cache when fully configured."""
+        from forge.trading.providers import get_provider, _providers
+        _providers.pop("robinhood-crypto", None)
+
+        p1 = get_provider("robinhood-crypto", api_key="key", api_secret="secret")
+        assert "robinhood-crypto" in _providers
+        p2 = get_provider("robinhood-crypto")
+        assert p1 is p2
+
+        _providers.pop("robinhood-crypto", None)
+
+
+class TestConfiguredProviderSelection:
+    def test_engine_supports_robinhood_crypto(self, monkeypatch, tmp_path):
+        from forge.trading import engine as engine_mod
+
+        class DummyProvider:
+            pass
+
+        dummy = DummyProvider()
+        calls = []
+
+        def fake_get_provider_from_config(name=""):
+            calls.append(name)
+            return dummy
+
+        monkeypatch.setattr(engine_mod, "get_provider_from_config", fake_get_provider_from_config)
+
+        engine = engine_mod.TradingEngine(data_dir=tmp_path)
+        assert engine._get_provider("robinhood-crypto") is dummy
+        assert calls == ["robinhood-crypto"]
