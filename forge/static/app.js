@@ -1,6 +1,6 @@
 const TECHNICAL_TYPES = new Set([
     "tool-call", "tool-result", "toll", "toll-summary",
-    "guardrail", "guardrail-summary", "firewall", "escalation",
+    "guardrail", "guardrail-summary", "firewall", "escalation", "token-usage",
 ]);
 
 const els = {
@@ -195,7 +195,7 @@ async function init() {
     updateControlState();
     applyWorkspaceMode();
 
-    await Promise.all([loadSessionCost(), loadHistory(), loadMemory()]);
+    await Promise.all([loadSessionCost(), loadHistory(), loadMemory(), loadTradingConfig()]);
 }
 
 async function fetchJson(url, options = {}) {
@@ -256,6 +256,132 @@ function renderFeatureBadges() {
     els.featureBadges.innerHTML = badges
         .map((badge) => `<span class="feature-badge">${escapeHtml(badge.label)}</span>`)
         .join("");
+}
+
+// ── Trading Config Panel ─────────────────────────────────────────────────
+
+async function loadTradingConfig() {
+    try {
+        const data = await fetchJson("/api/trading/config");
+        state.tradingConfig = data;
+        renderTradingConfig(data);
+    } catch (error) {
+        const panel = document.getElementById("trading-config-panel");
+        if (panel) panel.innerHTML = `<div class="trading-loading">Trading module not available</div>`;
+    }
+}
+
+async function switchTradingProvider(provider) {
+    try {
+        const result = await fetchJson("/api/trading/provider", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ provider }),
+        });
+        if (result.error) {
+            addMessage("error", `Provider switch failed: ${result.error}`);
+            return;
+        }
+        addMessage("status", `Trading provider switched to: ${provider}`);
+        await loadTradingConfig();  // refresh the panel
+    } catch (error) {
+        addMessage("error", `Provider switch failed: ${error.message}`);
+    }
+}
+
+function renderTradingConfig(cfg) {
+    const panel = document.getElementById("trading-config-panel");
+    const badge = document.getElementById("trading-active-badge");
+    const switcherRow = document.getElementById("trading-switcher-row");
+    if (!panel || !badge) return;
+
+    const active = cfg.default_provider || "yfinance";
+    const paperMode = cfg.paper_mode;
+
+    // Update header badge
+    badge.className = `trading-active-badge active-${active}`;
+    const activeProvider = cfg.providers?.[active];
+    badge.textContent = activeProvider
+        ? `${activeProvider.label}${paperMode ? " (Paper)" : ""}`
+        : `${active}${paperMode ? " (Paper)" : ""}`;
+
+    // ── Provider switcher buttons ──
+    if (switcherRow) {
+        const switcherDefs = [
+            { key: "robinhood",       short: "RH Legacy",    sub: "Stocks + Options + Crypto" },
+            { key: "robinhood-crypto", short: "RH Crypto API", sub: "Crypto Only" },
+            { key: "tradier",         short: "Tradier",      sub: "Stocks + Options" },
+            { key: "yfinance",        short: "Yahoo",        sub: "Free / Delayed" },
+        ];
+        switcherRow.innerHTML = switcherDefs.map((s) => {
+            const p = cfg.providers?.[s.key];
+            const isActive = s.key === active;
+            const isConfigured = p?.configured;
+            const cls = isActive ? "sw-active" : !isConfigured ? "sw-disabled" : "";
+            return `<button class="trading-switch-btn ${cls}"
+                data-provider="${s.key}" ${!isConfigured && !isActive ? "disabled" : ""}>
+                ${escapeHtml(s.short)}
+                <span class="sw-sub">${escapeHtml(s.sub)}</span>
+            </button>`;
+        }).join("");
+
+        // Bind click handlers
+        switcherRow.querySelectorAll(".trading-switch-btn:not(.sw-disabled)").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const prov = btn.dataset.provider;
+                if (prov && prov !== active) switchTradingProvider(prov);
+            });
+        });
+    }
+
+    // ── Provider detail cards ──
+    const providerOrder = ["yfinance", "tradier", "robinhood", "robinhood-crypto"];
+    const html = providerOrder.map((key) => {
+        const p = cfg.providers?.[key];
+        if (!p) return "";
+
+        const isActive = key === active;
+        const isConfigured = p.configured;
+        const cardClass = isActive ? "is-active" : isConfigured ? "is-configured" : "is-unconfigured";
+
+        const statusClass = isActive ? "status-active" : isConfigured ? "status-ready" : "status-missing";
+        const statusText = isActive ? "ACTIVE" : isConfigured ? "Ready" : "Not Configured";
+
+        const caps = p.capabilities || {};
+        const capHtml = ["stocks", "options", "crypto"].map((asset) => {
+            const c = caps[asset] || {};
+            const quoteIcon = c.quotes
+                ? `<span class="trading-cap-icon cap-yes">Quotes</span>`
+                : `<span class="trading-cap-icon cap-no">Quotes</span>`;
+            const tradeIcon = c.trade
+                ? `<span class="trading-cap-icon cap-yes">Trade</span>`
+                : `<span class="trading-cap-icon cap-no">Trade</span>`;
+            return `<div class="trading-cap">
+                <span class="trading-cap-label">${asset}</span>
+                <div class="trading-cap-icons">${quoteIcon}${tradeIcon}</div>
+            </div>`;
+        }).join("");
+
+        const envVars = (p.env_vars || []).join(", ");
+        const authLine = p.auth !== "none"
+            ? `<div class="trading-provider-auth">
+                Auth: ${escapeHtml(p.auth)}
+                ${envVars ? `<span class="trading-provider-envvars">${escapeHtml(envVars)}</span>` : ""}
+               </div>`
+            : "";
+
+        return `<div class="trading-provider-card ${cardClass}">
+            <div class="trading-provider-header">
+                <span class="trading-provider-name">${escapeHtml(p.label)}</span>
+                <span class="trading-provider-mode">${escapeHtml(p.data_quality || "")}</span>
+                <span class="trading-provider-status ${statusClass}">${statusText}</span>
+            </div>
+            <div class="trading-caps-grid">${capHtml}</div>
+            ${authLine}
+        </div>`;
+    }).join("");
+
+    panel.innerHTML = html;
 }
 
 async function loadModels() {
@@ -1282,7 +1408,7 @@ function addMessage(type, content, options = {}) {
     const target = (TECHNICAL_TYPES.has(type) && els.messagesTechnical)
         ? els.messagesTechnical : els.messages;
     target.appendChild(div);
-    scrollToBottom();
+    scrollToBottom(false, target);
     return div;
 }
 
@@ -1369,12 +1495,14 @@ function isNearBottom(el) {
     return el.scrollHeight - el.scrollTop - el.clientHeight < 80;
 }
 
-function scrollToBottom(force = false) {
-    [els.messages, els.messagesTechnical].forEach(el => {
-        if (el && (force || isNearBottom(el))) {
-            el.scrollTop = el.scrollHeight;
-        }
-    });
+function scrollToBottom(force = false, target = null) {
+    if (target) {
+        if (force || isNearBottom(target)) target.scrollTop = target.scrollHeight;
+    } else {
+        [els.messages, els.messagesTechnical].forEach(el => {
+            if (el && (force || isNearBottom(el))) el.scrollTop = el.scrollHeight;
+        });
+    }
 }
 
 function modeFromControls() {

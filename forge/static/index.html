@@ -546,7 +546,7 @@
 
     <!-- ── TAB: Runtime ───────────────────────────────────────────── -->
     <div class="tab-content" id="tab-runtime">
-        <div class="tab-layout-single">
+        <div class="tab-layout-split">
             <section class="panel">
                 <div class="panel-header">
                     <h3>Runtime Configuration</h3>
@@ -568,6 +568,21 @@
                         <span>Working Dir</span>
                         <strong id="working-dir">-</strong>
                     </div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>Trading Providers</h3>
+                    <span class="trading-active-badge" id="trading-active-badge">Loading...</span>
+                </div>
+
+                <div class="trading-switcher" id="trading-switcher">
+                    <div class="trading-switcher-row" id="trading-switcher-row"></div>
+                </div>
+
+                <div id="trading-config-panel" class="trading-config-panel">
+                    <div class="trading-loading">Fetching trading config...</div>
                 </div>
             </section>
         </div>
