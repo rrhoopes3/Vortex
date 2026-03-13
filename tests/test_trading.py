@@ -471,3 +471,211 @@ class TestPositionPnL:
         assert d["ticker"] == "SPY"
         assert d["market_value"] == 5200
         assert d["unrealized_pnl"] == 200
+
+
+# ── Phase 1 Regression Tests (hardening f6c6412) ─────────────────────────────
+
+
+class TestMarkToMarketEdgeCases:
+    """Regression tests for mark-to-market with zero/negative quotes."""
+
+    def test_zero_quote_treated_as_unavailable(self):
+        """Quote=0 should NOT update current_price (treat as data unavailable)."""
+        from forge.trading.portfolio import PortfolioManager
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            pm = PortfolioManager(f.name)
+        pm.update_position("AAPL", 10, 150.0, "buy")
+
+        # Price fetcher returns 0 — should be treated as unavailable
+        zero_fetcher = lambda t: 0.0
+        summary = pm.get_summary(price_fetcher=zero_fetcher)
+        pos = summary["positions"][0]
+        # current_price should stay at 0 (default), NOT be "updated" to 0
+        assert pos["current_price"] == 0.0
+        # unrealized P&L should reflect the unavailable price, not show a bogus loss
+        assert pos["unrealized_pnl"] == -1500.0  # (0 - 150) * 10
+
+    def test_negative_quote_treated_as_unavailable(self):
+        """Negative quote should NOT update current_price."""
+        from forge.trading.portfolio import PortfolioManager
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            pm = PortfolioManager(f.name)
+        pm.update_position("TSLA", 5, 200.0, "buy")
+
+        negative_fetcher = lambda t: -1.0
+        summary = pm.get_summary(price_fetcher=negative_fetcher)
+        pos = summary["positions"][0]
+        assert pos["current_price"] == 0.0  # should not be -1.0
+
+    def test_valid_quote_updates_price(self):
+        """Positive quote should update current_price normally."""
+        from forge.trading.portfolio import PortfolioManager
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            pm = PortfolioManager(f.name)
+        pm.update_position("MSFT", 10, 400.0, "buy")
+
+        good_fetcher = lambda t: 420.0
+        summary = pm.get_summary(price_fetcher=good_fetcher)
+        pos = summary["positions"][0]
+        assert pos["current_price"] == 420.0
+        assert pos["unrealized_pnl"] == 200.0  # (420-400)*10
+
+    def test_none_quote_treated_as_unavailable(self):
+        """None return from fetcher should not crash."""
+        from forge.trading.portfolio import PortfolioManager
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            pm = PortfolioManager(f.name)
+        pm.update_position("GOOG", 2, 170.0, "buy")
+
+        none_fetcher = lambda t: None
+        summary = pm.get_summary(price_fetcher=none_fetcher)
+        pos = summary["positions"][0]
+        assert pos["current_price"] == 0.0
+
+    def test_exception_in_fetcher_leaves_price_at_zero(self):
+        """Exception in price_fetcher should leave current_price at 0."""
+        from forge.trading.portfolio import PortfolioManager
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            pm = PortfolioManager(f.name)
+        pm.update_position("AMZN", 3, 180.0, "buy")
+
+        def broken_fetcher(t):
+            raise ConnectionError("API down")
+
+        summary = pm.get_summary(price_fetcher=broken_fetcher)
+        pos = summary["positions"][0]
+        assert pos["current_price"] == 0.0
+
+
+class TestProviderReadiness:
+    """Regression tests for trading provider/broker readiness checks."""
+
+    def test_readiness_disabled(self):
+        """Trading disabled → unavailable."""
+        from unittest.mock import patch
+        with patch.dict(os.environ, {"FORGE_TRADING_ENABLED": "false"}):
+            # Reload config to pick up env change
+            import importlib
+            import forge.config as cfg
+            orig_enabled = cfg.TRADING_ENABLED
+            cfg.TRADING_ENABLED = False
+            try:
+                from forge.trading import check_trading_readiness
+                result = check_trading_readiness()
+                assert result["state"] == "unavailable"
+            finally:
+                cfg.TRADING_ENABLED = orig_enabled
+
+    def test_readiness_paper_mode(self):
+        """Paper mode with yfinance → ready."""
+        import forge.config as cfg
+        orig = (cfg.TRADING_ENABLED, cfg.TRADING_PAPER_MODE, cfg.TRADING_DEFAULT_PROVIDER)
+        cfg.TRADING_ENABLED = True
+        cfg.TRADING_PAPER_MODE = True
+        cfg.TRADING_DEFAULT_PROVIDER = "yfinance"
+        try:
+            from forge.trading import check_trading_readiness
+            result = check_trading_readiness()
+            assert result["state"] == "ready"
+            assert result["broker"] == "paper"
+        finally:
+            cfg.TRADING_ENABLED, cfg.TRADING_PAPER_MODE, cfg.TRADING_DEFAULT_PROVIDER = orig
+
+    def test_readiness_tradier_partial_creds(self):
+        """Tradier API key set but account_id missing → degraded."""
+        import forge.config as cfg
+        orig = (cfg.TRADING_ENABLED, cfg.TRADING_PAPER_MODE,
+                cfg.TRADING_TRADIER_API_KEY, cfg.TRADING_TRADIER_ACCOUNT_ID)
+        cfg.TRADING_ENABLED = True
+        cfg.TRADING_PAPER_MODE = False
+        cfg.TRADING_TRADIER_API_KEY = "test-key-123"
+        cfg.TRADING_TRADIER_ACCOUNT_ID = ""
+        try:
+            from forge.trading import check_trading_readiness
+            result = check_trading_readiness()
+            assert result["state"] == "degraded"
+            assert result["broker"] == "paper"
+            assert any("account_id" in issue.lower() for issue in result["issues"])
+        finally:
+            (cfg.TRADING_ENABLED, cfg.TRADING_PAPER_MODE,
+             cfg.TRADING_TRADIER_API_KEY, cfg.TRADING_TRADIER_ACCOUNT_ID) = orig
+
+    def test_readiness_tradier_full_creds(self):
+        """Tradier with full credentials → ready, broker=tradier."""
+        import forge.config as cfg
+        orig = (cfg.TRADING_ENABLED, cfg.TRADING_PAPER_MODE,
+                cfg.TRADING_TRADIER_API_KEY, cfg.TRADING_TRADIER_ACCOUNT_ID,
+                cfg.TRADING_DEFAULT_PROVIDER)
+        cfg.TRADING_ENABLED = True
+        cfg.TRADING_PAPER_MODE = False
+        cfg.TRADING_TRADIER_API_KEY = "test-key-123"
+        cfg.TRADING_TRADIER_ACCOUNT_ID = "test-account-456"
+        cfg.TRADING_DEFAULT_PROVIDER = "yfinance"
+        try:
+            from forge.trading import check_trading_readiness
+            result = check_trading_readiness()
+            assert result["state"] == "ready"
+            assert result["broker"] == "tradier"
+            assert result["issues"] == []
+        finally:
+            (cfg.TRADING_ENABLED, cfg.TRADING_PAPER_MODE,
+             cfg.TRADING_TRADIER_API_KEY, cfg.TRADING_TRADIER_ACCOUNT_ID,
+             cfg.TRADING_DEFAULT_PROVIDER) = orig
+
+    def test_readiness_no_broker_creds_falls_back(self):
+        """No broker credentials, not paper mode → degraded with paper fallback."""
+        import forge.config as cfg
+        orig = (cfg.TRADING_ENABLED, cfg.TRADING_PAPER_MODE,
+                cfg.TRADING_TRADIER_API_KEY, cfg.TRADING_TRADIER_ACCOUNT_ID)
+        cfg.TRADING_ENABLED = True
+        cfg.TRADING_PAPER_MODE = False
+        cfg.TRADING_TRADIER_API_KEY = ""
+        cfg.TRADING_TRADIER_ACCOUNT_ID = ""
+        try:
+            from forge.trading import check_trading_readiness
+            result = check_trading_readiness()
+            assert result["state"] == "degraded"
+            assert result["broker"] == "paper"
+        finally:
+            (cfg.TRADING_ENABLED, cfg.TRADING_PAPER_MODE,
+             cfg.TRADING_TRADIER_API_KEY, cfg.TRADING_TRADIER_ACCOUNT_ID) = orig
+
+
+class TestProviderCaching:
+    """Regression tests for provider singleton caching behavior."""
+
+    def test_unconfigured_tradier_not_cached(self):
+        """Tradier without API key should not be cached — so re-calling with
+        real credentials gets a fresh instance."""
+        from forge.trading.providers import get_provider, _providers
+        # Clear cache
+        _providers.pop("tradier", None)
+
+        p1 = get_provider("tradier", api_key="")
+        assert "tradier" not in _providers  # should NOT be cached
+
+    def test_configured_tradier_is_cached(self):
+        """Tradier with API key should be cached."""
+        from forge.trading.providers import get_provider, _providers
+        _providers.pop("tradier", None)
+
+        p1 = get_provider("tradier", api_key="real-key-123", sandbox=True)
+        assert "tradier" in _providers
+
+        p2 = get_provider("tradier")
+        assert p1 is p2  # same instance from cache
+
+        # Clean up
+        _providers.pop("tradier", None)
+
+    def test_yfinance_always_cached(self):
+        """YFinance provider should always be cached (no credentials needed)."""
+        from forge.trading.providers import get_provider, _providers
+        _providers.pop("yfinance", None)
+
+        p1 = get_provider("yfinance")
+        assert "yfinance" in _providers
+        p2 = get_provider("yfinance")
+        assert p1 is p2
+
+        _providers.pop("yfinance", None)

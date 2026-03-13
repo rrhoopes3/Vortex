@@ -237,7 +237,12 @@ class PortfolioManager:
         if price_fetcher:
             for pos in positions:
                 try:
-                    pos.current_price = price_fetcher(pos.ticker)
+                    quote = price_fetcher(pos.ticker)
+                    if quote and quote > 0:
+                        pos.current_price = quote
+                    else:
+                        log.warning("Mark-to-market: %s returned price=%s, treating as unavailable",
+                                    pos.ticker, quote)
                 except Exception:
                     pass  # leave at 0 — caller sees the gap
 
