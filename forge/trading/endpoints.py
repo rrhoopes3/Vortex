@@ -201,6 +201,8 @@ def place_order():
 
         broker = get_broker()
         result = broker.place_order(ticker, side, quantity, order_type, price)
+        if "error" in result:
+            return jsonify(result), 502
         return jsonify(result)
     except ImportError:
         return jsonify({"error": "Trading brokers not yet configured"}), 501

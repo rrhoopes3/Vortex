@@ -371,7 +371,12 @@ _providers_lock = threading.Lock()
 
 
 def get_provider(name: str = "yfinance", **kwargs) -> DataProvider:
-    """Get or create a singleton provider by name."""
+    """Get or create a singleton provider by name.
+
+    Providers that require credentials (tradier, robinhood) are NOT cached
+    when instantiated with blank credentials, so a later call with real
+    credentials can replace the unconfigured instance.
+    """
     with _providers_lock:
         if name in _providers:
             return _providers[name]
@@ -391,5 +396,14 @@ def get_provider(name: str = "yfinance", **kwargs) -> DataProvider:
         else:
             raise ValueError(f"Unknown provider: {name}")
 
-        _providers[name] = p
+        # Don't cache providers created with blank credentials — a later
+        # call with real credentials should get a fresh, configured instance.
+        should_cache = True
+        if name == "tradier" and not kwargs.get("api_key"):
+            should_cache = False
+        elif name == "robinhood" and not kwargs.get("username"):
+            should_cache = False
+
+        if should_cache:
+            _providers[name] = p
         return p

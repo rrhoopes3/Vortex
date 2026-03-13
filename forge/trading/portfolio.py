@@ -216,8 +216,31 @@ class PortfolioManager:
             row = self._conn.execute("SELECT COALESCE(SUM(pnl), 0) as total FROM realized_pnl").fetchone()
             return float(row["total"])
 
-    def get_summary(self) -> dict:
+    def get_summary(self, price_fetcher=None) -> dict:
+        """Get portfolio summary with live mark-to-market pricing.
+
+        price_fetcher: callable(ticker) -> float. If None, falls back to
+        the trading engine's quote provider. Positions without a live price
+        keep current_price=0 (clearly wrong, but won't silently lie).
+        """
         positions = self.get_positions()
+
+        # Mark-to-market: fetch live prices for every open position
+        if price_fetcher is None:
+            try:
+                from forge.trading.engine import get_engine
+                engine = get_engine()
+                price_fetcher = lambda t: engine.get_quote(t).price
+            except Exception:
+                price_fetcher = None
+
+        if price_fetcher:
+            for pos in positions:
+                try:
+                    pos.current_price = price_fetcher(pos.ticker)
+                except Exception:
+                    pass  # leave at 0 — caller sees the gap
+
         realized = self.get_realized_pnl()
         unrealized = sum(p.unrealized_pnl for p in positions)
         return {

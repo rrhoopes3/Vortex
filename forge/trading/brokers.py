@@ -173,14 +173,15 @@ def get_broker() -> BrokerAdapter:
         if _broker is None:
             from forge.config import (
                 TRADING_PAPER_MODE, TRADING_DEFAULT_PROVIDER,
-                TRADING_TRADIER_API_KEY, TRADING_TRADIER_SANDBOX,
+                TRADING_TRADIER_API_KEY, TRADING_TRADIER_ACCOUNT_ID,
+                TRADING_TRADIER_SANDBOX,
             )
             if TRADING_PAPER_MODE:
                 _broker = PaperBroker(provider_name=TRADING_DEFAULT_PROVIDER)
-            elif TRADING_TRADIER_API_KEY:
+            elif TRADING_TRADIER_API_KEY and TRADING_TRADIER_ACCOUNT_ID:
                 _broker = TradierBroker(
                     api_key=TRADING_TRADIER_API_KEY,
-                    account_id="",  # User must configure
+                    account_id=TRADING_TRADIER_ACCOUNT_ID,
                     sandbox=TRADING_TRADIER_SANDBOX,
                 )
             else:
