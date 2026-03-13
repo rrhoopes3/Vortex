@@ -11,6 +11,7 @@ const els = {
     agentCount: document.getElementById("agent-count"),
     agentControl: document.getElementById("agent-control"),
     modelSelect: document.getElementById("model-select"),
+    packSelect: document.getElementById("pack-select"),
     arenaBtn: document.getElementById("arena-btn"),
     backToForgeBtn: document.getElementById("back-to-forge-btn"),
     resetCostBtn: document.getElementById("reset-cost-btn"),
@@ -67,6 +68,7 @@ const els = {
 const state = {
     config: null,
     models: [],
+    packs: [],
     history: [],
     memories: [],
     selectedHistoryId: null,
@@ -128,6 +130,10 @@ function bindEvents() {
         localStorage.setItem("forge_executor_model", els.modelSelect.value);
     });
 
+    els.packSelect.addEventListener("change", () => {
+        localStorage.setItem("forge_pack", els.packSelect.value);
+    });
+
     els.submitBtn.addEventListener("click", submitTask);
     els.killBtn.addEventListener("click", killTask);
 
@@ -178,6 +184,7 @@ async function init() {
 
     await loadConfig();
     await loadModels();
+    await loadPacks();
     restoreSettings();
     updateControlState();
     applyWorkspaceMode();
@@ -257,6 +264,38 @@ async function loadModels() {
     }
 }
 
+async function loadPacks() {
+    try {
+        state.packs = await fetchJson("/api/packs");
+        populatePackSelect();
+    } catch (error) {
+        // Packs are optional — degrade gracefully
+        state.packs = [];
+    }
+}
+
+function populatePackSelect() {
+    if (!els.packSelect || !state.packs) return;
+
+    // Keep the "Auto" option, clear the rest
+    els.packSelect.innerHTML = '<option value="">Auto (all tools)</option>';
+
+    const READINESS_ICONS = { ready: "\u2705", degraded: "\u26A0\uFE0F", unavailable: "\u274C" };
+
+    // state.packs is an array of pack dicts from /api/packs
+    for (const pack of state.packs) {
+        const option = document.createElement("option");
+        option.value = pack.name;
+        const icon = READINESS_ICONS[pack.readiness?.state] || "";
+        const label = pack.name.charAt(0).toUpperCase() + pack.name.slice(1);
+        option.textContent = `${icon} ${label} — ${pack.description || ""}`.trim();
+        if (pack.readiness?.state === "unavailable") {
+            option.disabled = true;
+        }
+        els.packSelect.appendChild(option);
+    }
+}
+
 function populateModelSelect(selectEl, includeAuto) {
     if (!selectEl) return;
 
@@ -303,6 +342,11 @@ function restoreSettings() {
         els.modelSelect.value = savedModel;
     }
 
+    const savedPack = localStorage.getItem("forge_pack") || "";
+    if (hasOption(els.packSelect, savedPack)) {
+        els.packSelect.value = savedPack;
+    }
+
     if (!els.redModel.value && els.redModel.options.length > 0) {
         els.redModel.value = pickArenaDefaultModel();
     }
@@ -334,6 +378,7 @@ function updateControlState() {
     els.directToggle.disabled = controlsDisabled;
     els.agentSlider.disabled = controlsDisabled || els.directToggle.checked;
     els.modelSelect.disabled = controlsDisabled;
+    els.packSelect.disabled = controlsDisabled;
     els.arenaBtn.disabled = controlsDisabled;
     els.submitBtn.disabled = controlsDisabled;
 
@@ -953,6 +998,7 @@ async function submitTask() {
             direct_mode: els.directToggle.checked,
             agent_count: Number.parseInt(els.agentSlider.value, 10),
             executor_model: els.modelSelect.value,
+            pack: els.packSelect.value,
         };
 
         const response = await fetchJson("/api/task", {

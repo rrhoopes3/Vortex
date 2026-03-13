@@ -213,7 +213,7 @@ Lock in the f6c6412 fixes with explicit test cases:
 ### Phase 3: Pack Definitions — DONE (Claude, feature/capability-packs)
 1. ~~Define all 6 packs (research, builder, ops, trading, arena, email)~~
 2. ~~Implement readiness checks per pack (env, deps, feature flags, provider keys)~~
-3. Add pack selector to frontend (TODO)
+3. ~~Add pack selector to frontend (dropdown with readiness icons)~~
 4. ~~Write tests for pack loading, readiness checks, tool filtering (32 tests passing)~~
 
 ### Phase 4: Golden Evals — DONE (Claude, d4a3b19)
