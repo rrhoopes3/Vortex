@@ -216,15 +216,16 @@ Lock in the f6c6412 fixes with explicit test cases:
 3. Add pack selector to frontend (TODO)
 4. ~~Write tests for pack loading, readiness checks, tool filtering (32 tests passing)~~
 
-### Phase 4: Golden Evals (1 cycle)
-1. Write golden eval cases for each pack
-2. Extend EvalRunner to support pack-scoped runs
-3. Add `GET /api/packs/<name>/eval` endpoint
-4. Run cross-provider benchmarks, store baselines
-5. **Chaos mode** (from Grok): Add a `chaos_mode` flag to EvalRunner that injects
-   random provider timeouts and failures, simulating Grok-4.20 beta instability
-6. **Arena evals** (from Grok): Add arena-specific eval cases (combat smoke test,
-   TTS commentary verification, marketplace relay invoke + toll deduction)
+### Phase 4: Golden Evals — DONE (Claude, d4a3b19)
+1. ~~Golden eval cases for all 6 packs (research, builder, ops, trading, arena, email)~~
+2. ~~PackEvalRunner: pack-scoped execution with readiness gating~~
+3. ~~`POST /api/packs/<name>/eval` endpoint (supports chaos + benchmark modes)~~
+4. ~~BenchmarkResult: cross-provider comparison with best-model selection~~
+5. ~~**Chaos mode**: ChaosConfig with seeded deterministic failure/timeout injection~~
+6. ~~**Arena evals**: combat smoke test + marketplace relay eval cases~~
+7. ~~43 tests (golden cases, filtering, chaos, benchmarks, runner, budget alignment)~~
+8. TODO: Run actual cross-provider benchmarks and store baseline results
+9. TODO: TTS commentary verification eval case
 
 ---
 
