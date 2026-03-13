@@ -312,8 +312,15 @@ def get_portfolio():
     try:
         from forge.trading.portfolio import get_portfolio_manager
 
+        provider = request.args.get("provider", "").strip()
         pm = get_portfolio_manager()
-        return jsonify(pm.get_summary())
+
+        price_fetcher = None
+        if provider:
+            engine = get_engine()
+            price_fetcher = lambda t: engine.get_quote(t, provider=provider).price
+
+        return jsonify(pm.get_summary(price_fetcher=price_fetcher))
     except ImportError:
         return jsonify({"positions": [], "total_pnl": 0, "message": "Portfolio module available"})
 

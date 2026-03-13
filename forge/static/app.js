@@ -2443,7 +2443,9 @@ async function executeTrade() {
 
 async function loadPortfolio() {
     try {
-        const data = await fetchJson("/api/trading/portfolio");
+        const provider = document.getElementById("trading-provider")?.value || "";
+        const qs = provider ? `?provider=${encodeURIComponent(provider)}` : "";
+        const data = await fetchJson(`/api/trading/portfolio${qs}`);
         document.getElementById("port-count").textContent = data.position_count || 0;
         document.getElementById("port-realized").textContent = formatMoney(data.realized_pnl || 0);
         document.getElementById("port-unrealized").textContent = formatMoney(data.unrealized_pnl || 0);
