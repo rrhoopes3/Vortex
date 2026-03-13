@@ -13,6 +13,7 @@ import json
 import logging
 import time
 import threading
+from datetime import datetime, timezone
 from typing import Generator
 from xai_sdk import Client
 from xai_sdk.chat import user, tool_result
@@ -29,7 +30,21 @@ log = logging.getLogger("forge.executor")
 MAX_RETRIES = 3
 RETRY_DELAYS = [2, 4, 8]  # seconds
 
-EXECUTOR_SYSTEM = """You are The Forge Executor — an autonomous agent that completes tasks by using tools.
+
+def _current_timestamp() -> str:
+    """Return a human-readable timestamp string for injection into prompts."""
+    now = datetime.now()
+    utc = datetime.now(timezone.utc)
+    return (
+        f"Current date/time: {now.strftime('%A, %B %d, %Y at %I:%M %p')} (local) / "
+        f"{utc.strftime('%Y-%m-%dT%H:%M:%SZ')} (UTC). "
+        f"This is the PRESENT — not past, not future."
+    )
+
+
+EXECUTOR_SYSTEM_TEMPLATE = """You are The Forge Executor — an autonomous agent that completes tasks by using tools.
+
+{timestamp}
 
 You have access to tools for reading/writing files, running shell commands, and browsing the web.
 Work step by step. Use tools to gather information, then act on it. Be precise and efficient.
@@ -41,7 +56,17 @@ Rules:
 - IMPORTANT: If context from previous steps already contains the information you need (file contents, grep results, etc.), use that directly — do NOT re-read the same files.
 - Minimize tool calls. Combine searches when possible instead of running many small queries.
 - Stay focused on files relevant to the current task. Do NOT explore unrelated directories or projects.
-- When the step is complete, provide a clear summary of findings and outcome."""
+- When the step is complete, provide a clear summary of findings and outcome.
+- Do NOT pip install packages — project dependencies are pre-installed. Use run_python directly."""
+
+
+def _build_system_prompt() -> str:
+    """Build the executor system prompt with current timestamp."""
+    return EXECUTOR_SYSTEM_TEMPLATE.format(timestamp=_current_timestamp())
+
+
+# Backward compat — static reference for tests that import this
+EXECUTOR_SYSTEM = EXECUTOR_SYSTEM_TEMPLATE.format(timestamp="(timestamp injected at runtime)")
 
 
 def execute_step(
@@ -76,8 +101,11 @@ def execute_step(
              use_model, provider, iteration_limit,
              f"{len(tool_filter)} filtered" if tool_filter else "all")
 
+    # Build the system prompt with live timestamp
+    system_prompt = _build_system_prompt()
+
     # Build the full prompt (shared across all providers)
-    prompt = f"{EXECUTOR_SYSTEM}\n\n"
+    prompt = f"{system_prompt}\n\n"
     if sandbox_path:
         prompt += f"SANDBOX MODE ACTIVE: All file operations are restricted to {sandbox_path}. Do not attempt to access paths outside this directory.\n\n"
     if context:
@@ -87,7 +115,7 @@ def execute_step(
     # ── Route to non-xAI providers ───────────────────────────────────
     if provider == "anthropic":
         return (yield from run_anthropic(
-            model=use_model, system_prompt=EXECUTOR_SYSTEM, user_prompt=prompt,
+            model=use_model, system_prompt=system_prompt, user_prompt=prompt,
             registry=registry, sandbox_path=sandbox_path,
             cancel_event=cancel_event, max_iterations=iteration_limit,
             tool_filter=tool_filter, task_goal=task_goal,
@@ -95,7 +123,7 @@ def execute_step(
         ))
     elif provider == "openai":
         return (yield from run_openai(
-            model=use_model, system_prompt=EXECUTOR_SYSTEM, user_prompt=prompt,
+            model=use_model, system_prompt=system_prompt, user_prompt=prompt,
             registry=registry, sandbox_path=sandbox_path,
             cancel_event=cancel_event, max_iterations=iteration_limit,
             tool_filter=tool_filter, task_goal=task_goal,
@@ -105,7 +133,7 @@ def execute_step(
         # Strip "lmstudio:" prefix; use "default" if nothing after it
         lm_model = use_model.split(":", 1)[1] if ":" in use_model else "default"
         return (yield from run_openai(
-            model=lm_model, system_prompt=EXECUTOR_SYSTEM, user_prompt=prompt,
+            model=lm_model, system_prompt=system_prompt, user_prompt=prompt,
             registry=registry, sandbox_path=sandbox_path,
             cancel_event=cancel_event, max_iterations=iteration_limit,
             base_url=LMSTUDIO_BASE_URL, tool_filter=tool_filter, task_goal=task_goal,
@@ -115,7 +143,7 @@ def execute_step(
         # Strip "ollama:" prefix; use "default" if nothing after it
         ollama_model = use_model.split(":", 1)[1] if ":" in use_model else "default"
         return (yield from run_openai(
-            model=ollama_model, system_prompt=EXECUTOR_SYSTEM, user_prompt=prompt,
+            model=ollama_model, system_prompt=system_prompt, user_prompt=prompt,
             registry=registry, sandbox_path=sandbox_path,
             cancel_event=cancel_event, max_iterations=iteration_limit,
             base_url=OLLAMA_BASE_URL, tool_filter=tool_filter, task_goal=task_goal,
@@ -145,7 +173,8 @@ def execute_step(
         # ── Instruction Reminder (prevent goal drift) ────────────────
         if task_goal and iteration > 0 and iteration % REMINDER_INTERVAL == 0:
             reminder = (
-                f"[SYSTEM REMINDER] Original task goal: {task_goal[:500]}\n"
+                f"[SYSTEM REMINDER] {_current_timestamp()}\n"
+                f"Original task goal: {task_goal[:500]}\n"
                 f"Current step: {step_title}\nStay focused on completing this step."
             )
             chat.append(user(reminder))

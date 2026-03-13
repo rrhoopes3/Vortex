@@ -125,8 +125,10 @@ def run_anthropic(
 
         # ── Instruction Reminder ─────────────────────────────────────
         if task_goal and iteration > 0 and iteration % REMINDER_INTERVAL == 0:
+            from forge.executor import _current_timestamp
             messages.append({"role": "user", "content":
-                f"[SYSTEM REMINDER] Original task goal: {task_goal[:500]}\nStay focused."})
+                f"[SYSTEM REMINDER] {_current_timestamp()}\n"
+                f"Original task goal: {task_goal[:500]}\nStay focused."})
 
         log.info("Anthropic iteration %d (model: %s)", iteration + 1, model)
 
@@ -292,8 +294,10 @@ def run_openai(
 
         # ── Instruction Reminder ─────────────────────────────────────
         if task_goal and iteration > 0 and iteration % REMINDER_INTERVAL == 0:
+            from forge.executor import _current_timestamp
             messages.append({"role": "user", "content":
-                f"[SYSTEM REMINDER] Original task goal: {task_goal[:500]}\nStay focused."})
+                f"[SYSTEM REMINDER] {_current_timestamp()}\n"
+                f"Original task goal: {task_goal[:500]}\nStay focused."})
 
         log.info("OpenAI iteration %d (model: %s, base_url: %s)", iteration + 1, model, base_url or "default")
 

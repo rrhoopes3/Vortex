@@ -131,7 +131,14 @@ SOLANA_USDC_DECIMALS = 6
 
 # ── Trading ─────────────────────────────────────────────────────────────────
 TRADING_ENABLED = os.getenv("FORGE_TRADING_ENABLED", "true").lower() == "true"
-TRADING_DEFAULT_PROVIDER = os.getenv("FORGE_TRADING_PROVIDER", "yfinance")
+# Auto-detect best provider: Tradier if API key set, else yfinance fallback
+_trading_provider_env = os.getenv("FORGE_TRADING_PROVIDER", "")
+if _trading_provider_env:
+    TRADING_DEFAULT_PROVIDER = _trading_provider_env
+elif os.getenv("FORGE_TRADIER_API_KEY", ""):
+    TRADING_DEFAULT_PROVIDER = "tradier"
+else:
+    TRADING_DEFAULT_PROVIDER = "yfinance"
 TRADING_TRADIER_API_KEY = os.getenv("FORGE_TRADIER_API_KEY", "")
 TRADING_TRADIER_ACCOUNT_ID = os.getenv("FORGE_TRADIER_ACCOUNT_ID", "")
 TRADING_TRADIER_SANDBOX = os.getenv("FORGE_TRADIER_SANDBOX", "true").lower() == "true"
