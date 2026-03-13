@@ -17,6 +17,7 @@
             <button class="tab-btn" data-tab="history">History</button>
             <button class="tab-btn" data-tab="memory">Memory</button>
             <button class="tab-btn" data-tab="safety">Safety</button>
+            <button class="tab-btn" data-tab="trading">Trading</button>
             <button class="tab-btn" data-tab="runtime">Runtime</button>
         </nav>
         <div class="feature-badges" id="feature-badges"></div>
@@ -266,6 +267,194 @@
                     <ul id="verification-list" class="mini-list">
                         <li>No active step.</li>
                     </ul>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- ── TAB: Trading ───────────────────────────────────────────── -->
+    <div class="tab-content" id="tab-trading">
+        <div class="tab-layout-split trading-layout">
+            <!-- Left Panel: Controls + Metrics -->
+            <section class="panel trading-sidebar">
+                <div class="panel-header">
+                    <h3>PCR Dashboard</h3>
+                    <div class="panel-actions">
+                        <button id="trading-refresh-btn" class="ghost-btn small-btn">Refresh</button>
+                        <label class="toggle-field mini-toggle" title="Auto-refresh every 30s">
+                            <span>Auto</span>
+                            <span class="switch">
+                                <input type="checkbox" id="trading-auto-refresh">
+                                <span class="switch-track"></span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Provider + Ticker Selection -->
+                <div class="trading-controls">
+                    <label class="field">
+                        <span>Provider</span>
+                        <select id="trading-provider">
+                            <option value="yfinance">yfinance (Free)</option>
+                            <option value="tradier">Tradier (Real-time)</option>
+                            <option value="robinhood">Robinhood (Crypto)</option>
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span>Ticker</span>
+                        <select id="trading-ticker">
+                            <optgroup label="Indices">
+                                <option value="SPY" selected>SPY</option>
+                                <option value="QQQ">QQQ</option>
+                                <option value="IWM">IWM</option>
+                                <option value="DIA">DIA</option>
+                            </optgroup>
+                            <optgroup label="Volatility">
+                                <option value="^VIX">VIX</option>
+                            </optgroup>
+                            <optgroup label="Sectors">
+                                <option value="XLE">XLE (Energy)</option>
+                                <option value="XLF">XLF (Financials)</option>
+                                <option value="XLK">XLK (Technology)</option>
+                                <option value="XLI">XLI (Industrials)</option>
+                                <option value="XLY">XLY (Discretionary)</option>
+                                <option value="XLP">XLP (Staples)</option>
+                                <option value="XLU">XLU (Utilities)</option>
+                                <option value="XLB">XLB (Materials)</option>
+                                <option value="XLRE">XLRE (Real Estate)</option>
+                                <option value="XLC">XLC (Comms)</option>
+                            </optgroup>
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span>Expiry</span>
+                        <select id="trading-expiry">
+                            <option value="">Nearest</option>
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span>Custom Ticker</span>
+                        <input type="text" id="trading-custom-ticker" placeholder="e.g. AAPL, BTC">
+                    </label>
+                </div>
+
+                <!-- PCR Metrics -->
+                <div class="pcr-metrics" id="pcr-metrics">
+                    <div class="pcr-card">
+                        <span class="pcr-label">Vol Ratio</span>
+                        <strong class="pcr-value" id="pcr-vol-ratio">—</strong>
+                    </div>
+                    <div class="pcr-card">
+                        <span class="pcr-label">OI Ratio</span>
+                        <strong class="pcr-value" id="pcr-oi-ratio">—</strong>
+                    </div>
+                    <div class="pcr-card">
+                        <span class="pcr-label">Put Vol</span>
+                        <strong class="pcr-value" id="pcr-put-vol">—</strong>
+                    </div>
+                    <div class="pcr-card">
+                        <span class="pcr-label">Call Vol</span>
+                        <strong class="pcr-value" id="pcr-call-vol">—</strong>
+                    </div>
+                    <div class="pcr-card sentiment-card">
+                        <span class="pcr-label">Sentiment</span>
+                        <span class="sentiment-badge neutral" id="pcr-sentiment">—</span>
+                    </div>
+                    <div class="pcr-card">
+                        <span class="pcr-label">Price</span>
+                        <strong class="pcr-value" id="pcr-price">—</strong>
+                    </div>
+                </div>
+
+                <!-- Alert Config -->
+                <div class="trading-section">
+                    <h4>Alerts</h4>
+                    <div class="alert-config">
+                        <label class="field">
+                            <span>Metric</span>
+                            <select id="alert-metric">
+                                <option value="vol_ratio">Vol Ratio</option>
+                                <option value="oi_ratio">OI Ratio</option>
+                            </select>
+                        </label>
+                        <label class="field">
+                            <span>Threshold</span>
+                            <input type="number" id="alert-threshold" value="1.2" step="0.1" min="0" max="10">
+                        </label>
+                        <label class="field">
+                            <span>Direction</span>
+                            <select id="alert-direction">
+                                <option value="above">Above</option>
+                                <option value="below">Below</option>
+                            </select>
+                        </label>
+                        <button id="alert-set-btn" class="accent-btn small-btn">Set Alert</button>
+                    </div>
+                    <div id="alert-list" class="alert-list"></div>
+                </div>
+
+                <!-- Trade Panel -->
+                <div class="trading-section">
+                    <h4>Trade <span class="paper-badge" id="paper-badge">PAPER</span></h4>
+                    <div class="trade-controls">
+                        <div class="trade-side-btns">
+                            <button class="trade-side-btn buy active" id="trade-buy-btn">Buy</button>
+                            <button class="trade-side-btn sell" id="trade-sell-btn">Sell</button>
+                        </div>
+                        <label class="field">
+                            <span>Qty</span>
+                            <input type="number" id="trade-quantity" value="1" min="0.01" step="1">
+                        </label>
+                        <label class="field">
+                            <span>Type</span>
+                            <select id="trade-order-type">
+                                <option value="market">Market</option>
+                                <option value="limit">Limit</option>
+                            </select>
+                        </label>
+                        <label class="field" id="trade-price-field" style="display:none">
+                            <span>Price</span>
+                            <input type="number" id="trade-price" step="0.01">
+                        </label>
+                        <button id="trade-submit-btn" class="accent-btn">Execute</button>
+                    </div>
+                    <div id="trade-result" class="trade-result"></div>
+                </div>
+
+                <!-- Portfolio -->
+                <div class="trading-section">
+                    <h4>Portfolio</h4>
+                    <div class="portfolio-summary" id="portfolio-summary">
+                        <div class="pcr-card">
+                            <span class="pcr-label">Positions</span>
+                            <strong class="pcr-value" id="port-count">0</strong>
+                        </div>
+                        <div class="pcr-card">
+                            <span class="pcr-label">Realized P&L</span>
+                            <strong class="pcr-value" id="port-realized">$0.00</strong>
+                        </div>
+                        <div class="pcr-card">
+                            <span class="pcr-label">Unrealized P&L</span>
+                            <strong class="pcr-value" id="port-unrealized">$0.00</strong>
+                        </div>
+                    </div>
+                    <div id="portfolio-positions" class="portfolio-positions"></div>
+                </div>
+            </section>
+
+            <!-- Right Panel: Charts -->
+            <section class="panel trading-chart-panel">
+                <div class="panel-header">
+                    <h3 id="chart-title">PCR Chart — SPY</h3>
+                    <div class="chart-mode-btns">
+                        <button class="filter-btn active" data-chart="line">Line</button>
+                        <button class="filter-btn" data-chart="heatmap">Heatmap</button>
+                        <button class="filter-btn" data-chart="3d">3D Surface</button>
+                    </div>
+                </div>
+                <div class="trading-chart-container" id="trading-chart-container">
+                    <div class="empty-state">Select a ticker and click Refresh to load PCR data.</div>
                 </div>
             </section>
         </div>

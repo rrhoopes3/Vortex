@@ -1,0 +1,243 @@
+"""
+Trading tools for the Forge agent.
+
+Enables the agent to query PCR data, analyze sentiment, execute trades,
+and manage portfolio through natural language.
+"""
+from __future__ import annotations
+
+import json
+import logging
+
+from .registry import ToolRegistry
+
+log = logging.getLogger("forge.tools.trading")
+
+
+def fetch_pcr(ticker: str, expiry: str = "", provider: str = "") -> str:
+    """Fetch Put/Call Ratio for a ticker."""
+    try:
+        from forge.trading.engine import get_engine
+        result = get_engine().get_pcr(ticker, expiry=expiry, provider=provider)
+        return json.dumps(result.to_dict())
+    except Exception as e:
+        return json.dumps({"error": f"{type(e).__name__}: {e}"})
+
+
+def analyze_sentiment(tickers: str, provider: str = "") -> str:
+    """Analyze PCR sentiment across multiple tickers.
+
+    tickers: comma-separated ticker symbols (e.g. "SPY,QQQ,IWM")
+    """
+    try:
+        from forge.trading.engine import get_engine
+        ticker_list = [t.strip() for t in tickers.split(",") if t.strip()]
+        if not ticker_list:
+            return json.dumps({"error": "No tickers provided"})
+        result = get_engine().analyze_sentiment(ticker_list, provider=provider)
+        return json.dumps(result, default=str)
+    except Exception as e:
+        return json.dumps({"error": f"{type(e).__name__}: {e}"})
+
+
+def get_options_chain(ticker: str, expiry: str = "", provider: str = "",
+                      min_volume: str = "0") -> str:
+    """Get raw options chain data for a ticker, capped at 50 rows per side."""
+    try:
+        from forge.trading.engine import get_engine
+        chain = get_engine().get_options_chain(
+            ticker, expiry, provider, int(min_volume),
+        )
+        # Cap output for token efficiency
+        data = chain.to_dict()
+        data["calls"] = data["calls"][:50]
+        data["puts"] = data["puts"][:50]
+        return json.dumps(data)
+    except Exception as e:
+        return json.dumps({"error": f"{type(e).__name__}: {e}"})
+
+
+def set_alert(ticker: str, metric: str = "vol_ratio", threshold: str = "1.0",
+              direction: str = "above") -> str:
+    """Set a PCR alert. Triggers when the metric crosses the threshold."""
+    try:
+        from forge.trading.engine import get_engine
+        alert = get_engine().set_alert(ticker, metric, float(threshold), direction)
+        return json.dumps({"status": "alert_set", **alert.to_dict()})
+    except Exception as e:
+        return json.dumps({"error": f"{type(e).__name__}: {e}"})
+
+
+def get_portfolio() -> str:
+    """Get current portfolio positions, P&L, and summary."""
+    try:
+        from forge.trading.portfolio import get_portfolio_manager
+        pm = get_portfolio_manager()
+        summary = pm.get_summary()
+        return json.dumps(summary)
+    except Exception as e:
+        return json.dumps({"error": f"{type(e).__name__}: {e}"})
+
+
+def execute_trade(ticker: str, side: str, quantity: str,
+                  order_type: str = "market", price: str = "") -> str:
+    """Execute a trade order. Paper mode by default.
+
+    ticker: stock/crypto symbol
+    side: "buy" or "sell"
+    quantity: number of shares/units
+    order_type: "market" or "limit"
+    price: limit price (required for limit orders)
+    """
+    try:
+        from forge.trading.brokers import get_broker
+        broker = get_broker()
+        result = broker.place_order(
+            ticker=ticker,
+            side=side,
+            quantity=float(quantity),
+            order_type=order_type,
+            price=float(price) if price else None,
+        )
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"{type(e).__name__}: {e}"})
+
+
+def get_market_quote(ticker: str, provider: str = "") -> str:
+    """Get current price quote for a ticker."""
+    try:
+        from forge.trading.engine import get_engine
+        q = get_engine().get_quote(ticker, provider=provider)
+        return json.dumps({
+            "ticker": q.ticker, "price": q.price,
+            "change": q.change, "change_pct": q.change_pct,
+            "volume": q.volume,
+        })
+    except Exception as e:
+        return json.dumps({"error": f"{type(e).__name__}: {e}"})
+
+
+# -- Registration ------------------------------------------------------------
+
+def register(registry: ToolRegistry):
+    registry.register(
+        name="fetch_pcr",
+        description=(
+            "Fetch Put/Call Ratio (PCR) for a stock ticker. Returns vol_ratio, oi_ratio, "
+            "sentiment (bullish/bearish/neutral), and raw put/call volumes. "
+            "PCR > 1.2 = bearish, < 0.7 = bullish."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string", "description": "Stock ticker symbol (e.g. SPY, QQQ, ^SPX)"},
+                "expiry": {"type": "string", "description": "Option expiration date (ISO format). Defaults to nearest."},
+                "provider": {"type": "string", "description": "Data provider: yfinance (free) or tradier (real-time)"},
+            },
+            "required": ["ticker"],
+        },
+        handler=fetch_pcr,
+    )
+
+    registry.register(
+        name="analyze_sentiment",
+        description=(
+            "Analyze PCR sentiment across multiple tickers at once. Returns per-ticker "
+            "sentiment and a market-wide summary (bullish/bearish/mixed)."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "tickers": {"type": "string", "description": "Comma-separated ticker symbols (e.g. 'SPY,QQQ,IWM')"},
+                "provider": {"type": "string", "description": "Data provider: yfinance or tradier"},
+            },
+            "required": ["tickers"],
+        },
+        handler=analyze_sentiment,
+    )
+
+    registry.register(
+        name="get_options_chain",
+        description=(
+            "Get raw options chain data (strikes, volumes, OI) for a ticker. "
+            "Capped at 50 rows per side. Use min_volume to filter low-activity strikes."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string", "description": "Stock ticker symbol"},
+                "expiry": {"type": "string", "description": "Expiration date. Defaults to nearest."},
+                "provider": {"type": "string", "description": "Data provider"},
+                "min_volume": {"type": "string", "description": "Minimum volume filter (default: 0)"},
+            },
+            "required": ["ticker"],
+        },
+        handler=get_options_chain,
+    )
+
+    registry.register(
+        name="set_alert",
+        description=(
+            "Set a PCR threshold alert. Triggers when vol_ratio or oi_ratio crosses "
+            "the threshold in the specified direction."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string", "description": "Stock ticker symbol"},
+                "metric": {"type": "string", "description": "Metric to watch: vol_ratio or oi_ratio"},
+                "threshold": {"type": "string", "description": "Threshold value (e.g. '1.2')"},
+                "direction": {"type": "string", "description": "Trigger direction: above or below"},
+            },
+            "required": ["ticker"],
+        },
+        handler=set_alert,
+    )
+
+    registry.register(
+        name="get_portfolio",
+        description=(
+            "Get current trading portfolio: positions, unrealized/realized P&L, "
+            "and market values. Includes both stock and crypto positions."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {},
+        },
+        handler=get_portfolio,
+    )
+
+    registry.register(
+        name="execute_trade",
+        description=(
+            "Execute a buy or sell order. Uses paper trading by default. "
+            "Supports market and limit orders. Returns fill confirmation."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string", "description": "Stock/crypto ticker symbol"},
+                "side": {"type": "string", "description": "Order side: buy or sell"},
+                "quantity": {"type": "string", "description": "Number of shares/units to trade"},
+                "order_type": {"type": "string", "description": "Order type: market (default) or limit"},
+                "price": {"type": "string", "description": "Limit price (required for limit orders)"},
+            },
+            "required": ["ticker", "side", "quantity"],
+        },
+        handler=execute_trade,
+    )
+
+    registry.register(
+        name="get_market_quote",
+        description="Get current price, change, and volume for a stock or crypto ticker.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string", "description": "Ticker symbol (e.g. SPY, BTC)"},
+                "provider": {"type": "string", "description": "Data provider: yfinance, tradier, or robinhood"},
+            },
+            "required": ["ticker"],
+        },
+        handler=get_market_quote,
+    )

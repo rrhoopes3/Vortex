@@ -48,6 +48,8 @@ TOOL_CATEGORIES = {
                    "email_get_analytics"},
     "escalation": {"escalate_to_human"},
     "generative_ui": {"render_widget"},
+    "trading": {"fetch_pcr", "analyze_sentiment", "get_options_chain",
+                "set_alert", "get_portfolio", "execute_trade", "get_market_quote"},
 }
 
 # Reverse map: tool_name → category

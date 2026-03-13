@@ -1,0 +1,252 @@
+"""
+Portfolio manager — tracks positions, orders, and P&L.
+
+SQLite-backed, thread-safe, following forge/toll/ledger.py patterns.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import sqlite3
+import threading
+import time
+import uuid
+from dataclasses import dataclass
+
+log = logging.getLogger("forge.trading.portfolio")
+
+
+@dataclass
+class Position:
+    ticker: str
+    quantity: float
+    avg_price: float
+    current_price: float = 0.0
+    side: str = "long"  # "long" | "short"
+
+    @property
+    def unrealized_pnl(self) -> float:
+        if self.side == "long":
+            return (self.current_price - self.avg_price) * self.quantity
+        return (self.avg_price - self.current_price) * self.quantity
+
+    @property
+    def unrealized_pnl_pct(self) -> float:
+        cost = self.avg_price * self.quantity
+        if cost == 0:
+            return 0
+        return self.unrealized_pnl / cost * 100
+
+    def to_dict(self) -> dict:
+        return {
+            "ticker": self.ticker,
+            "quantity": self.quantity,
+            "avg_price": round(self.avg_price, 4),
+            "current_price": round(self.current_price, 4),
+            "side": self.side,
+            "unrealized_pnl": round(self.unrealized_pnl, 2),
+            "unrealized_pnl_pct": round(self.unrealized_pnl_pct, 2),
+            "market_value": round(self.current_price * self.quantity, 2),
+        }
+
+
+class PortfolioManager:
+    """Thread-safe portfolio tracker backed by SQLite."""
+
+    def __init__(self, db_path: str):
+        self._db_path = db_path
+        self._lock = threading.RLock()
+        self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._conn.row_factory = sqlite3.Row
+        self._init_tables()
+
+    def _init_tables(self):
+        with self._lock:
+            self._conn.executescript("""
+                CREATE TABLE IF NOT EXISTS positions (
+                    ticker TEXT PRIMARY KEY,
+                    quantity REAL NOT NULL DEFAULT 0,
+                    avg_price REAL NOT NULL DEFAULT 0,
+                    side TEXT NOT NULL DEFAULT 'long',
+                    updated_at REAL NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS orders (
+                    order_id TEXT PRIMARY KEY,
+                    ticker TEXT NOT NULL,
+                    side TEXT NOT NULL,
+                    quantity REAL NOT NULL,
+                    order_type TEXT NOT NULL DEFAULT 'market',
+                    price REAL,
+                    fill_price REAL,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    broker TEXT NOT NULL DEFAULT 'paper',
+                    created_at REAL NOT NULL,
+                    filled_at REAL
+                );
+                CREATE TABLE IF NOT EXISTS realized_pnl (
+                    id TEXT PRIMARY KEY,
+                    ticker TEXT NOT NULL,
+                    quantity REAL NOT NULL,
+                    entry_price REAL NOT NULL,
+                    exit_price REAL NOT NULL,
+                    pnl REAL NOT NULL,
+                    closed_at REAL NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_orders_ticker ON orders(ticker);
+                CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
+            """)
+
+    # ── Positions ────────────────────────────────────────────────────────
+
+    def get_positions(self) -> list[Position]:
+        with self._lock:
+            rows = self._conn.execute("SELECT * FROM positions WHERE quantity > 0").fetchall()
+            return [
+                Position(
+                    ticker=r["ticker"],
+                    quantity=r["quantity"],
+                    avg_price=r["avg_price"],
+                    side=r["side"],
+                )
+                for r in rows
+            ]
+
+    def update_position(self, ticker: str, quantity: float, price: float,
+                        side: str = "buy") -> Position:
+        """Update position after a fill. Handles averaging and closing."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM positions WHERE ticker = ?", (ticker,)
+            ).fetchone()
+
+            now = time.time()
+            if row is None:
+                # New position
+                self._conn.execute(
+                    "INSERT INTO positions (ticker, quantity, avg_price, side, updated_at) VALUES (?, ?, ?, ?, ?)",
+                    (ticker, quantity, price, "long" if side == "buy" else "short", now),
+                )
+            else:
+                existing_qty = row["quantity"]
+                existing_avg = row["avg_price"]
+
+                if side == "buy" and row["side"] == "long":
+                    # Add to long position — average up/down
+                    new_qty = existing_qty + quantity
+                    new_avg = (existing_avg * existing_qty + price * quantity) / new_qty
+                    self._conn.execute(
+                        "UPDATE positions SET quantity = ?, avg_price = ?, updated_at = ? WHERE ticker = ?",
+                        (new_qty, new_avg, now, ticker),
+                    )
+                elif side == "sell" and row["side"] == "long":
+                    # Close/reduce long position
+                    close_qty = min(quantity, existing_qty)
+                    pnl = (price - existing_avg) * close_qty
+                    self._conn.execute(
+                        "INSERT INTO realized_pnl (id, ticker, quantity, entry_price, exit_price, pnl, closed_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (str(uuid.uuid4())[:8], ticker, close_qty, existing_avg, price, pnl, now),
+                    )
+                    remaining = existing_qty - close_qty
+                    if remaining <= 0:
+                        self._conn.execute("DELETE FROM positions WHERE ticker = ?", (ticker,))
+                    else:
+                        self._conn.execute(
+                            "UPDATE positions SET quantity = ?, updated_at = ? WHERE ticker = ?",
+                            (remaining, now, ticker),
+                        )
+                else:
+                    # Simple update for other cases
+                    new_qty = existing_qty + quantity
+                    new_avg = (existing_avg * existing_qty + price * quantity) / max(new_qty, 0.0001)
+                    self._conn.execute(
+                        "UPDATE positions SET quantity = ?, avg_price = ?, updated_at = ? WHERE ticker = ?",
+                        (new_qty, new_avg, now, ticker),
+                    )
+
+            self._conn.commit()
+            return self._get_position(ticker)
+
+    def _get_position(self, ticker: str) -> Position:
+        row = self._conn.execute(
+            "SELECT * FROM positions WHERE ticker = ?", (ticker,)
+        ).fetchone()
+        if not row:
+            return Position(ticker=ticker, quantity=0, avg_price=0)
+        return Position(
+            ticker=row["ticker"],
+            quantity=row["quantity"],
+            avg_price=row["avg_price"],
+            side=row["side"],
+        )
+
+    # ── Orders ───────────────────────────────────────────────────────────
+
+    def record_order(self, ticker: str, side: str, quantity: float,
+                     order_type: str = "market", price: float | None = None,
+                     fill_price: float | None = None, status: str = "filled",
+                     broker: str = "paper") -> dict:
+        order_id = str(uuid.uuid4())[:8]
+        now = time.time()
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO orders
+                   (order_id, ticker, side, quantity, order_type, price, fill_price, status, broker, created_at, filled_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (order_id, ticker, side, quantity, order_type, price,
+                 fill_price, status, broker, now, now if status == "filled" else None),
+            )
+            self._conn.commit()
+        return {
+            "order_id": order_id, "ticker": ticker, "side": side,
+            "quantity": quantity, "order_type": order_type,
+            "fill_price": fill_price, "status": status, "broker": broker,
+        }
+
+    def get_orders(self, limit: int = 50) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM orders ORDER BY created_at DESC LIMIT ?", (limit,)
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    # ── P&L ──────────────────────────────────────────────────────────────
+
+    def get_realized_pnl(self) -> float:
+        with self._lock:
+            row = self._conn.execute("SELECT COALESCE(SUM(pnl), 0) as total FROM realized_pnl").fetchone()
+            return float(row["total"])
+
+    def get_summary(self) -> dict:
+        positions = self.get_positions()
+        realized = self.get_realized_pnl()
+        unrealized = sum(p.unrealized_pnl for p in positions)
+        return {
+            "positions": [p.to_dict() for p in positions],
+            "realized_pnl": round(realized, 2),
+            "unrealized_pnl": round(unrealized, 2),
+            "total_pnl": round(realized + unrealized, 2),
+            "position_count": len(positions),
+        }
+
+    def reset(self):
+        with self._lock:
+            self._conn.executescript("""
+                DELETE FROM positions;
+                DELETE FROM orders;
+                DELETE FROM realized_pnl;
+            """)
+
+
+# ── Singleton ────────────────────────────────────────────────────────────────
+
+_pm: PortfolioManager | None = None
+_pm_lock = threading.Lock()
+
+
+def get_portfolio_manager() -> PortfolioManager:
+    global _pm
+    with _pm_lock:
+        if _pm is None:
+            from forge.config import TRADING_DATA_DIR
+            _pm = PortfolioManager(str(TRADING_DATA_DIR / "portfolio.db"))
+        return _pm

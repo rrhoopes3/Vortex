@@ -37,7 +37,7 @@ from forge.config import (
     EMAIL_AGENT_ENABLED, ARCRELAY_WEBHOOK_SECRET, ARCRELAY_API_KEY,
     ARCRELAY_API_URL, EMAIL_AGENT_MODEL, EXECUTOR_MODEL, PLANNER_MODEL,
     PLANNER_AGENT_COUNT, EXECUTOR_MAX_ITERATIONS,
-    USER_CORRECTION_ENABLED, GENERATIVE_UI_ENABLED,
+    USER_CORRECTION_ENABLED, GENERATIVE_UI_ENABLED, TRADING_ENABLED,
 )
 from forge.toll.endpoints import toll_bp
 from forge.toll.public_api import public_bp
@@ -49,6 +49,13 @@ app = Flask(__name__, static_folder="static", static_url_path="/static")
 app.register_blueprint(toll_bp)
 if MARKETPLACE_ENABLED:
     app.register_blueprint(public_bp)
+
+# ── Trading Module ──────────────────────────────────────────────────────
+if TRADING_ENABLED:
+    from forge.trading.endpoints import trading_bp
+    app.register_blueprint(trading_bp)
+    log.info("Trading module enabled (provider=%s)",
+             os.getenv("FORGE_TRADING_PROVIDER", "yfinance"))
 
 # ── Email Agent + Webhook ────────────────────────────────────────────────
 _email_agent = None
@@ -367,6 +374,7 @@ def get_config():
             "email_agent": EMAIL_AGENT_ENABLED,
             "solana_watcher": SOLANA_WATCHER_ENABLED,
             "generative_ui": GENERATIVE_UI_ENABLED,
+            "trading": TRADING_ENABLED,
         },
         "runtime": {
             "working_dir": str(SHELL_WORKING_DIR),

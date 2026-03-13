@@ -129,6 +129,17 @@ SOLANA_POLL_INTERVAL = int(os.getenv("FORGE_SOLANA_POLL_INTERVAL", "15"))  # sec
 SOLANA_USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"  # mainnet USDC mint
 SOLANA_USDC_DECIMALS = 6
 
+# ── Trading ─────────────────────────────────────────────────────────────────
+TRADING_ENABLED = os.getenv("FORGE_TRADING_ENABLED", "true").lower() == "true"
+TRADING_DEFAULT_PROVIDER = os.getenv("FORGE_TRADING_PROVIDER", "yfinance")
+TRADING_TRADIER_API_KEY = os.getenv("FORGE_TRADIER_API_KEY", "")
+TRADING_TRADIER_SANDBOX = os.getenv("FORGE_TRADIER_SANDBOX", "true").lower() == "true"
+TRADING_ROBINHOOD_USER = os.getenv("FORGE_ROBINHOOD_USER", "")
+TRADING_ROBINHOOD_PASS = os.getenv("FORGE_ROBINHOOD_PASS", "")
+TRADING_DATA_DIR = DATA_DIR / "trading"
+TRADING_DATA_DIR.mkdir(exist_ok=True)
+TRADING_PAPER_MODE = os.getenv("FORGE_TRADING_PAPER_MODE", "true").lower() == "true"
+
 # ── Arena ──────────────────────────────────────────────────────────────────
 ARENA_MASTER_MODEL = PLANNER_MODEL       # 16-agent Pantheon for commentary/judging
 ARENA_DEFAULT_FIGHTER_MODEL = "grok-4-1-fast-reasoning"

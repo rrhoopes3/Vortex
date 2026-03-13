@@ -167,6 +167,7 @@ function bindEvents() {
         // Auto-refresh data when switching to a tab
         if (tab === "history") loadHistory();
         if (tab === "memory") loadMemory();
+        if (tab === "trading") initTrading();
     });
 }
 
@@ -229,6 +230,7 @@ function renderFeatureBadges() {
         { enabled: features.email_agent, label: "Email Agent" },
         { enabled: features.solana_watcher, label: "Solana Watcher" },
         { enabled: features.generative_ui, label: "Generative UI" },
+        { enabled: features.trading, label: "Trading" },
     ].filter((item) => item.enabled);
 
     if (features.email_agent && state.config.runtime?.email_agent_model) {
@@ -1654,6 +1656,440 @@ function escapeHtml(value) {
 function capitalize(value) {
     if (!value) return "";
     return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// TRADING TAB
+// ══════════════════════════════════════════════════════════════════════════
+
+const tradingState = {
+    initialized: false,
+    autoRefreshTimer: null,
+    currentTicker: "SPY",
+    currentExpiry: "",
+    chartMode: "line",
+    tradeSide: "buy",
+    pcrHistory: [],
+    alerts: [],
+    sseSource: null,
+};
+
+function initTrading() {
+    if (tradingState.initialized) return;
+    tradingState.initialized = true;
+
+    // Bind trading events
+    const refreshBtn = document.getElementById("trading-refresh-btn");
+    const autoRefresh = document.getElementById("trading-auto-refresh");
+    const tickerSelect = document.getElementById("trading-ticker");
+    const expirySelect = document.getElementById("trading-expiry");
+    const providerSelect = document.getElementById("trading-provider");
+    const customTicker = document.getElementById("trading-custom-ticker");
+    const alertSetBtn = document.getElementById("alert-set-btn");
+    const tradeSubmitBtn = document.getElementById("trade-submit-btn");
+    const buyBtn = document.getElementById("trade-buy-btn");
+    const sellBtn = document.getElementById("trade-sell-btn");
+    const orderType = document.getElementById("trade-order-type");
+    const priceField = document.getElementById("trade-price-field");
+
+    refreshBtn.addEventListener("click", () => loadPCRData());
+    tickerSelect.addEventListener("change", () => {
+        tradingState.currentTicker = tickerSelect.value;
+        loadExpirations();
+        loadPCRData();
+    });
+    expirySelect.addEventListener("change", () => {
+        tradingState.currentExpiry = expirySelect.value;
+        loadPCRData();
+    });
+    customTicker.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            tradingState.currentTicker = customTicker.value.trim().toUpperCase();
+            loadExpirations();
+            loadPCRData();
+        }
+    });
+
+    autoRefresh.addEventListener("change", () => {
+        if (autoRefresh.checked) {
+            tradingState.autoRefreshTimer = setInterval(() => loadPCRData(), 30000);
+        } else {
+            clearInterval(tradingState.autoRefreshTimer);
+        }
+    });
+
+    alertSetBtn.addEventListener("click", setTradingAlert);
+    tradeSubmitBtn.addEventListener("click", executeTrade);
+
+    buyBtn.addEventListener("click", () => {
+        tradingState.tradeSide = "buy";
+        buyBtn.classList.add("active");
+        sellBtn.classList.remove("active");
+    });
+    sellBtn.addEventListener("click", () => {
+        tradingState.tradeSide = "sell";
+        sellBtn.classList.add("active");
+        buyBtn.classList.remove("active");
+    });
+
+    orderType.addEventListener("change", () => {
+        priceField.style.display = orderType.value === "limit" ? "" : "none";
+    });
+
+    // Chart mode switching
+    document.querySelectorAll(".chart-mode-btns .filter-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            document.querySelectorAll(".chart-mode-btns .filter-btn").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            tradingState.chartMode = btn.dataset.chart;
+            renderTradingChart();
+        });
+    });
+
+    // Connect SSE stream
+    connectTradingStream();
+
+    // Initial data load
+    loadExpirations();
+    loadPCRData();
+    loadTradingAlerts();
+    loadPortfolio();
+}
+
+async function loadExpirations() {
+    const provider = document.getElementById("trading-provider").value;
+    try {
+        const data = await fetchJson(`/api/trading/expirations/${encodeURIComponent(tradingState.currentTicker)}?provider=${provider}`);
+        const select = document.getElementById("trading-expiry");
+        select.innerHTML = '<option value="">Nearest</option>';
+        (data.expirations || []).forEach(exp => {
+            select.innerHTML += `<option value="${escapeHtml(exp)}">${escapeHtml(exp)}</option>`;
+        });
+    } catch (e) {
+        console.warn("Failed to load expirations:", e);
+    }
+}
+
+async function loadPCRData() {
+    const ticker = tradingState.currentTicker;
+    const expiry = tradingState.currentExpiry;
+    const provider = document.getElementById("trading-provider").value;
+
+    try {
+        const params = new URLSearchParams({ provider });
+        if (expiry) params.set("expiry", expiry);
+
+        const [pcr, quote] = await Promise.all([
+            fetchJson(`/api/trading/pcr/${encodeURIComponent(ticker)}?${params}`),
+            fetchJson(`/api/trading/quote/${encodeURIComponent(ticker)}?provider=${provider}`),
+        ]);
+
+        // Update metric cards
+        document.getElementById("pcr-vol-ratio").textContent = pcr.vol_ratio != null ? pcr.vol_ratio.toFixed(4) : "—";
+        document.getElementById("pcr-oi-ratio").textContent = pcr.oi_ratio != null ? pcr.oi_ratio.toFixed(4) : "—";
+        document.getElementById("pcr-put-vol").textContent = (pcr.put_vol || 0).toLocaleString();
+        document.getElementById("pcr-call-vol").textContent = (pcr.call_vol || 0).toLocaleString();
+
+        const badge = document.getElementById("pcr-sentiment");
+        badge.textContent = pcr.sentiment || "—";
+        badge.className = `sentiment-badge ${pcr.sentiment || "neutral"}`;
+
+        const priceEl = document.getElementById("pcr-price");
+        priceEl.textContent = quote.price ? `$${quote.price.toFixed(2)}` : "—";
+
+        // Update chart title
+        document.getElementById("chart-title").textContent = `PCR Chart — ${ticker}`;
+
+        // Add to history for charting
+        tradingState.pcrHistory.push({
+            timestamp: new Date().toLocaleTimeString(),
+            vol_ratio: pcr.vol_ratio,
+            oi_ratio: pcr.oi_ratio,
+            ticker,
+            expiry: pcr.expiry,
+        });
+        if (tradingState.pcrHistory.length > 100) {
+            tradingState.pcrHistory = tradingState.pcrHistory.slice(-100);
+        }
+
+        renderTradingChart();
+    } catch (e) {
+        console.error("Failed to load PCR data:", e);
+    }
+}
+
+function renderTradingChart() {
+    const container = document.getElementById("trading-chart-container");
+    const data = tradingState.pcrHistory.filter(d => d.ticker === tradingState.currentTicker);
+
+    if (data.length === 0) {
+        container.innerHTML = '<div class="empty-state">No data yet. Click Refresh to load.</div>';
+        return;
+    }
+
+    const mode = tradingState.chartMode;
+    let plotlyCode;
+
+    if (mode === "line") {
+        plotlyCode = `
+            const data = ${JSON.stringify(data)};
+            Plotly.newPlot('chart', [
+                {
+                    x: data.map(d => d.timestamp),
+                    y: data.map(d => d.vol_ratio),
+                    name: 'Vol Ratio',
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    line: { color: '#f2a74b', width: 2 },
+                    marker: { size: 4 },
+                },
+                {
+                    x: data.map(d => d.timestamp),
+                    y: data.map(d => d.oi_ratio),
+                    name: 'OI Ratio',
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    line: { color: '#63c7b2', width: 2 },
+                    marker: { size: 4 },
+                },
+                {
+                    x: data.map(d => d.timestamp),
+                    y: data.map(() => 1),
+                    name: 'Neutral (1.0)',
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: '#9cacbf', width: 1, dash: 'dot' },
+                },
+            ], {
+                template: 'plotly_dark',
+                paper_bgcolor: '#171f2a',
+                plot_bgcolor: '#171f2a',
+                margin: { t: 30, r: 20, b: 40, l: 50 },
+                xaxis: { title: 'Time', gridcolor: 'rgba(255,255,255,0.06)' },
+                yaxis: { title: 'PCR', gridcolor: 'rgba(255,255,255,0.06)' },
+                legend: { x: 0, y: 1.1, orientation: 'h' },
+            }, { responsive: true });
+        `;
+    } else if (mode === "heatmap") {
+        const expiries = [...new Set(data.map(d => d.expiry))];
+        const timestamps = [...new Set(data.map(d => d.timestamp))];
+        const z = expiries.map(exp =>
+            timestamps.map(ts => {
+                const point = data.find(d => d.expiry === exp && d.timestamp === ts);
+                return point ? point.vol_ratio : null;
+            })
+        );
+        plotlyCode = `
+            Plotly.newPlot('chart', [{
+                z: ${JSON.stringify(z)},
+                x: ${JSON.stringify(timestamps)},
+                y: ${JSON.stringify(expiries)},
+                type: 'heatmap',
+                colorscale: [[0, '#63c7b2'], [0.5, '#f5c35b'], [1, '#ff6a6a']],
+                colorbar: { title: 'PCR' },
+            }], {
+                template: 'plotly_dark',
+                paper_bgcolor: '#171f2a',
+                plot_bgcolor: '#171f2a',
+                margin: { t: 30, r: 20, b: 60, l: 80 },
+                xaxis: { title: 'Time' },
+                yaxis: { title: 'Expiry' },
+            }, { responsive: true });
+        `;
+    } else {
+        // 3D surface
+        plotlyCode = `
+            const data = ${JSON.stringify(data)};
+            Plotly.newPlot('chart', [{
+                x: data.map(d => d.timestamp),
+                y: data.map(d => d.expiry || 'nearest'),
+                z: data.map(d => d.vol_ratio),
+                type: 'scatter3d',
+                mode: 'markers+lines',
+                marker: {
+                    size: 4,
+                    color: data.map(d => d.vol_ratio),
+                    colorscale: [[0, '#63c7b2'], [0.5, '#f5c35b'], [1, '#ff6a6a']],
+                },
+                line: { color: '#f2a74b', width: 2 },
+            }], {
+                template: 'plotly_dark',
+                paper_bgcolor: '#171f2a',
+                plot_bgcolor: '#171f2a',
+                margin: { t: 10, r: 10, b: 10, l: 10 },
+                scene: {
+                    xaxis: { title: 'Time', gridcolor: 'rgba(255,255,255,0.06)' },
+                    yaxis: { title: 'Expiry', gridcolor: 'rgba(255,255,255,0.06)' },
+                    zaxis: { title: 'PCR', gridcolor: 'rgba(255,255,255,0.06)' },
+                    bgcolor: '#171f2a',
+                },
+            }, { responsive: true });
+        `;
+    }
+
+    const html = `<!DOCTYPE html>
+<html><head>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"><\/script>
+<style>body{margin:0;background:#171f2a;overflow:hidden}#chart{width:100%;height:100vh}</style>
+</head><body>
+<div id="chart"></div>
+<script>${plotlyCode}<\/script>
+</body></html>`;
+
+    container.innerHTML = "";
+    const iframe = document.createElement("iframe");
+    iframe.srcdoc = html;
+    iframe.style.cssText = "width:100%;height:100%;border:none;border-radius:6px;position:absolute;top:0;left:0";
+    container.appendChild(iframe);
+}
+
+async function setTradingAlert() {
+    const ticker = tradingState.currentTicker;
+    const metric = document.getElementById("alert-metric").value;
+    const threshold = document.getElementById("alert-threshold").value;
+    const direction = document.getElementById("alert-direction").value;
+
+    try {
+        const result = await fetchJson("/api/trading/alerts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ticker, metric, threshold: parseFloat(threshold), direction }),
+        });
+        loadTradingAlerts();
+    } catch (e) {
+        console.error("Failed to set alert:", e);
+    }
+}
+
+async function loadTradingAlerts() {
+    try {
+        const alerts = await fetchJson("/api/trading/alerts");
+        tradingState.alerts = alerts;
+        const list = document.getElementById("alert-list");
+        if (alerts.length === 0) {
+            list.innerHTML = '<div class="empty-state" style="font-size:0.75rem;padding:6px">No alerts set.</div>';
+            return;
+        }
+        list.innerHTML = alerts.map(a => `
+            <div class="alert-item ${a.triggered ? 'triggered' : ''}">
+                <span>${escapeHtml(a.ticker)} ${a.metric} ${a.direction} ${a.threshold}${a.last_value != null ? ` (now: ${a.last_value.toFixed(4)})` : ''}</span>
+                <button class="alert-remove" onclick="removeTradingAlert('${a.alert_id}')">&times;</button>
+            </div>
+        `).join("");
+    } catch (e) {
+        console.warn("Failed to load alerts:", e);
+    }
+}
+
+async function removeTradingAlert(alertId) {
+    try {
+        await fetch(`/api/trading/alerts/${alertId}`, { method: "DELETE" });
+        loadTradingAlerts();
+    } catch (e) {
+        console.error("Failed to remove alert:", e);
+    }
+}
+
+async function executeTrade() {
+    const ticker = tradingState.currentTicker;
+    const side = tradingState.tradeSide;
+    const quantity = document.getElementById("trade-quantity").value;
+    const orderType = document.getElementById("trade-order-type").value;
+    const price = document.getElementById("trade-price").value;
+    const resultEl = document.getElementById("trade-result");
+
+    try {
+        const result = await fetchJson("/api/trading/order", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ticker, side, quantity: parseFloat(quantity), order_type: orderType, price: price || undefined }),
+        });
+
+        if (result.error) {
+            resultEl.textContent = result.error;
+            resultEl.className = "trade-result error";
+        } else {
+            resultEl.textContent = result.message || `${side} ${quantity} ${ticker} — ${result.status}`;
+            resultEl.className = "trade-result success";
+            loadPortfolio();
+        }
+    } catch (e) {
+        resultEl.textContent = `Error: ${e.message}`;
+        resultEl.className = "trade-result error";
+    }
+}
+
+async function loadPortfolio() {
+    try {
+        const data = await fetchJson("/api/trading/portfolio");
+        document.getElementById("port-count").textContent = data.position_count || 0;
+        document.getElementById("port-realized").textContent = formatMoney(data.realized_pnl || 0);
+        document.getElementById("port-unrealized").textContent = formatMoney(data.unrealized_pnl || 0);
+
+        const realizedEl = document.getElementById("port-realized");
+        realizedEl.className = `pcr-value ${(data.realized_pnl || 0) >= 0 ? 'pnl-positive' : 'pnl-negative'}`;
+        const unrealizedEl = document.getElementById("port-unrealized");
+        unrealizedEl.className = `pcr-value ${(data.unrealized_pnl || 0) >= 0 ? 'pnl-positive' : 'pnl-negative'}`;
+
+        const positionsEl = document.getElementById("portfolio-positions");
+        const positions = data.positions || [];
+        if (positions.length === 0) {
+            positionsEl.innerHTML = '<div class="empty-state" style="font-size:0.75rem;padding:6px">No positions.</div>';
+            return;
+        }
+        positionsEl.innerHTML = `
+            <table>
+                <thead><tr><th>Ticker</th><th>Qty</th><th>Avg</th><th>Current</th><th>P&L</th></tr></thead>
+                <tbody>
+                    ${positions.map(p => `
+                        <tr>
+                            <td>${escapeHtml(p.ticker)}</td>
+                            <td>${p.quantity}</td>
+                            <td>$${p.avg_price.toFixed(2)}</td>
+                            <td>$${p.current_price.toFixed(2)}</td>
+                            <td class="${p.unrealized_pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">
+                                $${p.unrealized_pnl.toFixed(2)} (${p.unrealized_pnl_pct.toFixed(1)}%)
+                            </td>
+                        </tr>
+                    `).join("")}
+                </tbody>
+            </table>
+        `;
+    } catch (e) {
+        console.warn("Failed to load portfolio:", e);
+    }
+}
+
+function connectTradingStream() {
+    if (tradingState.sseSource) return;
+    try {
+        tradingState.sseSource = new EventSource("/api/trading/stream");
+        tradingState.sseSource.onmessage = (event) => {
+            const msg = JSON.parse(event.data);
+            if (msg.type === "pcr_update") {
+                // Auto-update if it's the current ticker
+                const d = msg.data;
+                if (d.ticker === tradingState.currentTicker) {
+                    document.getElementById("pcr-vol-ratio").textContent = d.vol_ratio != null ? d.vol_ratio.toFixed(4) : "—";
+                    document.getElementById("pcr-oi-ratio").textContent = d.oi_ratio != null ? d.oi_ratio.toFixed(4) : "—";
+                    const badge = document.getElementById("pcr-sentiment");
+                    badge.textContent = d.sentiment;
+                    badge.className = `sentiment-badge ${d.sentiment}`;
+                }
+            } else if (msg.type === "alert_triggered") {
+                loadTradingAlerts();
+                addMessage("info", `Trading Alert: ${msg.data.ticker} ${msg.data.metric} is ${msg.data.current_value?.toFixed(4)} (${msg.data.direction} ${msg.data.threshold})`);
+            }
+        };
+        tradingState.sseSource.onerror = () => {
+            tradingState.sseSource.close();
+            tradingState.sseSource = null;
+            // Reconnect after 5 seconds
+            setTimeout(connectTradingStream, 5000);
+        };
+    } catch (e) {
+        console.warn("Failed to connect trading stream:", e);
+    }
 }
 
 init();

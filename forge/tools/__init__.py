@@ -25,4 +25,9 @@ def create_registry() -> ToolRegistry:
     # Generative UI — interactive widget rendering
     from forge.generative_ui import register_widget_tools
     register_widget_tools(reg)
+    # Trading tools — PCR analysis, trade execution, portfolio
+    from forge.config import TRADING_ENABLED
+    if TRADING_ENABLED:
+        from . import trading as trading_tools
+        trading_tools.register(reg)
     return reg
