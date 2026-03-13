@@ -198,11 +198,11 @@ Lock in the f6c6412 fixes with explicit test cases:
 
 ## Execution Order
 
-### Phase 1: Harden (1 cycle)
-1. Fix the two edge cases in xenodochial-tu
-2. Write regression tests for all 4 trading bug fixes
-3. Merge xenodochial-tu to main
-4. Confirm tests pass
+### Phase 1: Harden — DONE (Claude, 3dc0ce4)
+1. ~~Fix mark-to-market: treat quote <= 0 as "data unavailable"~~
+2. ~~Add check_trading_readiness() with full credential validation~~
+3. ~~13 regression tests (mark-to-market edge cases, provider readiness, provider caching)~~
+4. ~~All 69 trading tests passing~~
 
 ### Phase 2: Foundation — DONE (Claude, feature/capability-packs)
 1. ~~Create `forge/packs/__init__.py` — `CapabilityPack` dataclass, `PackRegistry`~~
