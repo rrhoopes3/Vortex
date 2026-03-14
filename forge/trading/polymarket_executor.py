@@ -160,10 +160,37 @@ def get_market_price(token_id: str) -> float | None:
     try:
         client = _get_client()
         mid = client.get_midpoint(token_id)
-        return float(mid) if mid else None
+        price = _coerce_price(mid)
+        if price is None:
+            log.warning("Unrecognized midpoint payload for %s: %r", token_id, mid)
+        return price
     except Exception as e:
         log.error("Failed to get price for %s: %s", token_id, e)
         return None
+
+
+def _coerce_price(value) -> float | None:
+    """Parse Polymarket price payloads that may be strings, numbers, or dicts."""
+    if value in (None, ""):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip())
+        except ValueError:
+            return None
+    if isinstance(value, dict):
+        for key in ("mid", "midpoint", "price", "value"):
+            parsed = _coerce_price(value.get(key))
+            if parsed is not None:
+                return parsed
+        for key in ("data", "result"):
+            nested = value.get(key)
+            parsed = _coerce_price(nested)
+            if parsed is not None:
+                return parsed
+    return None
 
 
 # ── Order execution ──────────────────────────────────────────────────────────
