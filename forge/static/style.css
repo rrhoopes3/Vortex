@@ -819,6 +819,11 @@ button.stack-item:hover {
     transform: translateY(-1px);
 }
 
+.danger-btn {
+    background: linear-gradient(135deg, var(--danger), #c0392b) !important;
+    color: #fff !important;
+}
+
 .ghost-btn {
     padding: 7px 12px;
     background: rgba(255, 255, 255, 0.04);
@@ -1408,8 +1413,161 @@ input[type="range"] {
 /* ── Trading Tab ────────────────────────────────────────────────── */
 
 .trading-layout {
-    grid-template-columns: 380px 1fr;
+    grid-template-columns: 280px 1fr;
 }
+.trading-layout.has-agent-log {
+    grid-template-columns: 240px 320px 1fr;
+}
+
+.agent-log-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    max-height: calc(100vh - 60px);
+}
+.agent-log-panel .agent-log-container {
+    flex: 1;
+    max-height: none;
+    min-height: 0;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    word-break: break-word;
+    padding: 6px 8px;
+}
+
+/* Sub-tab bar for Stocks / Crypto split */
+.trading-subtab-bar {
+    display: flex;
+    gap: 2px;
+    padding: 8px 16px 0;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 0;
+}
+.trading-subtab-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 8px 20px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.2s, border-color 0.2s;
+}
+.trading-subtab-btn:hover { color: var(--text); }
+.trading-subtab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+.trading-pane { display: none; }
+.trading-pane.active { display: block; }
+
+/* Crypto quote card */
+.crypto-quote-card {
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 16px;
+    margin: 8px 12px;
+}
+.crypto-price-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+.crypto-symbol {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--muted);
+}
+.crypto-price {
+    font-size: 1.6rem;
+    color: var(--text);
+}
+.crypto-change-row {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: 0.8rem;
+}
+.crypto-change { color: var(--signal); }
+.crypto-change.negative { color: var(--danger); }
+.crypto-volume { color: var(--muted); }
+
+/* Live badge */
+.live-badge {
+    font-size: 0.6rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--danger);
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    vertical-align: middle;
+}
+
+/* AI Agent section */
+.crypto-agent-section {
+    border-top: 1px solid var(--line-strong);
+    margin-top: 8px;
+    padding-top: 8px;
+}
+.crypto-agent-controls { display: flex; flex-direction: column; gap: 6px; }
+.crypto-agent-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+}
+.crypto-agent-status {
+    font-size: 0.8rem;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.status-dot.idle { background: var(--muted); }
+.status-dot.running { background: var(--signal); animation: pulse 1.5s infinite; }
+.status-dot.error { background: var(--danger); }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+.agent-log-container {
+    max-height: 400px;
+    overflow-y: auto;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    line-height: 1.7;
+    background: #0d1117;
+    border: 2px solid var(--accent);
+    border-radius: 8px;
+    padding: 12px 14px;
+    box-shadow: 0 0 12px rgba(242, 167, 75, 0.08);
+}
+#crypto-agent-log-section h4 {
+    font-size: 1rem;
+    color: var(--accent);
+    margin-bottom: 8px;
+}
+.agent-log-entry {
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    color: #c9d1d9;
+}
+.agent-log-entry:last-child { border-bottom: none; }
+.agent-log-entry .log-time { color: #8b949e; margin-right: 8px; font-size: 0.75rem; }
+.agent-log-entry.log-decision { color: var(--signal); font-weight: 700; font-size: 0.95rem; }
+.agent-log-entry.log-error { color: var(--danger); }
+.agent-log-entry.log-tool_call { color: var(--info); }
+.agent-log-entry.log-started, .agent-log-entry.log-stopped { color: var(--accent); }
+.agent-log-entry.log-waiting { color: #8b949e; font-style: italic; }
+.agent-log-entry.log-cycle_start { color: var(--accent); }
+.agent-log-entry.log-trade { color: #00d4aa; font-weight: 700; font-size: 0.9rem; }
 
 .trading-sidebar {
     overflow-y: auto;
@@ -1419,8 +1577,8 @@ input[type="range"] {
 .trading-controls {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    padding: 10px 0;
+    gap: 6px;
+    padding: 6px 0;
 }
 
 .trading-controls .field {
@@ -1721,7 +1879,8 @@ input[type="range"] {
 .trading-chart-container {
     flex: 1;
     position: relative;
-    min-height: 400px;
+    min-height: 280px;
+    max-height: 40vh;
 }
 
 .trading-chart-container iframe {
@@ -1955,4 +2114,122 @@ input[type="range"] {
     font-size: 10px;
     color: var(--blue);
     opacity: 0.7;
+}
+
+/* ── Polymarket ─────────────────────────────────────────────────────────── */
+.polymarket-layout {
+    grid-template-columns: 320px 1fr;
+}
+
+.poly-markets-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 10px;
+    padding: 4px 0;
+}
+
+.poly-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+.poly-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 12px rgba(242, 167, 75, 0.12);
+    transform: translateY(-1px);
+}
+.poly-card.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 16px rgba(242, 167, 75, 0.18);
+}
+
+.poly-card-question {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.3;
+}
+
+.poly-card-prices {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.poly-price-pill {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 20px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.poly-price-yes {
+    background: rgba(46, 204, 113, 0.15);
+    color: #2ecc71;
+}
+.poly-price-no {
+    background: rgba(231, 76, 60, 0.15);
+    color: #e74c3c;
+}
+
+.poly-card-meta {
+    font-size: 0.72rem;
+    color: var(--muted);
+    display: flex;
+    gap: 12px;
+}
+.poly-card-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+/* Detail Card */
+.poly-detail-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+    margin-top: 12px;
+}
+.poly-detail-card h4 {
+    font-size: 0.95rem;
+    color: var(--text);
+    margin: 0 0 10px;
+    line-height: 1.4;
+}
+.poly-detail-prices {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+.poly-detail-meta {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 8px;
+    line-height: 1.6;
+}
+.poly-detail-desc {
+    font-size: 0.78rem;
+    color: var(--text);
+    opacity: 0.8;
+    line-height: 1.5;
+    max-height: 200px;
+    overflow-y: auto;
+}
+.poly-event-market-row {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line);
+}
+.poly-event-market-row:last-child {
+    border-bottom: none;
 }

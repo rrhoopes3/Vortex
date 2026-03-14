@@ -78,6 +78,17 @@ CLIPBOARD:
 - copy_to_clipboard(text) — copy to system clipboard
 - read_clipboard() — read system clipboard
 
+TRADING (real money — Robinhood):
+- get_portfolio() — get all current holdings, positions, P&L
+- get_market_quote(ticker) — get current price/volume for a crypto or stock
+- execute_trade(ticker, side, quantity, order_type, asset_type) — place a buy or sell order. side="buy"|"sell", order_type="market"|"limit", asset_type="crypto"|"stock"
+- fetch_pcr(ticker) — get Put/Call Ratio for options analysis
+- analyze_sentiment(tickers) — multi-ticker PCR sentiment analysis
+- get_options_chain(ticker, expiration_date) — get options chain data
+- start_trading_agent(ticker, strategy, max_position_usd, interval_minutes, model) — start autonomous trading bot
+- stop_trading_agent() — stop the autonomous trading bot
+- get_trading_agent_status() — check if trading bot is running, cycle count, etc.
+
 Format your plan EXACTLY as follows (this will be parsed):
 
 PLAN_START
@@ -134,6 +145,7 @@ def plan(
 
             full_response = ""
             is_thinking = True
+            last_reported_tokens = 0
 
             for response, chunk in chat.stream():
                 # Check cancellation
@@ -146,7 +158,9 @@ def plan(
                     if hasattr(response, "usage") and response.usage:
                         if hasattr(response.usage, "reasoning_tokens") and response.usage.reasoning_tokens:
                             r_tokens = response.usage.reasoning_tokens
-                    if r_tokens:
+                    # Only emit every 500 reasoning tokens to avoid UI spam
+                    if r_tokens and (r_tokens - last_reported_tokens) >= 500:
+                        last_reported_tokens = r_tokens
                         yield {"type": "status", "phase": "planning", "content": f"Deliberating... ({r_tokens:,} reasoning tokens)"}
 
                 if chunk.content and is_thinking:

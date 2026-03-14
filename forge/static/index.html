@@ -292,6 +292,15 @@
 
     <!-- ── TAB: Trading ───────────────────────────────────────────── -->
     <div class="tab-content" id="tab-trading">
+        <!-- Sub-tab bar -->
+        <div class="trading-subtab-bar">
+            <button class="trading-subtab-btn active" data-subtab="stocks">Stocks / Options</button>
+            <button class="trading-subtab-btn" data-subtab="crypto">Crypto</button>
+            <button class="trading-subtab-btn" data-subtab="polymarket">Polymarket</button>
+        </div>
+
+        <!-- ── STOCKS/OPTIONS PANE ──────────────────────────────────── -->
+        <div class="trading-pane active" id="trading-pane-stocks">
         <div class="tab-layout-split trading-layout">
             <!-- Left Panel: Controls + Metrics -->
             <section class="panel trading-sidebar">
@@ -422,7 +431,7 @@
                     <div class="trade-asset-tabs" id="trade-asset-tabs">
                         <button class="trade-asset-tab active" data-asset="stock">Stocks</button>
                         <button class="trade-asset-tab" data-asset="option">Options</button>
-                        <button class="trade-asset-tab" data-asset="crypto">Crypto</button>
+                        <button class="trade-asset-tab disabled" data-asset="crypto" title="Use the Crypto tab">Crypto ↗</button>
                     </div>
 
                     <div class="trade-controls">
@@ -543,6 +552,305 @@
                 </div>
             </section>
         </div>
+        </div><!-- /trading-pane-stocks -->
+
+        <!-- ── CRYPTO PANE ──────────────────────────────────────────── -->
+        <div class="trading-pane" id="trading-pane-crypto">
+        <div class="tab-layout-split trading-layout">
+            <!-- Left: Crypto Controls -->
+            <section class="panel trading-sidebar">
+                <div class="panel-header">
+                    <h3>Crypto Trading</h3>
+                    <div class="panel-actions">
+                        <button id="crypto-refresh-btn" class="ghost-btn small-btn">Refresh</button>
+                    </div>
+                </div>
+
+                <!-- Symbol + Quote -->
+                <div class="trading-controls">
+                    <label class="field">
+                        <span>Symbol</span>
+                        <select id="crypto-ticker">
+                            <option value="BTC" selected>BTC — Bitcoin</option>
+                            <option value="ETH">ETH — Ethereum</option>
+                            <option value="SOL">SOL — Solana</option>
+                            <option value="XRP">XRP — Ripple</option>
+                            <option value="DOGE">DOGE — Dogecoin</option>
+                            <option value="ADA">ADA — Cardano</option>
+                            <option value="AVAX">AVAX — Avalanche</option>
+                            <option value="LINK">LINK — Chainlink</option>
+                            <option value="SHIB">SHIB — Shiba Inu</option>
+                            <option value="DOT">DOT — Polkadot</option>
+                            <option value="MATIC">MATIC — Polygon</option>
+                            <option value="UNI">UNI — Uniswap</option>
+                            <option value="LTC">LTC — Litecoin</option>
+                            <option value="ATOM">ATOM — Cosmos</option>
+                        </select>
+                    </label>
+                </div>
+
+                <!-- Live Quote -->
+                <div class="crypto-quote-card" id="crypto-quote-card">
+                    <div class="crypto-price-row">
+                        <span class="crypto-symbol" id="crypto-quote-symbol">BTC</span>
+                        <strong class="crypto-price" id="crypto-quote-price">—</strong>
+                    </div>
+                    <div class="crypto-change-row">
+                        <span id="crypto-quote-change" class="crypto-change">—</span>
+                        <span id="crypto-quote-volume" class="crypto-volume">Vol: —</span>
+                    </div>
+                </div>
+
+                <!-- Order Panel -->
+                <div class="trading-section">
+                    <h4>Trade <span class="live-badge" id="crypto-live-badge">LIVE</span></h4>
+
+                    <div class="trade-controls">
+                        <div class="trade-side-btns">
+                            <button class="trade-side-btn buy active" id="crypto-buy-btn">Buy</button>
+                            <button class="trade-side-btn sell" id="crypto-sell-btn">Sell</button>
+                        </div>
+
+                        <label class="field">
+                            <span>Qty</span>
+                            <input type="number" id="crypto-quantity" value="1" min="0.001" step="0.1">
+                        </label>
+
+                        <label class="field">
+                            <span>Order</span>
+                            <select id="crypto-order-type">
+                                <option value="market">Market</option>
+                                <option value="limit">Limit</option>
+                                <option value="stop">Stop</option>
+                                <option value="stop_limit">Stop Limit</option>
+                            </select>
+                        </label>
+
+                        <label class="field" id="crypto-price-field" style="display:none">
+                            <span>Limit Price</span>
+                            <input type="number" id="crypto-limit-price" step="0.01" placeholder="0.00">
+                        </label>
+
+                        <button id="crypto-submit-btn" class="accent-btn">Execute</button>
+                    </div>
+                    <div id="crypto-trade-result" class="trade-result"></div>
+                </div>
+
+                <!-- Crypto Portfolio -->
+                <div class="trading-section">
+                    <h4>Holdings</h4>
+                    <div class="portfolio-summary" id="crypto-portfolio-summary">
+                        <div class="pcr-card">
+                            <span class="pcr-label">Positions</span>
+                            <strong class="pcr-value" id="crypto-port-count">0</strong>
+                        </div>
+                        <div class="pcr-card">
+                            <span class="pcr-label">Realized P&L</span>
+                            <strong class="pcr-value" id="crypto-port-realized">$0.00</strong>
+                        </div>
+                        <div class="pcr-card">
+                            <span class="pcr-label">Unrealized P&L</span>
+                            <strong class="pcr-value" id="crypto-port-unrealized">$0.00</strong>
+                        </div>
+                    </div>
+                    <div id="crypto-portfolio-positions" class="portfolio-positions"></div>
+                </div>
+
+                <!-- AI Agent Config -->
+                <div class="trading-section crypto-agent-section">
+                    <h4>AI Trading Agent</h4>
+                    <div class="crypto-agent-controls">
+                        <label class="field">
+                            <span>Model</span>
+                            <select id="crypto-agent-model">
+                                <option value="grok-4-1-fast-reasoning" selected>Grok 4.1 Fast Reasoning</option>
+                                <option value="grok-4.20-multi-agent-beta-0309">Grok 4.20 Multi-Agent</option>
+                                <option value="grok-4.20-multi-agent-experimental-beta-0304">Grok 4.20 Multi-Agent (Exp)</option>
+                                <option value="grok-4.20-beta-0309-reasoning">Grok 4.20 Reasoning</option>
+                                <option value="lmstudio:default">LM Studio (Local)</option>
+                                <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
+                                <option value="claude-opus-4-20250514">Claude Opus 4</option>
+                            </select>
+                        </label>
+                        <label class="field">
+                            <span>Strategy</span>
+                            <select id="crypto-agent-strategy">
+                                <option value="manual">Manual (Confirm Each)</option>
+                                <option value="dca">DCA — Dollar Cost Average</option>
+                                <option value="momentum">Momentum — Trend Follow</option>
+                                <option value="grid">Grid — Range Bound</option>
+                            </select>
+                        </label>
+                        <label class="field">
+                            <span>Max Position ($)</span>
+                            <input type="number" id="crypto-agent-max-pos" value="250" min="1" step="10">
+                        </label>
+                        <label class="field">
+                            <span>Interval (min)</span>
+                            <input type="number" id="crypto-agent-interval" value="15" min="1" step="5">
+                        </label>
+                        <div class="crypto-agent-footer">
+                            <div id="crypto-agent-status" class="crypto-agent-status">
+                                <span class="status-dot idle"></span> Agent idle
+                            </div>
+                            <button id="crypto-agent-btn" class="accent-btn small-btn">Start Agent</button>
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- Center: Agent Log -->
+            <section class="panel agent-log-panel" id="crypto-agent-log-section" style="display:none;">
+                <div class="panel-header">
+                    <h3 style="color:var(--accent)">Agent Log</h3>
+                    <span id="crypto-agent-cycle-info" style="font-size:0.8rem;color:var(--muted)"></span>
+                </div>
+                <div id="crypto-agent-log" class="agent-log-container"></div>
+            </section>
+
+            <!-- Right: Crypto Chart -->
+            <section class="panel trading-chart-panel">
+                <div class="panel-header">
+                    <h3 id="crypto-chart-title">BTC — Live</h3>
+                    <div class="chart-mode-btns">
+                        <button class="filter-btn active" data-crypto-tf="1D">1D</button>
+                        <button class="filter-btn" data-crypto-tf="1W">1W</button>
+                        <button class="filter-btn" data-crypto-tf="1M">1M</button>
+                        <button class="filter-btn" data-crypto-tf="3M">3M</button>
+                    </div>
+                </div>
+                <div class="trading-chart-container" id="crypto-chart-container">
+                    <div class="empty-state">Select a crypto and quotes will load automatically.</div>
+                </div>
+            </section>
+        </div>
+        </div><!-- /trading-pane-crypto -->
+
+        <!-- ── POLYMARKET PANE ────────────────────────────────────────── -->
+        <div class="trading-pane" id="trading-pane-polymarket">
+        <div class="tab-layout-split trading-layout">
+
+            <!-- Left: Target Event & Agent Controls -->
+            <section class="panel trading-sidebar" style="font-size:0.82rem;">
+                <div class="panel-header" style="padding-bottom:6px;">
+                    <h3 style="font-size:0.95rem;">Polymarket</h3>
+                    <button id="poly-refresh-btn" class="ghost-btn small-btn" style="font-size:0.7rem;">Refresh</button>
+                </div>
+
+                <!-- Event URL Input — compact inline -->
+                <div style="display:flex;gap:4px;align-items:end;padding:4px 0 6px;">
+                    <label class="field" style="flex:1;margin:0;">
+                        <span style="font-size:0.7rem;">Event URL or Slug</span>
+                        <input type="text" id="poly-event-url" style="font-size:0.78rem;padding:5px 6px;"
+                               placeholder="polymarket.com/event/..."
+                               value="https://polymarket.com/event/btc-updown-5m-1773464700">
+                    </label>
+                    <button id="poly-load-event-btn" class="accent-btn" style="font-size:0.72rem;padding:5px 10px;white-space:nowrap;">Load Event</button>
+                </div>
+
+                <!-- Event Detail Card -->
+                <div id="poly-event-card" class="crypto-quote-card" style="display:none;padding:8px;">
+                    <div class="crypto-price-row">
+                        <span class="crypto-symbol" id="poly-event-title" style="font-size:0.8rem;">—</span>
+                    </div>
+                    <div id="poly-event-meta" style="font-size:0.7rem;color:var(--muted);margin-top:3px;"></div>
+                </div>
+
+                <!-- Markets in this event -->
+                <div id="poly-event-markets" class="trading-section" style="display:none;padding-top:4px;">
+                    <h4 style="font-size:0.82rem;">Markets <span id="poly-market-count" style="font-size:0.7rem;color:var(--muted)"></span></h4>
+                    <div id="poly-market-list" class="portfolio-positions"></div>
+                </div>
+
+                <!-- AI Agent Config — compact -->
+                <div class="trading-section crypto-agent-section" style="padding-top:6px;">
+                    <h4 style="font-size:0.82rem;margin-bottom:4px;">AI Prediction Agent</h4>
+                    <div class="crypto-agent-controls" style="gap:4px;">
+                        <label class="field" style="margin:0;">
+                            <span style="font-size:0.7rem;">Model</span>
+                            <select id="poly-agent-model" style="font-size:0.76rem;padding:4px;">
+                                <option value="grok-4-1-fast-reasoning" selected>Grok 4.1 Fast Reasoning</option>
+                                <option value="grok-4.20-multi-agent-beta-0309">Grok 4.20 Multi-Agent</option>
+                                <option value="grok-4.20-multi-agent-experimental-beta-0304">Grok 4.20 Multi-Agent (Exp)</option>
+                                <option value="grok-4.20-beta-0309-reasoning">Grok 4.20 Reasoning</option>
+                                <option value="lmstudio:default">LM Studio (Local)</option>
+                                <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
+                                <option value="claude-opus-4-20250514">Claude Opus 4</option>
+                            </select>
+                        </label>
+                        <label class="field" style="margin:0;">
+                            <span style="font-size:0.7rem;">Strategy</span>
+                            <select id="poly-agent-strategy" style="font-size:0.76rem;padding:4px;">
+                                <option value="analyst">Analyst — Recommend Only</option>
+                                <option value="contrarian">Contrarian — Fade Crowd</option>
+                                <option value="momentum">Momentum — Follow Trends</option>
+                                <option value="value">Value — Find Mispricing</option>
+                            </select>
+                        </label>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+                            <label class="field" style="margin:0;">
+                                <span style="font-size:0.7rem;">Max Pos ($)</span>
+                                <input type="number" id="poly-agent-max-pos" value="50" min="1" step="10" style="font-size:0.76rem;padding:4px;">
+                            </label>
+                            <label class="field" style="margin:0;">
+                                <span style="font-size:0.7rem;">Interval (min)</span>
+                                <input type="number" id="poly-agent-interval" value="15" min="1" step="5" style="font-size:0.76rem;padding:4px;">
+                            </label>
+                        </div>
+                        <div style="display:flex;gap:10px;align-items:center;margin-top:4px;font-size:0.72rem;">
+                            <label style="display:flex;align-items:center;gap:3px;cursor:pointer;" title="Enable live order execution on Polymarket">
+                                <input type="checkbox" id="poly-agent-live-trading"> Live Trading
+                            </label>
+                            <label style="display:flex;align-items:center;gap:3px;cursor:pointer;color:var(--muted);" title="Log orders without executing (requires Live Trading)">
+                                <input type="checkbox" id="poly-agent-dry-run" checked> Dry Run
+                            </label>
+                        </div>
+                        <div class="crypto-agent-footer" style="margin-top:4px;">
+                            <div id="poly-agent-status" class="crypto-agent-status">
+                                <span class="status-dot idle"></span> Agent idle
+                            </div>
+                            <button id="poly-agent-btn" class="accent-btn small-btn">Start Agent</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Browse / Filter -->
+                <div class="trading-section" style="border-top:1px solid var(--border);padding-top:8px;margin-top:4px;">
+                    <h4 style="font-size:0.82rem;margin-bottom:4px;">Browse Markets</h4>
+                    <input type="text" id="poly-search" placeholder="Search markets..." style="font-size:0.76rem;padding:4px 6px;width:100%;margin-bottom:4px;">
+                    <select id="poly-sort" style="font-size:0.76rem;padding:4px;width:100%;">
+                        <option value="volume24hr" selected>Sort: 24h Volume</option>
+                        <option value="liquidity">Sort: Liquidity</option>
+                        <option value="startDate">Sort: Newest</option>
+                    </select>
+                </div>
+
+            </section>
+
+            <!-- Center: Agent Log -->
+            <section class="panel agent-log-panel" id="poly-agent-log-section" style="display:none;">
+                <div class="panel-header">
+                    <h3 style="color:var(--accent)">Agent Log</h3>
+                    <span id="poly-agent-cycle-info" style="font-size:0.8rem;color:var(--muted)"></span>
+                </div>
+                <div id="poly-agent-log" class="agent-log-container"></div>
+            </section>
+
+            <!-- Right: Market Cards Grid -->
+            <section class="panel" style="overflow-y:auto; max-height:calc(100vh - 60px);">
+                <div class="panel-header">
+                    <h3>Trending Markets</h3>
+                    <span id="poly-count" style="font-size:0.8rem;color:var(--muted)"></span>
+                </div>
+                <div id="poly-markets" class="poly-markets-grid">
+                    <div class="empty-state">Loading prediction markets...</div>
+                </div>
+            </section>
+
+        </div>
+        </div><!-- /trading-pane-polymarket -->
+
     </div>
 
     <!-- ── TAB: Runtime ───────────────────────────────────────────── -->

@@ -92,8 +92,24 @@ class PortfolioManager:
                     pnl REAL NOT NULL,
                     closed_at REAL NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS decisions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp REAL NOT NULL,
+                    ticker TEXT NOT NULL,
+                    strategy TEXT NOT NULL,
+                    model TEXT NOT NULL DEFAULT '',
+                    price REAL,
+                    decision TEXT NOT NULL,
+                    full_text TEXT,
+                    tool_calls TEXT,
+                    position_qty REAL,
+                    position_value REAL,
+                    cycle INTEGER NOT NULL DEFAULT 0
+                );
                 CREATE INDEX IF NOT EXISTS idx_orders_ticker ON orders(ticker);
                 CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
+                CREATE INDEX IF NOT EXISTS idx_decisions_ticker ON decisions(ticker);
+                CREATE INDEX IF NOT EXISTS idx_decisions_ts ON decisions(timestamp);
             """)
 
     # ── Positions ────────────────────────────────────────────────────────
@@ -255,6 +271,42 @@ class PortfolioManager:
             "total_pnl": round(realized + unrealized, 2),
             "position_count": len(positions),
         }
+
+    # ── Decisions ──────────────────────────────────────────────────────
+
+    def log_decision(self, *, ticker: str, strategy: str, model: str,
+                     price: float | None, decision: str, full_text: str = "",
+                     tool_calls: list | None = None,
+                     position_qty: float = 0, position_value: float = 0,
+                     cycle: int = 0):
+        """Persist an agent decision for later analysis."""
+        import json as _json
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO decisions
+                   (timestamp, ticker, strategy, model, price, decision,
+                    full_text, tool_calls, position_qty, position_value, cycle)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (time.time(), ticker, strategy, model, price, decision,
+                 full_text, _json.dumps(tool_calls or []),
+                 position_qty, position_value, cycle),
+            )
+            self._conn.commit()
+
+    def get_decisions(self, ticker: str | None = None, limit: int = 100) -> list[dict]:
+        """Retrieve logged decisions, newest first."""
+        with self._lock:
+            if ticker:
+                rows = self._conn.execute(
+                    "SELECT * FROM decisions WHERE ticker = ? ORDER BY timestamp DESC LIMIT ?",
+                    (ticker, limit),
+                ).fetchall()
+            else:
+                rows = self._conn.execute(
+                    "SELECT * FROM decisions ORDER BY timestamp DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+            return [dict(r) for r in rows]
 
     def reset(self):
         with self._lock:

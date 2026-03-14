@@ -49,6 +49,10 @@ SAFE_TOOLS = frozenset({
     "email_check_dmarc", "email_check_health",
     "email_get_logs", "email_get_analytics",
     "email_list_domains", "email_list_aliases",
+    # Trading read-only
+    "get_portfolio", "get_market_quote", "fetch_pcr",
+    "analyze_sentiment", "get_options_chain",
+    "get_trading_agent_status",
 })
 
 # Tools that modify state but are generally expected
@@ -62,6 +66,9 @@ CAUTION_TOOLS = frozenset({
     "zip_files",
     "email_create_alias", "email_add_domain", "email_verify_domain",
     "query_sqlite",
+    # Trading actions (real money but user-initiated)
+    "execute_trade", "set_alert",
+    "start_trading_agent", "stop_trading_agent",
 })
 
 # Tools that can cause irreversible damage

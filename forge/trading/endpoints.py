@@ -308,21 +308,86 @@ def switch_provider():
 
 @trading_bp.route("/portfolio")
 def get_portfolio():
-    """Get current portfolio positions and P&L."""
-    try:
-        from forge.trading.portfolio import get_portfolio_manager
+    """Get current portfolio positions and P&L.
 
-        provider = request.args.get("provider", "").strip()
+    When a live crypto provider is active, syncs real holdings from the
+    brokerage so the portfolio reflects the actual account state.
+    """
+    try:
+        from forge.config import TRADING_DEFAULT_PROVIDER, TRADING_PAPER_MODE
+        from forge.trading.portfolio import get_portfolio_manager
+        from forge.trading.providers import get_provider_from_config, RobinhoodCryptoAPIProvider
+
+        provider_name = request.args.get("provider", "").strip()
         pm = get_portfolio_manager()
 
-        price_fetcher = None
-        if provider:
-            engine = get_engine()
-            price_fetcher = lambda t: engine.get_quote(t, provider=provider).price
+        # In live mode with a crypto provider, sync holdings from the brokerage
+        effective_provider = provider_name or TRADING_DEFAULT_PROVIDER
+        log.debug("Portfolio sync check: paper=%s, provider=%s", TRADING_PAPER_MODE, effective_provider)
+        if not TRADING_PAPER_MODE and effective_provider in ("robinhood-crypto",):
+            try:
+                provider = get_provider_from_config(provider_name)
+                if isinstance(provider, RobinhoodCryptoAPIProvider):
+                    holdings = provider.get_holdings()
+                    log.info("Synced %d holdings from Robinhood", len(holdings) if holdings else 0)
+                    if holdings:
+                        _sync_holdings_to_portfolio(pm, holdings, provider)
+                else:
+                    log.warning("Provider is %s, not RobinhoodCryptoAPIProvider", type(provider).__name__)
+            except Exception as e:
+                log.warning("Failed to sync live holdings: %s", e)
 
-        return jsonify(pm.get_summary(price_fetcher=price_fetcher))
+        price_fetcher = None
+        if provider_name:
+            engine = get_engine()
+            price_fetcher = lambda t: engine.get_quote(t, provider=provider_name).price
+
+        summary = pm.get_summary(price_fetcher=price_fetcher)
+        log.info("Portfolio summary: %d positions, pnl=%s", summary.get("position_count", 0), summary.get("total_pnl", 0))
+        return jsonify(summary)
     except ImportError:
         return jsonify({"positions": [], "total_pnl": 0, "message": "Portfolio module available"})
+
+
+def _sync_holdings_to_portfolio(pm, holdings: list[dict], provider) -> None:
+    """Sync live brokerage holdings into the local portfolio DB."""
+    import time as _time
+    for h in holdings:
+        log.info("Raw holding: %s", {k: v for k, v in h.items() if k not in ("id",)})
+        code = h.get("asset_code", "") or h.get("currency", {}).get("code", "")
+        qty_str = h.get("total_quantity", "") or h.get("quantity", "") or h.get("quantity_available_for_trading", "") or "0"
+        quantity = float(qty_str)
+        log.info("Parsed holding: code=%s qty=%s (from '%s')", code, quantity, qty_str)
+        if not code or quantity <= 0:
+            log.warning("Skipping holding: code=%s qty=%s", code, quantity)
+            continue
+
+        # Get cost basis for avg price
+        cost_bases = h.get("cost_bases", [])
+        if cost_bases:
+            direct_cost = float(cost_bases[0].get("direct_cost_basis", 0) or 0)
+            direct_qty = float(cost_bases[0].get("direct_quantity", 0) or 0)
+            avg_price = direct_cost / direct_qty if direct_qty > 0 else 0
+        else:
+            avg_price = 0
+
+        # Upsert into local DB — replace with live data
+        with pm._lock:
+            row = pm._conn.execute(
+                "SELECT * FROM positions WHERE ticker = ?", (code,)
+            ).fetchone()
+            now = _time.time()
+            if row is None:
+                pm._conn.execute(
+                    "INSERT INTO positions (ticker, quantity, avg_price, side, updated_at) VALUES (?, ?, ?, ?, ?)",
+                    (code, quantity, avg_price, "long", now),
+                )
+            else:
+                pm._conn.execute(
+                    "UPDATE positions SET quantity = ?, avg_price = ?, updated_at = ? WHERE ticker = ?",
+                    (quantity, avg_price if avg_price > 0 else row["avg_price"], now, code),
+                )
+            pm._conn.commit()
 
 
 @trading_bp.route("/order", methods=["POST"])
@@ -395,6 +460,34 @@ def place_order():
                 ),
                 status,
             )
+
+        # Record successful live orders in local portfolio DB
+        if not TRADING_PAPER_MODE and result.get("status") in ("submitted", "filled", "confirmed"):
+            try:
+                from forge.trading.portfolio import get_portfolio_manager
+                from forge.trading.providers import get_provider_from_config
+                pm = get_portfolio_manager()
+                # Try to get fill price from quote
+                fill_price = price
+                if not fill_price:
+                    try:
+                        provider = get_provider_from_config()
+                        q = provider.get_quote(ticker)
+                        fill_price = q.price
+                    except Exception:
+                        fill_price = 0
+                pm.record_order(
+                    ticker=ticker, side=side, quantity=quantity,
+                    order_type=order_type, price=price,
+                    fill_price=fill_price,
+                    status="filled", broker=broker.name,
+                )
+                if fill_price:
+                    pm.update_position(ticker, quantity, fill_price, side)
+                    log.info("Portfolio updated: %s %s %s @ %s", side, quantity, ticker, fill_price)
+            except Exception as e:
+                log.warning("Failed to record order in portfolio: %s", e)
+
         return jsonify(result)
     except Exception as e:
         log.exception("Order endpoint exception")
@@ -411,3 +504,235 @@ def get_orders():
         return jsonify(pm.get_orders())
     except ImportError:
         return jsonify([])
+
+
+@trading_bp.route("/crypto/history/<symbol>")
+def get_crypto_history(symbol: str):
+    """Get crypto price history for charting via yfinance."""
+    timeframe = request.args.get("timeframe", "1D").strip()
+    try:
+        import yfinance as yf
+
+        tf_map = {
+            "1D": ("1d", "5m"),
+            "1W": ("5d", "30m"),
+            "1M": ("1mo", "1h"),
+            "3M": ("3mo", "1d"),
+        }
+        period, interval = tf_map.get(timeframe, ("1d", "5m"))
+
+        yf_symbol = f"{symbol.upper()}-USD"
+        ticker = yf.Ticker(yf_symbol)
+        hist = ticker.history(period=period, interval=interval)
+
+        if hist.empty:
+            return jsonify({"symbol": symbol, "candles": [], "timeframe": timeframe})
+
+        candles = []
+        for idx, row in hist.iterrows():
+            candles.append({
+                "time": idx.isoformat(),
+                "open": round(float(row.get("Open", 0)), 4),
+                "high": round(float(row.get("High", 0)), 4),
+                "low": round(float(row.get("Low", 0)), 4),
+                "close": round(float(row.get("Close", 0)), 4),
+                "volume": int(row.get("Volume", 0) or 0),
+            })
+
+        return jsonify({"symbol": symbol, "candles": candles, "timeframe": timeframe})
+    except Exception as e:
+        log.warning("Crypto history failed for %s: %s", symbol, e)
+        return jsonify({"symbol": symbol, "candles": [], "error": str(e)})
+
+
+# ── Crypto Agent endpoints ───────────────────────────────────────────────────
+
+@trading_bp.route("/agent/status")
+def agent_status():
+    """Get current agent state."""
+    from forge.trading.crypto_agent import get_state
+    return jsonify(get_state())
+
+
+@trading_bp.route("/agent/logs")
+def agent_logs():
+    """Get recent agent log entries."""
+    from forge.trading.crypto_agent import get_logs
+    limit = int(request.args.get("limit", 50))
+    return jsonify(get_logs(limit))
+
+
+@trading_bp.route("/agent/start", methods=["POST"])
+def agent_start():
+    """Start the autonomous trading agent."""
+    from forge.trading.crypto_agent import AgentConfig, start
+    data = request.get_json() or {}
+    config = AgentConfig(
+        model=data.get("model", "grok-4.20-beta-0309-reasoning"),
+        strategy=data.get("strategy", "manual"),
+        ticker=data.get("ticker", "BTC"),
+        max_position_usd=float(data.get("max_position_usd", 50)),
+        interval_minutes=int(data.get("interval_minutes", 15)),
+    )
+    result = start(config)
+    if "error" in result:
+        return jsonify(result), 409
+    return jsonify(result)
+
+
+@trading_bp.route("/agent/stop", methods=["POST"])
+def agent_stop():
+    """Stop the trading agent."""
+    from forge.trading.crypto_agent import stop
+    result = stop()
+    if "error" in result:
+        return jsonify(result), 409
+    return jsonify(result)
+
+
+@trading_bp.route("/agent/decisions")
+def agent_decisions():
+    """Get persisted agent decision history for analysis."""
+    from forge.trading.portfolio import get_portfolio_manager
+    ticker = request.args.get("ticker", "").strip() or None
+    limit = int(request.args.get("limit", 100))
+    pm = get_portfolio_manager()
+    rows = pm.get_decisions(ticker=ticker, limit=limit)
+    return jsonify(rows)
+
+
+# ── Polymarket Proxy ──────────────────────────────────────────────────────
+
+import requests as _req
+
+GAMMA_BASE = "https://gamma-api.polymarket.com"
+
+
+@trading_bp.route("/polymarket/markets")
+def poly_markets():
+    """Proxy Polymarket Gamma API — fetch active markets."""
+    params = {
+        "active": "true",
+        "closed": "false",
+        "limit": request.args.get("limit", "30"),
+        "offset": request.args.get("offset", "0"),
+        "order": request.args.get("order", "volume24hr"),
+        "ascending": "false",
+    }
+    tag = request.args.get("tag", "").strip()
+    if tag:
+        params["tag_slug"] = tag
+    q = request.args.get("q", "").strip()
+    if q:
+        params["_q"] = q
+    try:
+        resp = _req.get(f"{GAMMA_BASE}/markets", params=params, timeout=10)
+        resp.raise_for_status()
+        return jsonify(resp.json())
+    except Exception as e:
+        log.warning("Polymarket fetch failed: %s", e)
+        return jsonify({"error": str(e)}), 502
+
+
+@trading_bp.route("/polymarket/events")
+def poly_events():
+    """Proxy Polymarket Gamma API — fetch events (grouped markets)."""
+    params = {
+        "active": "true",
+        "closed": "false",
+        "limit": request.args.get("limit", "20"),
+        "offset": request.args.get("offset", "0"),
+        "order": request.args.get("order", "volume24hr"),
+        "ascending": "false",
+    }
+    tag = request.args.get("tag", "").strip()
+    if tag:
+        params["tag_slug"] = tag
+    try:
+        resp = _req.get(f"{GAMMA_BASE}/events", params=params, timeout=10)
+        resp.raise_for_status()
+        return jsonify(resp.json())
+    except Exception as e:
+        log.warning("Polymarket events fetch failed: %s", e)
+        return jsonify({"error": str(e)}), 502
+
+
+@trading_bp.route("/polymarket/market/<slug>")
+def poly_market_detail(slug: str):
+    """Proxy Polymarket Gamma API — fetch single market by slug."""
+    try:
+        resp = _req.get(f"{GAMMA_BASE}/markets", params={"slug": slug}, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        return jsonify(data[0] if data else {})
+    except Exception as e:
+        log.warning("Polymarket detail fetch failed: %s", e)
+        return jsonify({"error": str(e)}), 502
+
+
+@trading_bp.route("/polymarket/event/<slug>")
+def poly_event_detail(slug: str):
+    """Fetch a Polymarket event by slug (with its markets)."""
+    try:
+        resp = _req.get(f"{GAMMA_BASE}/events", params={"slug": slug}, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        event = data[0] if isinstance(data, list) and data else data if isinstance(data, dict) else {}
+        # Also fetch markets for this event
+        mresp = _req.get(
+            f"{GAMMA_BASE}/markets",
+            params={"event_slug": slug, "active": "true", "closed": "false"},
+            timeout=10,
+        )
+        mresp.raise_for_status()
+        markets = mresp.json() if isinstance(mresp.json(), list) else []
+        return jsonify({"event": event, "markets": markets})
+    except Exception as e:
+        log.warning("Polymarket event fetch failed: %s", e)
+        return jsonify({"error": str(e)}), 502
+
+
+# ── Polymarket Agent endpoints ────────────────────────────────────────────────
+
+@trading_bp.route("/polymarket/agent/status")
+def poly_agent_status():
+    from forge.trading.polymarket_agent import get_state
+    return jsonify(get_state())
+
+
+@trading_bp.route("/polymarket/agent/logs")
+def poly_agent_logs():
+    from forge.trading.polymarket_agent import get_logs
+    limit = int(request.args.get("limit", 50))
+    return jsonify(get_logs(limit))
+
+
+@trading_bp.route("/polymarket/agent/start", methods=["POST"])
+def poly_agent_start():
+    from forge.trading.polymarket_agent import PolyAgentConfig, start
+    data = request.get_json() or {}
+    config = PolyAgentConfig(
+        model=data.get("model", "grok-4.20-beta-0309-reasoning"),
+        strategy=data.get("strategy", "analyst"),
+        event_slug=data.get("event_slug", ""),
+        event_url=data.get("event_url", ""),
+        max_position_usd=float(data.get("max_position_usd", 50)),
+        interval_minutes=int(data.get("interval_minutes", 15)),
+        live_trading=bool(data.get("live_trading", False)),
+        dry_run=bool(data.get("dry_run", True)),
+    )
+    if not config.event_slug:
+        return jsonify({"error": "event_slug is required"}), 400
+    result = start(config)
+    if "error" in result:
+        return jsonify(result), 409
+    return jsonify(result)
+
+
+@trading_bp.route("/polymarket/agent/stop", methods=["POST"])
+def poly_agent_stop():
+    from forge.trading.polymarket_agent import stop
+    result = stop()
+    if "error" in result:
+        return jsonify(result), 409
+    return jsonify(result)

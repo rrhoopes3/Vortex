@@ -49,7 +49,8 @@ TOOL_CATEGORIES = {
     "escalation": {"escalate_to_human"},
     "generative_ui": {"render_widget"},
     "trading": {"fetch_pcr", "analyze_sentiment", "get_options_chain",
-                "set_alert", "get_portfolio", "execute_trade", "get_market_quote"},
+                "set_alert", "get_portfolio", "execute_trade", "get_market_quote",
+                "start_trading_agent", "stop_trading_agent", "get_trading_agent_status"},
 }
 
 # Reverse map: tool_name → category

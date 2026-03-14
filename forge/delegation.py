@@ -453,23 +453,23 @@ class AssessmentVerdict:
 
 # Fallback chains: if the primary model fails, try these in order
 FALLBACK_CHAINS: dict[str, list[str]] = {
-    "grok-4.20-experimental-beta-0304-reasoning": [
+    "grok-4.20-beta-0309-reasoning": [
         "claude-sonnet-4-20250514",
         "gpt-4o",
-        "grok-4-1-fast-reasoning",
+        "grok-4.20-beta-0309-reasoning",
     ],
     "claude-sonnet-4-20250514": [
-        "grok-4.20-experimental-beta-0304-reasoning",
+        "grok-4.20-beta-0309-reasoning",
         "gpt-4o",
-        "grok-4-1-fast-reasoning",
+        "grok-4.20-beta-0309-reasoning",
     ],
     "gpt-4o": [
-        "grok-4.20-experimental-beta-0304-reasoning",
+        "grok-4.20-beta-0309-reasoning",
         "claude-sonnet-4-20250514",
-        "grok-4-1-fast-reasoning",
+        "grok-4.20-beta-0309-reasoning",
     ],
-    "grok-4-1-fast-reasoning": [
-        "grok-4.20-experimental-beta-0304-reasoning",
+    "grok-4.20-beta-0309-reasoning": [
+        "grok-4.20-beta-0309-reasoning",
         "claude-sonnet-4-20250514",
         "gpt-4o",
     ],
@@ -477,7 +477,7 @@ FALLBACK_CHAINS: dict[str, list[str]] = {
 
 # Default fallback for models not in the chain map
 DEFAULT_FALLBACK_CHAIN = [
-    "grok-4-1-fast-reasoning",
+    "grok-4.20-beta-0309-reasoning",
     "gpt-4o",
     "claude-sonnet-4-20250514",
 ]

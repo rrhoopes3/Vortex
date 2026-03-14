@@ -57,7 +57,34 @@ Rules:
 - Minimize tool calls. Combine searches when possible instead of running many small queries.
 - Stay focused on files relevant to the current task. Do NOT explore unrelated directories or projects.
 - When the step is complete, provide a clear summary of findings and outcome.
-- Do NOT pip install packages — project dependencies are pre-installed. Use run_python directly."""
+- Do NOT pip install packages — project dependencies are pre-installed. Use run_python directly.
+
+## Trading Tools
+
+You have access to live trading tools connected to real brokerage accounts.
+**THESE EXECUTE REAL ORDERS WITH REAL MONEY UNLESS PAPER MODE IS ON.**
+
+### Available tools
+- `get_market_quote` — fetch current price/change for any ticker (crypto or stock)
+- `fetch_pcr` — pull Put/Call Ratio for options sentiment analysis
+- `analyze_sentiment` — multi-ticker PCR sentiment scan (bullish/bearish/neutral)
+- `get_options_chain` — raw options chain data (strikes, volumes, OI)
+- `set_alert` — set threshold alerts on PCR metrics
+- `get_portfolio` — view current positions, unrealized/realized P&L
+- `execute_trade` — place a buy/sell order (market or limit)
+- `start_trading_agent` — start an autonomous trading agent on a crypto ticker with a strategy (dca, momentum, grid, manual). Runs on a timer until stopped.
+- `stop_trading_agent` — stop the running trading agent immediately
+- `get_trading_agent_status` — check if agent is running, its config, last decision, cycle count
+
+### Trading rules — follow these strictly
+1. **Never execute a trade without explicit user confirmation.** If the user says "analyze BTC", that means research — NOT buy. Only call `execute_trade` when the user clearly says to buy, sell, or execute.
+2. **Always quote the price first.** Before any trade, call `get_market_quote` so you (and the user) know the current price. Report it before executing.
+3. **State what you're about to do before doing it.** Example: "I'll place a market buy for 5 XRP at ~$2.34. Confirm?" — then wait for the user's response before calling `execute_trade`.
+4. **Respect position sizing.** Never suggest "all-in" or reckless quantities. If the user doesn't specify a quantity, ask.
+5. **Crypto only on Robinhood Crypto API.** The current broker (robinhood-crypto) only supports crypto tickers (BTC, ETH, XRP, DOGE, SOL, etc.). Stock tickers (SPY, AAPL) will fail — tell the user if they try.
+6. **Report results clearly.** After a trade, report: ticker, side, quantity, fill status, and any error. If it failed, explain why.
+7. **No financial advice.** You are a tool operator, not a financial advisor. Present data and execute instructions — do not recommend trades or predict prices. If the user asks "should I buy X?", present relevant data (quote, PCR, sentiment) and let them decide.
+8. **Paper vs live awareness.** Check whether paper mode is active. If live, remind the user that real money is at stake when they first request a trade in a session."""
 
 
 def _build_system_prompt() -> str:
@@ -82,6 +109,7 @@ def execute_step(
     tool_filter: set[str] | None = None,
     task_goal: str = "",
     guardrail_engine: GuardrailEngine | None = None,
+    system_prompt_override: str = "",
 ) -> Generator[dict, None, str]:
     """
     Execute a single plan step using the reasoning model + client-side tools.
@@ -102,7 +130,7 @@ def execute_step(
              f"{len(tool_filter)} filtered" if tool_filter else "all")
 
     # Build the system prompt with live timestamp
-    system_prompt = _build_system_prompt()
+    system_prompt = system_prompt_override if system_prompt_override else _build_system_prompt()
 
     # Build the full prompt (shared across all providers)
     prompt = f"{system_prompt}\n\n"
@@ -151,11 +179,11 @@ def execute_step(
         ))
 
     # ── xAI provider (original path) ────────────────────────────────
-    chat = client.chat.create(
-        model=use_model,
-        tools=registry.get_definitions(only=tool_filter),
-        use_encrypted_content=True,
-    )
+    tool_defs = registry.get_definitions(only=tool_filter)
+    chat_kwargs = dict(model=use_model, use_encrypted_content=True)
+    if tool_defs:
+        chat_kwargs["tools"] = tool_defs
+    chat = client.chat.create(**chat_kwargs)
 
     chat.append(user(prompt))
 

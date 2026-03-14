@@ -118,6 +118,45 @@ def get_market_quote(ticker: str, provider: str = "") -> str:
         return json.dumps({"error": f"{type(e).__name__}: {e}"})
 
 
+def start_trading_agent(ticker: str, strategy: str = "momentum",
+                        max_position_usd: str = "50",
+                        interval_minutes: str = "15",
+                        model: str = "grok-4.20-beta-0309-reasoning") -> str:
+    """Start the autonomous crypto trading agent."""
+    try:
+        from forge.trading.crypto_agent import AgentConfig, start
+        config = AgentConfig(
+            model=model,
+            strategy=strategy,
+            ticker=ticker.upper(),
+            max_position_usd=float(max_position_usd),
+            interval_minutes=int(interval_minutes),
+        )
+        result = start(config)
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"{type(e).__name__}: {e}"})
+
+
+def stop_trading_agent() -> str:
+    """Stop the autonomous crypto trading agent."""
+    try:
+        from forge.trading.crypto_agent import stop
+        result = stop()
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"{type(e).__name__}: {e}"})
+
+
+def get_trading_agent_status() -> str:
+    """Get the current status of the trading agent."""
+    try:
+        from forge.trading.crypto_agent import get_state
+        return json.dumps(get_state())
+    except Exception as e:
+        return json.dumps({"error": f"{type(e).__name__}: {e}"})
+
+
 # -- Registration ------------------------------------------------------------
 
 def register(registry: ToolRegistry):
@@ -198,8 +237,9 @@ def register(registry: ToolRegistry):
     registry.register(
         name="get_portfolio",
         description=(
-            "Get current trading portfolio: positions, unrealized/realized P&L, "
-            "and market values. Includes both stock and crypto positions."
+            "Get locally tracked portfolio: positions, unrealized/realized P&L, "
+            "and market values with live price updates. Note: this tracks orders "
+            "placed through Forge — it may not reflect your full brokerage account."
         ),
         parameters={
             "type": "object",
@@ -211,8 +251,10 @@ def register(registry: ToolRegistry):
     registry.register(
         name="execute_trade",
         description=(
-            "Execute a buy or sell order. Uses paper trading by default. "
-            "Supports market and limit orders. Returns fill confirmation."
+            "Execute a LIVE buy or sell order through the connected brokerage. "
+            "THIS SPENDS REAL MONEY if paper mode is off. "
+            "ALWAYS confirm with the user and quote the current price before calling this. "
+            "Supports market and limit orders. Returns fill confirmation or error."
         ),
         parameters={
             "type": "object",
@@ -240,4 +282,47 @@ def register(registry: ToolRegistry):
             "required": ["ticker"],
         },
         handler=get_market_quote,
+    )
+
+    registry.register(
+        name="start_trading_agent",
+        description=(
+            "Start the autonomous crypto trading agent. It runs on a timer, analyzing "
+            "the market and executing trades based on the chosen strategy. "
+            "Strategies: 'manual' (recommend only), 'dca' (dollar cost average), "
+            "'momentum' (trend follow), 'grid' (range bound). "
+            "The agent runs until stopped with stop_trading_agent."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string", "description": "Crypto ticker (e.g. BTC, DOGE, XRP)"},
+                "strategy": {"type": "string", "description": "Strategy: manual, dca, momentum, or grid"},
+                "max_position_usd": {"type": "string", "description": "Max position size in USD (default: 50)"},
+                "interval_minutes": {"type": "string", "description": "Minutes between cycles (default: 15)"},
+                "model": {"type": "string", "description": "AI model to use (default: grok-4.20-beta-0309-reasoning)"},
+            },
+            "required": ["ticker"],
+        },
+        handler=start_trading_agent,
+    )
+
+    registry.register(
+        name="stop_trading_agent",
+        description="Stop the autonomous crypto trading agent immediately.",
+        parameters={
+            "type": "object",
+            "properties": {},
+        },
+        handler=stop_trading_agent,
+    )
+
+    registry.register(
+        name="get_trading_agent_status",
+        description="Check if the trading agent is running, its config, last decision, and cycle count.",
+        parameters={
+            "type": "object",
+            "properties": {},
+        },
+        handler=get_trading_agent_status,
     )

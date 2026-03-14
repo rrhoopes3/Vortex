@@ -541,7 +541,7 @@ class RobinhoodCryptoAPIProvider(DataProvider):
         self._api_key = api_key
         self._api_secret = api_secret
         self._lock = threading.Lock()
-        self._base = "https://trading.robinhood.com/api/v1"
+        self._base = "https://trading.robinhood.com"
 
     @property
     def name(self) -> str:
@@ -553,7 +553,7 @@ class RobinhoodCryptoAPIProvider(DataProvider):
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
         timestamp = str(int(time.time()))
-        message = f"{self._api_key}{timestamp}{path}{method}{body}"
+        message = f"{self._api_key}{timestamp}{path}{method.upper()}{body}"
 
         # Decode base64 private key → Ed25519 signing key (first 32 bytes)
         private_bytes = base64.b64decode(self._api_secret)
@@ -573,8 +573,9 @@ class RobinhoodCryptoAPIProvider(DataProvider):
         if not self._api_key or not self._api_secret:
             raise RuntimeError("Robinhood Crypto API key not configured (need FORGE_ROBINHOOD_API_KEY + FORGE_ROBINHOOD_API_SECRET)")
         require_provider_dependencies("robinhood-crypto")
+        # Path includes query params — sign the full path as-is
+        headers = self._make_headers(method.upper(), path, body)
         url = f"{self._base}{path}"
-        headers = self._make_headers(method, path, body)
         req = urllib.request.Request(url, method=method, headers=headers)
         if body:
             req.data = body.encode("utf-8")
@@ -589,8 +590,11 @@ class RobinhoodCryptoAPIProvider(DataProvider):
 
     def get_trading_pairs(self, *symbols: str) -> list[dict]:
         """Get trading pair info for one or more symbols (e.g. 'BTC-USD')."""
-        params = "&".join(f"symbol={s}" for s in symbols)
-        path = f"/crypto/trading/trading_pairs/?{params}" if params else "/crypto/trading/trading_pairs/"
+        if symbols:
+            params = "&".join(f"symbol={s}" for s in symbols)
+            path = f"/api/v1/crypto/trading/trading_pairs/?{params}"
+        else:
+            path = "/api/v1/crypto/trading/trading_pairs/"
         data = self._request("GET", path)
         return data.get("results", []) if isinstance(data, dict) else data
 
@@ -598,7 +602,7 @@ class RobinhoodCryptoAPIProvider(DataProvider):
         with self._lock:
             try:
                 symbol = f"{ticker}-USD" if not ticker.endswith("-USD") else ticker
-                path = f"/crypto/marketdata/best_bid_ask/?symbol={symbol}"
+                path = f"/api/v1/crypto/marketdata/best_bid_ask/?symbol={symbol}"
                 data = self._request("GET", path)
                 # Response: {"results": [{"symbol": "BTC-USD", "bid_inclusive_of_sell_spread": "...", "ask_inclusive_of_buy_spread": "...", ...}]}
                 results = data.get("results", []) if isinstance(data, dict) else []
@@ -612,7 +616,7 @@ class RobinhoodCryptoAPIProvider(DataProvider):
                         timestamp=time.time(),
                     )
                 # Fallback: estimated price endpoint
-                path2 = f"/crypto/marketdata/estimated_price/?symbol={symbol}&side=bid&quantity=1"
+                path2 = f"/api/v1/crypto/marketdata/estimated_price/?symbol={symbol}&side=bid&quantity=1"
                 data2 = self._request("GET", path2)
                 ep = float(data2.get("estimated_price", 0) or 0)
                 return Quote(ticker=ticker, price=round(ep, 4), timestamp=time.time())
@@ -622,12 +626,15 @@ class RobinhoodCryptoAPIProvider(DataProvider):
 
     def get_account(self) -> dict:
         """Get crypto account info."""
-        return self._request("GET", "/crypto/trading/accounts/")
+        return self._request("GET", "/api/v1/crypto/trading/accounts/")
 
     def get_holdings(self, *asset_codes: str) -> list[dict]:
         """Get crypto holdings, optionally filtered by asset code (e.g. 'BTC')."""
-        params = "&".join(f"asset_code={c}" for c in asset_codes)
-        path = f"/crypto/trading/holdings/?{params}" if params else "/crypto/trading/holdings/"
+        if asset_codes:
+            params = "&".join(f"asset_code={c}" for c in asset_codes)
+            path = f"/api/v1/crypto/trading/holdings/?{params}"
+        else:
+            path = "/api/v1/crypto/trading/holdings/"
         data = self._request("GET", path)
         return data.get("results", []) if isinstance(data, dict) else data
 
@@ -668,8 +675,8 @@ class RobinhoodCryptoAPIProvider(DataProvider):
                         "time_in_force": "gtc",
                     }
 
-                body = json.dumps(payload)
-                result = self._request("POST", "/crypto/trading/orders/", body)
+                body = json.dumps(payload, separators=(",", ":"))
+                result = self._request("POST", "/api/v1/crypto/trading/orders/", body)
                 return {
                     "status": result.get("state", "submitted"),
                     "order_id": result.get("id", ""),
@@ -683,7 +690,7 @@ class RobinhoodCryptoAPIProvider(DataProvider):
     def cancel_order(self, order_id: str) -> bool:
         """Cancel a pending crypto order."""
         try:
-            self._request("POST", f"/crypto/trading/orders/{order_id}/cancel/")
+            self._request("POST", f"/api/v1/crypto/trading/orders/{order_id}/cancel/")
             return True
         except Exception:
             return False
@@ -691,7 +698,7 @@ class RobinhoodCryptoAPIProvider(DataProvider):
     def get_orders(self) -> list[dict]:
         """Get crypto order history."""
         try:
-            data = self._request("GET", "/crypto/trading/orders/")
+            data = self._request("GET", "/api/v1/crypto/trading/orders/")
             return data.get("results", []) if isinstance(data, dict) else data
         except Exception:
             return []

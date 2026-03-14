@@ -11,9 +11,14 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 LMSTUDIO_BASE_URL = os.getenv("LMSTUDIO_BASE_URL", "http://localhost:1234/v1")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
 
+# ── Polymarket ────────────────────────────────────────────────────────────
+POLYMARKET_RELAYER_API_KEY = os.getenv("POLYMARKET_RELAYER_API_KEY", "")
+POLYMARKET_RELAYER_ADDRESS = os.getenv("POLYMARKET_RELAYER_ADDRESS", "")
+POLYMARKET_PRIVATE_KEY = os.getenv("POLYMARKET_PRIVATE_KEY", "")
+
 # ── Models ──────────────────────────────────────────────────────────────────
-PLANNER_MODEL = "grok-4.20-multi-agent-experimental-beta-0304"
-EXECUTOR_MODEL = "grok-4.20-experimental-beta-0304-reasoning"
+PLANNER_MODEL = "grok-4.20-multi-agent-beta-0309"
+EXECUTOR_MODEL = "grok-4.20-beta-0309-reasoning"
 PLANNER_AGENT_COUNT = 16
 
 # Available executor models with pricing (cost per 1M tokens)
@@ -24,22 +29,38 @@ EXECUTOR_MODELS = {
         "cost_in": 0, "cost_out": 0,  # varies by routed model
     },
     # xAI
-    "grok-4.20-experimental-beta-0304-reasoning": {
-        "label": "Grok 4.20 Reasoning", "provider": "xAI",
-        "cost_in": 2.00, "cost_out": 6.00,
-    },
     "grok-4-1-fast-reasoning": {
         "label": "Grok 4.1 Fast Reasoning", "provider": "xAI",
         "cost_in": 0.20, "cost_out": 0.50,
     },
-    "grok-4-1-fast-non-reasoning": {
-        "label": "Grok 4.1 Fast", "provider": "xAI",
-        "cost_in": 0.20, "cost_out": 0.50,
+    "grok-4.20-multi-agent-beta-0309": {
+        "label": "Grok 4.20 Multi-Agent", "provider": "xAI",
+        "cost_in": 2.00, "cost_out": 6.00,
+    },
+    "grok-4.20-beta-0309-reasoning": {
+        "label": "Grok 4.20 Reasoning", "provider": "xAI",
+        "cost_in": 2.00, "cost_out": 6.00,
+    },
+    "grok-4.20-beta-0309-non-reasoning": {
+        "label": "Grok 4.20 Non-Reasoning", "provider": "xAI",
+        "cost_in": 2.00, "cost_out": 6.00,
+    },
+    "grok-code-fast-1": {
+        "label": "Grok Code Fast", "provider": "xAI",
+        "cost_in": 0.20, "cost_out": 1.50,
+    },
+    "grok-4.20-multi-agent-experimental-beta-0304": {
+        "label": "Grok 4.20 Multi (Legacy)", "provider": "xAI",
+        "cost_in": 2.00, "cost_out": 6.00,
     },
     # Anthropic
     "claude-sonnet-4-20250514": {
         "label": "Claude Sonnet 4", "provider": "Anthropic",
         "cost_in": 3.00, "cost_out": 15.00,
+    },
+    "claude-opus-4-20250514": {
+        "label": "Claude Opus 4", "provider": "Anthropic",
+        "cost_in": 15.00, "cost_out": 75.00,
     },
     "claude-haiku-4-20250414": {
         "label": "Claude Haiku 4", "provider": "Anthropic",
@@ -145,6 +166,12 @@ TRADING_ROBINHOOD_PASS = os.getenv("FORGE_ROBINHOOD_PASS", "")
 TRADING_ROBINHOOD_API_KEY = os.getenv("FORGE_ROBINHOOD_API_KEY", "")
 TRADING_ROBINHOOD_API_SECRET = os.getenv("FORGE_ROBINHOOD_API_SECRET", "")
 
+# Polymarket CLOB (prediction markets)
+POLYMARKET_PRIVATE_KEY = os.getenv("POLYMARKET_PRIVATE_KEY", os.getenv("FORGE_POLYMARKET_PRIVATE_KEY", ""))
+POLYMARKET_FUNDER_ADDRESS = os.getenv("POLYMARKET_RELAYER_ADDRESS", os.getenv("FORGE_POLYMARKET_FUNDER_ADDRESS", ""))
+POLYMARKET_RELAYER_API_KEY = os.getenv("POLYMARKET_RELAYER_API_KEY", "")
+POLYMARKET_SIGNATURE_TYPE = int(os.getenv("FORGE_POLYMARKET_SIGNATURE_TYPE", "1"))  # 1=Magic/email, 2=browser, 0=EOA
+
 # Auto-detect best provider
 _trading_provider_env = os.getenv("FORGE_TRADING_PROVIDER", "")
 if _trading_provider_env:
@@ -164,7 +191,7 @@ TRADING_PAPER_MODE = os.getenv("FORGE_TRADING_PAPER_MODE", "true").lower() == "t
 
 # ── Arena ──────────────────────────────────────────────────────────────────
 ARENA_MASTER_MODEL = PLANNER_MODEL       # 16-agent Pantheon for commentary/judging
-ARENA_DEFAULT_FIGHTER_MODEL = "grok-4-1-fast-reasoning"
+ARENA_DEFAULT_FIGHTER_MODEL = "grok-4.20-beta-0309-reasoning"
 ARENA_FIGHTER_AGENT_COUNT = 4
 ARENA_RECON_ITERATIONS = 3               # tool iterations for recon round
 ARENA_FORGE_ITERATIONS = 5               # tool iterations for weapon forge round
@@ -173,7 +200,7 @@ ARENA_COMBAT_TURNS = 6                   # total turns in combat (3 per team)
 # ── OpenClaw-RL (arXiv:2603.10165) ───────────────────────────────────────
 SIGNALS_ENABLED = os.getenv("FORGE_SIGNALS_ENABLED", "true").lower() == "true"
 JUDGE_ENABLED = os.getenv("FORGE_JUDGE_ENABLED", "true").lower() == "true"
-JUDGE_MODEL = os.getenv("FORGE_JUDGE_MODEL", "grok-4-1-fast-reasoning")
+JUDGE_MODEL = os.getenv("FORGE_JUDGE_MODEL", "grok-4.20-beta-0309-reasoning")
 JUDGE_TIMEOUT_SECONDS = float(os.getenv("FORGE_JUDGE_TIMEOUT", "30.0"))
 DIRECTIVES_ENABLED = os.getenv("FORGE_DIRECTIVES_ENABLED", "true").lower() == "true"
 USER_CORRECTION_ENABLED = os.getenv("FORGE_USER_CORRECTION_ENABLED", "true").lower() == "true"

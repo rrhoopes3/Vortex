@@ -488,7 +488,7 @@ function restoreSettings() {
 }
 
 function pickArenaDefaultModel() {
-    const preferred = ["grok-4-1-fast-reasoning", "gpt-4o-mini", "claude-haiku-4-20250414"];
+    const preferred = ["grok-4.20-beta-0309-reasoning", "grok-code-fast-1", "gpt-4o-mini", "claude-haiku-4-20250414"];
     for (const modelId of preferred) {
         if (hasOption(els.redModel, modelId)) return modelId;
     }
@@ -1859,11 +1859,33 @@ const tradingState = {
     pcrHistory: [],
     alerts: [],
     sseSource: null,
+    // Crypto sub-tab state
+    cryptoInitialized: false,
+    activeSubtab: "stocks",
+    cryptoTicker: "BTC",
+    cryptoSide: "buy",
+    cryptoAutoRefreshTimer: null,
+    agentRunning: false,
+    agentPollTimer: null,
 };
 
 function initTrading() {
     if (tradingState.initialized) return;
     tradingState.initialized = true;
+
+    // Sub-tab switching
+    document.querySelectorAll(".trading-subtab-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            document.querySelectorAll(".trading-subtab-btn").forEach(b => b.classList.remove("active"));
+            document.querySelectorAll(".trading-pane").forEach(p => p.classList.remove("active"));
+            btn.classList.add("active");
+            const pane = document.getElementById(`trading-pane-${btn.dataset.subtab}`);
+            if (pane) pane.classList.add("active");
+            tradingState.activeSubtab = btn.dataset.subtab;
+            if (btn.dataset.subtab === "crypto") initCryptoPane();
+            if (btn.dataset.subtab === "polymarket") initPolymarketPane();
+        });
+    });
 
     // Bind trading events
     const refreshBtn = document.getElementById("trading-refresh-btn");
@@ -2514,6 +2536,829 @@ function connectTradingStream() {
     } catch (e) {
         console.warn("Failed to connect trading stream:", e);
     }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// CRYPTO PANE
+// ══════════════════════════════════════════════════════════════════════════
+
+function initCryptoPane() {
+    if (tradingState.cryptoInitialized) return;
+    tradingState.cryptoInitialized = true;
+
+    const tickerSel = document.getElementById("crypto-ticker");
+    const buyBtn = document.getElementById("crypto-buy-btn");
+    const sellBtn = document.getElementById("crypto-sell-btn");
+    const submitBtn = document.getElementById("crypto-submit-btn");
+    const orderType = document.getElementById("crypto-order-type");
+    const priceField = document.getElementById("crypto-price-field");
+    const refreshBtn = document.getElementById("crypto-refresh-btn");
+
+    tickerSel.addEventListener("change", () => {
+        tradingState.cryptoTicker = tickerSel.value;
+        loadCryptoQuote();
+        loadCryptoPortfolio();
+        const activeTf = document.querySelector("[data-crypto-tf].active");
+        loadCryptoChart(activeTf ? activeTf.dataset.cryptoTf : "1D");
+    });
+
+    buyBtn.addEventListener("click", () => {
+        tradingState.cryptoSide = "buy";
+        buyBtn.classList.add("active");
+        sellBtn.classList.remove("active");
+    });
+    sellBtn.addEventListener("click", () => {
+        tradingState.cryptoSide = "sell";
+        sellBtn.classList.add("active");
+        buyBtn.classList.remove("active");
+    });
+
+    orderType.addEventListener("change", () => {
+        const needsPrice = ["limit", "stop", "stop_limit"].includes(orderType.value);
+        priceField.style.display = needsPrice ? "" : "none";
+    });
+
+    submitBtn.addEventListener("click", executeCryptoTrade);
+    refreshBtn.addEventListener("click", () => {
+        loadCryptoQuote();
+        loadCryptoPortfolio();
+    });
+
+    // Timeframe buttons for crypto chart
+    document.querySelectorAll("[data-crypto-tf]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            document.querySelectorAll("[data-crypto-tf]").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            loadCryptoChart(btn.dataset.cryptoTf);
+        });
+    });
+
+    // Agent button
+    const agentBtn = document.getElementById("crypto-agent-btn");
+    agentBtn.addEventListener("click", toggleCryptoAgent);
+
+    // Initial load
+    loadCryptoQuote();
+    loadCryptoPortfolio();
+    loadCryptoChart("1D");
+    pollAgentStatus();
+
+    // Auto-refresh quotes every 15 seconds, agent status every 5s
+    tradingState.cryptoAutoRefreshTimer = setInterval(() => {
+        if (tradingState.activeSubtab === "crypto") {
+            loadCryptoQuote();
+            pollAgentStatus();
+        }
+    }, 15000);
+    tradingState.agentPollTimer = setInterval(() => {
+        if (tradingState.activeSubtab === "crypto" && tradingState.agentRunning) {
+            pollAgentStatus();
+            pollAgentLogs();
+        }
+    }, 5000);
+}
+
+async function loadCryptoQuote() {
+    const ticker = tradingState.cryptoTicker;
+    try {
+        const data = await fetchJson(`/api/trading/quote/${ticker}?provider=robinhood-crypto`);
+        document.getElementById("crypto-quote-symbol").textContent = ticker;
+        document.getElementById("crypto-chart-title").textContent = `${ticker} — Live`;
+
+        if (data.price && data.price > 0) {
+            const priceStr = data.price < 1 ? data.price.toFixed(6) : data.price.toFixed(2);
+            document.getElementById("crypto-quote-price").textContent = `$${priceStr}`;
+
+            const changeEl = document.getElementById("crypto-quote-change");
+            if (data.change != null && data.change !== 0) {
+                const sign = data.change >= 0 ? "+" : "";
+                changeEl.textContent = `${sign}$${data.change.toFixed(2)} (${sign}${data.change_pct.toFixed(2)}%)`;
+                changeEl.className = `crypto-change ${data.change >= 0 ? "" : "negative"}`;
+            } else {
+                changeEl.textContent = "—";
+            }
+
+            document.getElementById("crypto-quote-volume").textContent =
+                data.volume ? `Vol: ${Number(data.volume).toLocaleString()}` : "Vol: —";
+        } else {
+            document.getElementById("crypto-quote-price").textContent = "—";
+        }
+    } catch (e) {
+        console.warn("Crypto quote failed:", e);
+        document.getElementById("crypto-quote-price").textContent = "Error";
+    }
+}
+
+async function loadCryptoPortfolio() {
+    try {
+        const data = await fetchJson("/api/trading/portfolio?provider=robinhood-crypto");
+        document.getElementById("crypto-port-count").textContent = data.position_count || 0;
+        document.getElementById("crypto-port-realized").textContent = formatMoney(data.realized_pnl || 0);
+        document.getElementById("crypto-port-unrealized").textContent = formatMoney(data.unrealized_pnl || 0);
+
+        const realizedEl = document.getElementById("crypto-port-realized");
+        realizedEl.className = `pcr-value ${(data.realized_pnl || 0) >= 0 ? 'pnl-positive' : 'pnl-negative'}`;
+        const unrealizedEl = document.getElementById("crypto-port-unrealized");
+        unrealizedEl.className = `pcr-value ${(data.unrealized_pnl || 0) >= 0 ? 'pnl-positive' : 'pnl-negative'}`;
+
+        const posEl = document.getElementById("crypto-portfolio-positions");
+        const positions = data.positions || [];
+        if (positions.length === 0) {
+            posEl.innerHTML = '<div class="empty-state" style="font-size:0.75rem;padding:6px">No holdings.</div>';
+            return;
+        }
+        posEl.innerHTML = `
+            <table>
+                <thead><tr><th>Ticker</th><th>Qty</th><th>Avg</th><th>Current</th><th>P&L</th></tr></thead>
+                <tbody>
+                    ${positions.map(p => `
+                        <tr>
+                            <td>${escapeHtml(p.ticker)}</td>
+                            <td>${p.quantity}</td>
+                            <td>$${p.avg_price < 1 ? p.avg_price.toFixed(6) : p.avg_price.toFixed(2)}</td>
+                            <td>$${p.current_price < 1 ? p.current_price.toFixed(6) : p.current_price.toFixed(2)}</td>
+                            <td class="${p.unrealized_pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">
+                                $${p.unrealized_pnl.toFixed(2)} (${p.unrealized_pnl_pct.toFixed(1)}%)
+                            </td>
+                        </tr>
+                    `).join("")}
+                </tbody>
+            </table>
+        `;
+    } catch (e) {
+        console.warn("Crypto portfolio failed:", e);
+    }
+}
+
+async function loadCryptoChart(timeframe = "1D") {
+    const ticker = tradingState.cryptoTicker;
+    const container = document.getElementById("crypto-chart-container");
+    container.innerHTML = '<div class="empty-state">Loading chart...</div>';
+    try {
+        const data = await fetchJson(`/api/trading/crypto/history/${ticker}?timeframe=${timeframe}`);
+        if (data.error) {
+            container.innerHTML = `<div class="empty-state">Chart error: ${escapeHtml(data.error)}</div>`;
+            return;
+        }
+        if (!data.candles || data.candles.length === 0) {
+            container.innerHTML = '<div class="empty-state">No price data available.</div>';
+            return;
+        }
+        renderCryptoChart(container, data.candles, ticker, timeframe);
+    } catch (e) {
+        console.warn("Crypto chart failed:", e);
+        container.innerHTML = `<div class="empty-state">Failed to load chart.</div>`;
+    }
+}
+
+function renderCryptoChart(container, candles, ticker, timeframe) {
+    const times = candles.map(c => c.time);
+    const opens = candles.map(c => c.open);
+    const highs = candles.map(c => c.high);
+    const lows = candles.map(c => c.low);
+    const closes = candles.map(c => c.close);
+    const volumes = candles.map(c => c.volume);
+
+    const plotlyCode = `
+        const times = ${JSON.stringify(times)};
+        const opens = ${JSON.stringify(opens)};
+        const highs = ${JSON.stringify(highs)};
+        const lows = ${JSON.stringify(lows)};
+        const closes = ${JSON.stringify(closes)};
+        const volumes = ${JSON.stringify(volumes)};
+
+        const candlestick = {
+            x: times,
+            open: opens, high: highs, low: lows, close: closes,
+            type: 'candlestick',
+            increasing: { line: { color: '#26a69a' }, fillcolor: '#26a69a' },
+            decreasing: { line: { color: '#ef5350' }, fillcolor: '#ef5350' },
+            name: '${ticker}',
+            xaxis: 'x', yaxis: 'y',
+        };
+
+        const volumeBars = {
+            x: times,
+            y: volumes,
+            type: 'bar',
+            marker: {
+                color: closes.map((c, i) => c >= opens[i] ? 'rgba(38,166,154,0.35)' : 'rgba(239,83,80,0.35)'),
+            },
+            name: 'Volume',
+            xaxis: 'x', yaxis: 'y2',
+            hoverinfo: 'x+y',
+        };
+
+        Plotly.newPlot('chart', [candlestick, volumeBars], {
+            template: 'plotly_dark',
+            paper_bgcolor: '#171f2a',
+            plot_bgcolor: '#171f2a',
+            margin: { t: 10, r: 50, b: 40, l: 60 },
+            xaxis: {
+                rangeslider: { visible: false },
+                gridcolor: 'rgba(255,255,255,0.06)',
+                type: 'date',
+            },
+            yaxis: {
+                title: 'Price ($)',
+                gridcolor: 'rgba(255,255,255,0.06)',
+                domain: [0.22, 1],
+                side: 'right',
+            },
+            yaxis2: {
+                title: 'Vol',
+                gridcolor: 'rgba(255,255,255,0.04)',
+                domain: [0, 0.18],
+                side: 'right',
+            },
+            legend: { x: 0, y: 1.05, orientation: 'h' },
+            showlegend: false,
+        }, { responsive: true });
+    `;
+
+    const html = `<!DOCTYPE html>
+<html><head>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"><\/script>
+<style>body{margin:0;background:#171f2a;overflow:hidden}#chart{width:100%;height:100vh}</style>
+</head><body>
+<div id="chart"></div>
+<script>${plotlyCode}<\/script>
+</body></html>`;
+
+    container.innerHTML = "";
+    const iframe = document.createElement("iframe");
+    iframe.srcdoc = html;
+    iframe.style.cssText = "width:100%;height:100%;border:none;border-radius:6px;position:absolute;top:0;left:0";
+    container.appendChild(iframe);
+}
+
+async function toggleCryptoAgent() {
+    const btn = document.getElementById("crypto-agent-btn");
+    btn.disabled = true;
+
+    if (tradingState.agentRunning) {
+        // Stop
+        try {
+            await fetch("/api/trading/agent/stop", { method: "POST" });
+            tradingState.agentRunning = false;
+            updateAgentUI(false);
+        } catch (e) {
+            console.warn("Failed to stop agent:", e);
+        }
+    } else {
+        // Start
+        const config = {
+            model: document.getElementById("crypto-agent-model").value,
+            strategy: document.getElementById("crypto-agent-strategy").value,
+            ticker: tradingState.cryptoTicker,
+            max_position_usd: parseFloat(document.getElementById("crypto-agent-max-pos").value) || 50,
+            interval_minutes: parseInt(document.getElementById("crypto-agent-interval").value) || 15,
+        };
+        try {
+            const resp = await fetch("/api/trading/agent/start", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(config),
+            });
+            const data = await resp.json();
+            if (data.error) {
+                alert(`Agent error: ${data.error}`);
+            } else {
+                tradingState.agentRunning = true;
+                updateAgentUI(true);
+                showAgentLog(true);
+            }
+        } catch (e) {
+            console.warn("Failed to start agent:", e);
+        }
+    }
+    btn.disabled = false;
+}
+
+function showAgentLog(visible) {
+    const section = document.getElementById("crypto-agent-log-section");
+    const layout = section?.closest(".trading-layout");
+    if (visible) {
+        section.style.display = "";
+        layout?.classList.add("has-agent-log");
+    } else {
+        section.style.display = "none";
+        layout?.classList.remove("has-agent-log");
+    }
+}
+
+function updateAgentUI(running) {
+    const btn = document.getElementById("crypto-agent-btn");
+    const statusEl = document.getElementById("crypto-agent-status");
+    const dot = statusEl.querySelector(".status-dot");
+
+    if (running) {
+        btn.textContent = "Stop Agent";
+        btn.classList.add("danger-btn");
+        dot.className = "status-dot running";
+        statusEl.childNodes[statusEl.childNodes.length - 1].textContent = " Agent running";
+    } else {
+        btn.textContent = "Start Agent";
+        btn.classList.remove("danger-btn");
+        dot.className = "status-dot idle";
+        statusEl.childNodes[statusEl.childNodes.length - 1].textContent = " Agent idle";
+    }
+}
+
+async function pollAgentStatus() {
+    try {
+        const data = await fetchJson("/api/trading/agent/status");
+        tradingState.agentRunning = data.running;
+        updateAgentUI(data.running);
+
+        if (data.running) {
+            showAgentLog(true);
+        }
+
+        // Update cycle info in log header
+        const cycleInfo = document.getElementById("crypto-agent-cycle-info");
+        if (cycleInfo && data.cycle_count > 0) {
+            const lastRun = data.last_run ? new Date(data.last_run * 1000).toLocaleTimeString() : "—";
+            cycleInfo.textContent = `Cycle #${data.cycle_count} · Last: ${lastRun}`;
+        }
+
+        if (data.last_decision) {
+            const statusEl = document.getElementById("crypto-agent-status");
+            const dot = statusEl.querySelector(".status-dot");
+            const text = data.running ? " Agent running" : " Agent idle";
+            statusEl.innerHTML = "";
+            statusEl.appendChild(dot);
+            statusEl.appendChild(document.createTextNode(text));
+        }
+    } catch (e) {
+        // silent
+    }
+}
+
+async function pollAgentLogs() {
+    try {
+        const logs = await fetchJson("/api/trading/agent/logs?limit=50");
+        if (!logs || logs.length === 0) return;
+
+        const container = document.getElementById("crypto-agent-log");
+        for (const entry of logs) {
+            const div = document.createElement("div");
+            div.className = `agent-log-entry log-${entry.type}`;
+            const timeStr = entry.time ? new Date(entry.time).toLocaleTimeString() : "";
+            div.innerHTML = `<span class="log-time">${escapeHtml(timeStr)}</span>${escapeHtml(entry.message)}`;
+            container.appendChild(div);
+        }
+        // Auto-scroll
+        container.scrollTop = container.scrollHeight;
+
+        // If we got a decision, refresh portfolio
+        if (logs.some(l => l.type === "decision")) {
+            loadCryptoPortfolio();
+            loadCryptoQuote();
+        }
+    } catch (e) {
+        // silent
+    }
+}
+
+async function executeCryptoTrade() {
+    const ticker = tradingState.cryptoTicker;
+    const side = tradingState.cryptoSide;
+    const qty = parseFloat(document.getElementById("crypto-quantity").value);
+    const orderType = document.getElementById("crypto-order-type").value;
+    const limitPrice = document.getElementById("crypto-limit-price").value;
+
+    const resultEl = document.getElementById("crypto-trade-result");
+    resultEl.textContent = "Submitting...";
+    resultEl.className = "trade-result";
+
+    try {
+        const body = {
+            asset_type: "crypto",
+            ticker: ticker,
+            side: side,
+            quantity: qty,
+            order_type: orderType,
+            provider: "robinhood-crypto",
+        };
+        if (limitPrice && orderType !== "market") body.price = parseFloat(limitPrice);
+
+        const resp = await fetch("/api/trading/order", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+        const data = await resp.json();
+
+        if (data.error) {
+            resultEl.textContent = `Error: ${data.error}`;
+            resultEl.className = "trade-result trade-error";
+        } else {
+            const msg = data.message || `${side.toUpperCase()} ${qty} ${ticker} — ${data.status || "submitted"}`;
+            resultEl.textContent = msg;
+            resultEl.className = "trade-result trade-success";
+            // Refresh portfolio after trade
+            setTimeout(loadCryptoPortfolio, 1000);
+        }
+    } catch (e) {
+        resultEl.textContent = `Network error: ${e.message}`;
+        resultEl.className = "trade-result trade-error";
+    }
+}
+
+// ── Polymarket ───────────────────────────────────────────────────────────
+
+const polyState = {
+    loaded: false,
+    markets: [],
+    selectedSlug: null,
+    eventSlug: "btc-updown-5m-1773464700",
+    eventData: null,
+    agentRunning: false,
+    agentPollTimer: null,
+    autoRefreshTimer: null,
+};
+
+function initPolymarketPane() {
+    if (polyState.loaded) return;
+    polyState.loaded = true;
+
+    document.getElementById("poly-refresh-btn")?.addEventListener("click", () => {
+        loadPolymarkets();
+        if (polyState.eventSlug) loadPolyEvent(polyState.eventSlug);
+    });
+    document.getElementById("poly-sort")?.addEventListener("change", loadPolymarkets);
+
+    let searchTimer = null;
+    document.getElementById("poly-search")?.addEventListener("input", () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => loadPolymarkets(), 400);
+    });
+
+    // Load event button
+    document.getElementById("poly-load-event-btn")?.addEventListener("click", () => {
+        const raw = document.getElementById("poly-event-url")?.value?.trim() || "";
+        const slug = parsePolymarketSlug(raw);
+        if (slug) {
+            polyState.eventSlug = slug;
+            loadPolyEvent(slug);
+        } else {
+            alert("Could not parse event slug from input. Paste a Polymarket event URL or just the slug.");
+        }
+    });
+
+    // Agent button
+    document.getElementById("poly-agent-btn")?.addEventListener("click", togglePolyAgent);
+
+    // Load default event + markets
+    loadPolymarkets();
+    if (polyState.eventSlug) loadPolyEvent(polyState.eventSlug);
+    pollPolyAgentStatus();
+
+    // Auto-refresh: event data every 30s, agent status every 5s when running
+    polyState.autoRefreshTimer = setInterval(() => {
+        if (tradingState.activeSubtab === "polymarket") {
+            if (polyState.eventSlug) loadPolyEvent(polyState.eventSlug);
+            pollPolyAgentStatus();
+        }
+    }, 30000);
+    polyState.agentPollTimer = setInterval(() => {
+        if (tradingState.activeSubtab === "polymarket" && polyState.agentRunning) {
+            pollPolyAgentStatus();
+            pollPolyAgentLogs();
+        }
+    }, 5000);
+}
+
+function parsePolymarketSlug(input) {
+    // Handle full URL: https://polymarket.com/event/btc-updown-5m-1773464700
+    const urlMatch = input.match(/polymarket\.com\/event\/([a-zA-Z0-9_-]+)/);
+    if (urlMatch) return urlMatch[1];
+    // Handle bare slug
+    if (/^[a-zA-Z0-9_-]+$/.test(input) && input.length > 3) return input;
+    return null;
+}
+
+async function loadPolyEvent(slug) {
+    try {
+        const data = await fetchJson(`/api/trading/polymarket/event/${slug}`);
+        if (data.error) {
+            document.getElementById("poly-event-card").style.display = "";
+            document.getElementById("poly-event-title").textContent = `Error: ${data.error}`;
+            return;
+        }
+
+        polyState.eventData = data;
+        const event = data.event || {};
+        const markets = data.markets || [];
+
+        // Show event card
+        const card = document.getElementById("poly-event-card");
+        card.style.display = "";
+        document.getElementById("poly-event-title").textContent = event.title || slug;
+
+        const metaLines = [];
+        if (event.endDate) metaLines.push(`Closes: ${new Date(event.endDate).toLocaleDateString()}`);
+        if (event.volume) metaLines.push(`Volume: $${formatCompact(event.volume)}`);
+        if (event.liquidity) metaLines.push(`Liquidity: $${formatCompact(event.liquidity)}`);
+        document.getElementById("poly-event-meta").innerHTML = metaLines.join(" · ");
+
+        // Show markets
+        const marketsSection = document.getElementById("poly-event-markets");
+        const marketList = document.getElementById("poly-market-list");
+        const marketCount = document.getElementById("poly-market-count");
+
+        if (markets.length > 0) {
+            marketsSection.style.display = "";
+            marketCount.textContent = `(${markets.length})`;
+
+            marketList.innerHTML = markets.map(m => {
+                let outcomes = [];
+                try {
+                    const names = typeof m.outcomes === "string" ? JSON.parse(m.outcomes) : (m.outcomes || []);
+                    const prices = typeof m.outcomePrices === "string" ? JSON.parse(m.outcomePrices) : (m.outcomePrices || []);
+                    outcomes = names.map((name, i) => ({ name, price: prices[i] ? parseFloat(prices[i]) : null }));
+                } catch {}
+
+                const priceHtml = outcomes.map(o => {
+                    if (o.price === null) return "";
+                    const pct = (o.price * 100).toFixed(0);
+                    const cls = o.name.toLowerCase() === "yes" ? "poly-price-yes" :
+                                o.name.toLowerCase() === "no" ? "poly-price-no" : "poly-price-yes";
+                    return `<span class="poly-price-pill ${cls}">${o.name} ${pct}%</span>`;
+                }).join(" ");
+
+                const vol = m.volume24hr ? `Vol: $${formatCompact(m.volume24hr)}` : "";
+
+                return `<div class="poly-event-market-row">
+                    <div style="font-size:0.8rem;margin-bottom:2px;">${escapeHtml(m.question || "?")}</div>
+                    <div>${priceHtml} <span style="font-size:0.7rem;color:var(--muted);margin-left:6px">${vol}</span></div>
+                </div>`;
+            }).join("");
+        } else {
+            marketsSection.style.display = "none";
+        }
+    } catch (e) {
+        console.warn("Failed to load poly event:", e);
+    }
+}
+
+async function togglePolyAgent() {
+    const btn = document.getElementById("poly-agent-btn");
+    btn.disabled = true;
+
+    if (polyState.agentRunning) {
+        try {
+            await fetch("/api/trading/polymarket/agent/stop", { method: "POST" });
+            polyState.agentRunning = false;
+            updatePolyAgentUI(false);
+        } catch (e) {
+            console.warn("Failed to stop poly agent:", e);
+        }
+    } else {
+        const slug = polyState.eventSlug;
+        if (!slug) {
+            alert("Load an event first before starting the agent.");
+            btn.disabled = false;
+            return;
+        }
+        const config = {
+            model: document.getElementById("poly-agent-model").value,
+            strategy: document.getElementById("poly-agent-strategy").value,
+            event_slug: slug,
+            event_url: document.getElementById("poly-event-url")?.value || "",
+            max_position_usd: parseFloat(document.getElementById("poly-agent-max-pos").value) || 50,
+            interval_minutes: parseInt(document.getElementById("poly-agent-interval").value) || 15,
+            live_trading: document.getElementById("poly-agent-live-trading")?.checked || false,
+            dry_run: document.getElementById("poly-agent-dry-run")?.checked ?? true,
+        };
+        try {
+            const resp = await fetch("/api/trading/polymarket/agent/start", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(config),
+            });
+            const data = await resp.json();
+            if (data.error) {
+                alert(`Agent error: ${data.error}`);
+            } else {
+                polyState.agentRunning = true;
+                updatePolyAgentUI(true);
+                showPolyAgentLog(true);
+            }
+        } catch (e) {
+            console.warn("Failed to start poly agent:", e);
+        }
+    }
+    btn.disabled = false;
+}
+
+function showPolyAgentLog(visible) {
+    const section = document.getElementById("poly-agent-log-section");
+    const layout = section?.closest(".trading-layout");
+    if (visible) {
+        section.style.display = "";
+        layout?.classList.add("has-agent-log");
+    } else {
+        section.style.display = "none";
+        layout?.classList.remove("has-agent-log");
+    }
+}
+
+function updatePolyAgentUI(running) {
+    const btn = document.getElementById("poly-agent-btn");
+    const statusEl = document.getElementById("poly-agent-status");
+    const dot = statusEl.querySelector(".status-dot");
+
+    if (running) {
+        btn.textContent = "Stop Agent";
+        btn.classList.add("danger-btn");
+        dot.className = "status-dot running";
+        statusEl.childNodes[statusEl.childNodes.length - 1].textContent = " Agent running";
+    } else {
+        btn.textContent = "Start Agent";
+        btn.classList.remove("danger-btn");
+        dot.className = "status-dot idle";
+        statusEl.childNodes[statusEl.childNodes.length - 1].textContent = " Agent idle";
+    }
+}
+
+async function pollPolyAgentStatus() {
+    try {
+        const data = await fetchJson("/api/trading/polymarket/agent/status");
+        polyState.agentRunning = data.running;
+        updatePolyAgentUI(data.running);
+
+        if (data.running) showPolyAgentLog(true);
+
+        const cycleInfo = document.getElementById("poly-agent-cycle-info");
+        if (cycleInfo && data.cycle_count > 0) {
+            const lastRun = data.last_run ? new Date(data.last_run * 1000).toLocaleTimeString() : "—";
+            cycleInfo.textContent = `Cycle #${data.cycle_count} · Last: ${lastRun}`;
+        }
+
+        // Update active slug display & event URL when rotating
+        if (data.active_slug && data.running) {
+            const urlInput = document.getElementById("poly-event-url");
+            if (urlInput && data.rotating) {
+                urlInput.value = `https://polymarket.com/event/${data.active_slug}`;
+            }
+
+            // Show rotation info in status line
+            const statusEl = document.getElementById("poly-agent-status");
+            if (statusEl && data.rotating) {
+                const dot = statusEl.querySelector(".status-dot");
+                const upcoming = (data.upcoming_slugs || []).slice(1, 3)
+                    .map(s => { const ts = parseInt(s.split("-").pop()); return ts ? new Date(ts*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : s; })
+                    .join(", ");
+                statusEl.innerHTML = "";
+                statusEl.appendChild(dot);
+                const activeTs = parseInt(data.active_slug.split("-").pop());
+                const activeTime = activeTs ? new Date(activeTs*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : "?";
+                statusEl.appendChild(document.createTextNode(
+                    ` Rotating · ${activeTime}` + (upcoming ? ` → ${upcoming}` : "")
+                ));
+            }
+
+            // Refresh event card when slot rolls over
+            if (data.active_slug !== polyState.eventSlug) {
+                polyState.eventSlug = data.active_slug;
+                loadPolyEvent(data.active_slug);
+            }
+        }
+    } catch (e) {
+        // silent
+    }
+}
+
+async function pollPolyAgentLogs() {
+    try {
+        const logs = await fetchJson("/api/trading/polymarket/agent/logs?limit=50");
+        if (!logs || logs.length === 0) return;
+
+        const container = document.getElementById("poly-agent-log");
+        for (const entry of logs) {
+            const div = document.createElement("div");
+            div.className = `agent-log-entry log-${entry.type}`;
+            const timeStr = entry.time ? new Date(entry.time).toLocaleTimeString() : "";
+            div.innerHTML = `<span class="log-time">${escapeHtml(timeStr)}</span>${escapeHtml(entry.message)}`;
+            container.appendChild(div);
+        }
+        container.scrollTop = container.scrollHeight;
+
+        // Refresh event data after decisions
+        if (logs.some(l => l.type === "decision") && polyState.eventSlug) {
+            loadPolyEvent(polyState.eventSlug);
+        }
+    } catch (e) {
+        // silent
+    }
+}
+
+async function loadPolymarkets() {
+    const container = document.getElementById("poly-markets");
+    const countEl = document.getElementById("poly-count");
+    const order = document.getElementById("poly-sort")?.value || "volume24hr";
+    const q = document.getElementById("poly-search")?.value?.trim() || "";
+
+    container.innerHTML = '<div class="empty-state">Loading markets...</div>';
+
+    const params = new URLSearchParams({ limit: "40", order });
+    if (q) params.set("q", q);
+
+    try {
+        const resp = await fetch(`/api/trading/polymarket/markets?${params}`);
+        const data = await resp.json();
+
+        if (data.error) {
+            container.innerHTML = `<div class="empty-state">Error: ${data.error}</div>`;
+            return;
+        }
+
+        const markets = Array.isArray(data) ? data : [];
+        polyState.markets = markets;
+
+        if (!markets.length) {
+            container.innerHTML = '<div class="empty-state">No markets found.</div>';
+            countEl.textContent = "";
+            return;
+        }
+
+        countEl.textContent = `${markets.length} markets`;
+        container.innerHTML = "";
+
+        markets.forEach(m => {
+            const card = document.createElement("div");
+            card.className = "poly-card";
+            card.dataset.slug = m.slug || "";
+
+            // Parse outcomes & prices
+            let outcomes = [];
+            try {
+                const names = typeof m.outcomes === "string" ? JSON.parse(m.outcomes) : (m.outcomes || []);
+                const prices = typeof m.outcomePrices === "string" ? JSON.parse(m.outcomePrices) : (m.outcomePrices || []);
+                outcomes = names.map((name, i) => ({
+                    name,
+                    price: prices[i] ? parseFloat(prices[i]) : null,
+                }));
+            } catch {}
+
+            const priceHtml = outcomes.map(o => {
+                if (o.price === null) return "";
+                const pct = (o.price * 100).toFixed(0);
+                const cls = o.name.toLowerCase() === "yes" ? "poly-price-yes" :
+                            o.name.toLowerCase() === "no" ? "poly-price-no" : "poly-price-yes";
+                return `<span class="poly-price-pill ${cls}">${o.name} ${pct}%</span>`;
+            }).join("");
+
+            const vol24 = m.volume24hr ? `$${formatCompact(m.volume24hr)}` : "";
+            const liq = m.liquidity ? `$${formatCompact(m.liquidity)}` : "";
+
+            card.innerHTML = `
+                <div class="poly-card-question">${escapeHtml(m.question || "Untitled")}</div>
+                <div class="poly-card-prices">${priceHtml}</div>
+                <div class="poly-card-meta">
+                    ${vol24 ? `<span>Vol: ${vol24}</span>` : ""}
+                    ${liq ? `<span>Liq: ${liq}</span>` : ""}
+                </div>
+            `;
+
+            card.addEventListener("click", () => selectPolyMarket(m));
+            container.appendChild(card);
+        });
+    } catch (e) {
+        container.innerHTML = `<div class="empty-state">Failed to load: ${e.message}</div>`;
+    }
+}
+
+function selectPolyMarket(m) {
+    // Highlight card
+    document.querySelectorAll(".poly-card").forEach(c => c.classList.remove("selected"));
+    const card = document.querySelector(`.poly-card[data-slug="${m.slug}"]`);
+    if (card) card.classList.add("selected");
+
+    // If the market has an event_slug, load it as the target event
+    const eventSlug = m.event_slug || m.slug;
+    if (eventSlug) {
+        const urlInput = document.getElementById("poly-event-url");
+        if (urlInput) urlInput.value = `https://polymarket.com/event/${eventSlug}`;
+        polyState.eventSlug = eventSlug;
+        loadPolyEvent(eventSlug);
+    }
+}
+
+function formatCompact(n) {
+    const num = parseFloat(n);
+    if (isNaN(num)) return "0";
+    if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + "M";
+    if (num >= 1_000) return (num / 1_000).toFixed(1) + "K";
+    return num.toFixed(0);
+}
+
+function escapeHtml(str) {
+    const d = document.createElement("div");
+    d.textContent = str;
+    return d.innerHTML;
 }
 
 init();
