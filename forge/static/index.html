@@ -537,18 +537,35 @@
                 </div>
             </section>
 
-            <!-- Right Panel: Charts -->
+            <!-- Right Panel: Price Chart + Indicators -->
             <section class="panel trading-chart-panel">
                 <div class="panel-header">
-                    <h3 id="chart-title">PCR Chart — SPY</h3>
-                    <div class="chart-mode-btns">
-                        <button class="filter-btn active" data-chart="line">Line</button>
-                        <button class="filter-btn" data-chart="heatmap">Heatmap</button>
-                        <button class="filter-btn" data-chart="3d">3D Surface</button>
+                    <h3 id="chart-title">SPY</h3>
+                    <div class="chart-controls-row">
+                        <div class="chart-tf-btns">
+                            <button class="filter-btn active" data-tf="1D">1D</button>
+                            <button class="filter-btn" data-tf="1W">1W</button>
+                            <button class="filter-btn" data-tf="1M">1M</button>
+                            <button class="filter-btn" data-tf="3M">3M</button>
+                        </div>
+                        <div class="chart-indicator-toggles">
+                            <label class="indicator-toggle" title="Bollinger Bands">
+                                <input type="checkbox" id="ind-bb" checked> <span>BB</span>
+                            </label>
+                            <label class="indicator-toggle" title="VWAP">
+                                <input type="checkbox" id="ind-vwap" checked> <span>VWAP</span>
+                            </label>
+                            <label class="indicator-toggle" title="RSI (14)">
+                                <input type="checkbox" id="ind-rsi" checked> <span>RSI</span>
+                            </label>
+                            <label class="indicator-toggle" title="MACD (12,26,9)">
+                                <input type="checkbox" id="ind-macd"> <span>MACD</span>
+                            </label>
+                        </div>
                     </div>
                 </div>
                 <div class="trading-chart-container" id="trading-chart-container">
-                    <div class="empty-state">Select a ticker and click Refresh to load PCR data.</div>
+                    <div class="empty-state">Select a ticker and click Refresh to load chart.</div>
                 </div>
             </section>
         </div>

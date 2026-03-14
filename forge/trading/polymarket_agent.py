@@ -442,6 +442,20 @@ def _build_agent_prompt(config: PolyAgentConfig, market_context: str) -> str:
     )
 
 
+def _cycle_config_for_slug(config: PolyAgentConfig, event_slug: str) -> PolyAgentConfig:
+    """Clone agent config for a specific rotating event slug."""
+    return PolyAgentConfig(
+        model=config.model,
+        strategy=config.strategy,
+        event_slug=event_slug,
+        event_url=config.event_url,
+        max_position_usd=config.max_position_usd,
+        interval_minutes=config.interval_minutes,
+        live_trading=config.live_trading,
+        dry_run=config.dry_run,
+    )
+
+
 # ── Agent loop ───────────────────────────────────────────────────────────────
 
 def _run_cycle(config: PolyAgentConfig) -> str:
@@ -584,14 +598,7 @@ def _agent_loop():
             with _agent_lock:
                 _agent_state.active_slug = new_slug
             # Override the event_slug for this cycle
-            cycle_config = PolyAgentConfig(
-                model=config.model,
-                strategy=config.strategy,
-                event_slug=new_slug,
-                event_url=config.event_url,
-                max_position_usd=config.max_position_usd,
-                interval_minutes=config.interval_minutes,
-            )
+            cycle_config = _cycle_config_for_slug(config, new_slug)
         else:
             cycle_config = config
 

@@ -198,10 +198,11 @@ class PortfolioManager:
     # ── Orders ───────────────────────────────────────────────────────────
 
     def record_order(self, ticker: str, side: str, quantity: float,
+                     order_id: str | None = None,
                      order_type: str = "market", price: float | None = None,
                      fill_price: float | None = None, status: str = "filled",
                      broker: str = "paper") -> dict:
-        order_id = str(uuid.uuid4())[:8]
+        order_id = order_id or str(uuid.uuid4())[:8]
         now = time.time()
         with self._lock:
             self._conn.execute(

@@ -1852,6 +1852,8 @@ const tradingState = {
     currentTicker: "SPY",
     currentExpiry: "",
     chartMode: "line",
+    chartTimeframe: "1D",
+    priceData: [],
     tradeSide: "buy",
     assetType: "stock",
     providerCaps: null,
@@ -2022,14 +2024,19 @@ function initTrading() {
         optionExpiry.addEventListener("focus", () => loadOptionExpirations());
     }
 
-    // Chart mode switching
-    document.querySelectorAll(".chart-mode-btns .filter-btn").forEach(btn => {
+    // Timeframe switching
+    document.querySelectorAll(".chart-tf-btns .filter-btn").forEach(btn => {
         btn.addEventListener("click", () => {
-            document.querySelectorAll(".chart-mode-btns .filter-btn").forEach(b => b.classList.remove("active"));
+            document.querySelectorAll(".chart-tf-btns .filter-btn").forEach(b => b.classList.remove("active"));
             btn.classList.add("active");
-            tradingState.chartMode = btn.dataset.chart;
-            renderTradingChart();
+            tradingState.chartTimeframe = btn.dataset.tf;
+            loadPriceChart();
         });
+    });
+
+    // Indicator toggles — re-render chart on change
+    document.querySelectorAll(".chart-indicator-toggles input").forEach(cb => {
+        cb.addEventListener("change", () => renderTradingChart());
     });
 
     // Connect SSE stream
@@ -2078,7 +2085,8 @@ async function loadPCRData() {
         priceEl.textContent = quote.price ? `$${quote.price.toFixed(2)}` : "—";
 
         // Update chart title
-        document.getElementById("chart-title").textContent = `PCR Chart — ${ticker}`;
+        const priceStr = quote.price ? `$${quote.price.toFixed(2)}` : '';
+        document.getElementById("chart-title").textContent = `${ticker} ${priceStr}`;
 
         // Add to history for charting
         tradingState.pcrHistory.push({
@@ -2092,120 +2100,197 @@ async function loadPCRData() {
             tradingState.pcrHistory = tradingState.pcrHistory.slice(-100);
         }
 
-        renderTradingChart();
+        loadPriceChart();
     } catch (e) {
         console.error("Failed to load PCR data:", e);
     }
 }
 
+async function loadPriceChart() {
+    const ticker = tradingState.currentTicker;
+    const tf = tradingState.chartTimeframe || "1D";
+    const provider = document.getElementById("trading-provider").value;
+    // Detect asset type from ticker, not provider — crypto tickers are short symbols
+    const cryptoTickers = ["BTC","ETH","SOL","DOGE","AVAX","LINK","XRP","ADA","SHIB","MATIC","DOT","UNI"];
+    const assetType = cryptoTickers.includes(ticker.toUpperCase()) ? "crypto" : "stock";
+
+    try {
+        const resp = await fetchJson(`/api/trading/price-history/${encodeURIComponent(ticker)}?timeframe=${tf}&type=${assetType}`);
+        tradingState.priceData = resp.candles || [];
+        renderTradingChart();
+    } catch (e) {
+        console.error("Failed to load price history:", e);
+    }
+}
+
 function renderTradingChart() {
     const container = document.getElementById("trading-chart-container");
-    const data = tradingState.pcrHistory.filter(d => d.ticker === tradingState.currentTicker);
+    const data = tradingState.priceData || [];
 
     if (data.length === 0) {
         container.innerHTML = '<div class="empty-state">No data yet. Click Refresh to load.</div>';
         return;
     }
 
-    const mode = tradingState.chartMode;
-    let plotlyCode;
+    const showBB = document.getElementById("ind-bb")?.checked ?? true;
+    const showVWAP = document.getElementById("ind-vwap")?.checked ?? true;
+    const showRSI = document.getElementById("ind-rsi")?.checked ?? true;
+    const showMACD = document.getElementById("ind-macd")?.checked ?? false;
 
-    if (mode === "line") {
-        plotlyCode = `
-            const data = ${JSON.stringify(data)};
-            Plotly.newPlot('chart', [
-                {
-                    x: data.map(d => d.timestamp),
-                    y: data.map(d => d.vol_ratio),
-                    name: 'Vol Ratio',
-                    type: 'scatter',
-                    mode: 'lines+markers',
-                    line: { color: '#f2a74b', width: 2 },
-                    marker: { size: 4 },
-                },
-                {
-                    x: data.map(d => d.timestamp),
-                    y: data.map(d => d.oi_ratio),
-                    name: 'OI Ratio',
-                    type: 'scatter',
-                    mode: 'lines+markers',
-                    line: { color: '#63c7b2', width: 2 },
-                    marker: { size: 4 },
-                },
-                {
-                    x: data.map(d => d.timestamp),
-                    y: data.map(() => 1),
-                    name: 'Neutral (1.0)',
-                    type: 'scatter',
-                    mode: 'lines',
-                    line: { color: '#9cacbf', width: 1, dash: 'dot' },
-                },
-            ], {
-                template: 'plotly_dark',
-                paper_bgcolor: '#171f2a',
-                plot_bgcolor: '#171f2a',
-                margin: { t: 30, r: 20, b: 40, l: 50 },
-                xaxis: { title: 'Time', gridcolor: 'rgba(255,255,255,0.06)' },
-                yaxis: { title: 'PCR', gridcolor: 'rgba(255,255,255,0.06)' },
-                legend: { x: 0, y: 1.1, orientation: 'h' },
-            }, { responsive: true });
-        `;
-    } else if (mode === "heatmap") {
-        const expiries = [...new Set(data.map(d => d.expiry))];
-        const timestamps = [...new Set(data.map(d => d.timestamp))];
-        const z = expiries.map(exp =>
-            timestamps.map(ts => {
-                const point = data.find(d => d.expiry === exp && d.timestamp === ts);
-                return point ? point.vol_ratio : null;
-            })
-        );
-        plotlyCode = `
-            Plotly.newPlot('chart', [{
-                z: ${JSON.stringify(z)},
-                x: ${JSON.stringify(timestamps)},
-                y: ${JSON.stringify(expiries)},
-                type: 'heatmap',
-                colorscale: [[0, '#63c7b2'], [0.5, '#f5c35b'], [1, '#ff6a6a']],
-                colorbar: { title: 'PCR' },
-            }], {
-                template: 'plotly_dark',
-                paper_bgcolor: '#171f2a',
-                plot_bgcolor: '#171f2a',
-                margin: { t: 30, r: 20, b: 60, l: 80 },
-                xaxis: { title: 'Time' },
-                yaxis: { title: 'Expiry' },
-            }, { responsive: true });
-        `;
-    } else {
-        // 3D surface
-        plotlyCode = `
-            const data = ${JSON.stringify(data)};
-            Plotly.newPlot('chart', [{
-                x: data.map(d => d.timestamp),
-                y: data.map(d => d.expiry || 'nearest'),
-                z: data.map(d => d.vol_ratio),
-                type: 'scatter3d',
-                mode: 'markers+lines',
-                marker: {
-                    size: 4,
-                    color: data.map(d => d.vol_ratio),
-                    colorscale: [[0, '#63c7b2'], [0.5, '#f5c35b'], [1, '#ff6a6a']],
-                },
-                line: { color: '#f2a74b', width: 2 },
-            }], {
-                template: 'plotly_dark',
-                paper_bgcolor: '#171f2a',
-                plot_bgcolor: '#171f2a',
-                margin: { t: 10, r: 10, b: 10, l: 10 },
-                scene: {
-                    xaxis: { title: 'Time', gridcolor: 'rgba(255,255,255,0.06)' },
-                    yaxis: { title: 'Expiry', gridcolor: 'rgba(255,255,255,0.06)' },
-                    zaxis: { title: 'PCR', gridcolor: 'rgba(255,255,255,0.06)' },
-                    bgcolor: '#171f2a',
-                },
-            }, { responsive: true });
-        `;
-    }
+    // How many sub-charts do we need?
+    const subCharts = [];
+    if (showRSI) subCharts.push("rsi");
+    if (showMACD) subCharts.push("macd");
+
+    // Domain splits: price chart gets most space, sub-indicators get small strips below
+    const subHeight = 0.12;  // each sub-indicator
+    const gap = 0.03;
+    const subTotal = subCharts.length * (subHeight + gap);
+    const priceTop = 1.0;
+    const priceBottom = subTotal + (subCharts.length > 0 ? 0.02 : 0);
+
+    const plotlyCode = `
+        const data = ${JSON.stringify(data)};
+        const times = data.map(d => d.time);
+        const traces = [];
+
+        // ── Candlestick ──
+        traces.push({
+            x: times,
+            open: data.map(d => d.open),
+            high: data.map(d => d.high),
+            low: data.map(d => d.low),
+            close: data.map(d => d.close),
+            type: 'candlestick',
+            name: 'Price',
+            increasing: { line: { color: '#26a69a' } },
+            decreasing: { line: { color: '#ef5350' } },
+            yaxis: 'y',
+            showlegend: false,
+        });
+
+        ${showBB ? `
+        // ── Bollinger Bands ──
+        traces.push({
+            x: times, y: data.map(d => d.bb_upper),
+            type: 'scatter', mode: 'lines', name: 'BB Upper',
+            line: { color: 'rgba(156,172,191,0.4)', width: 1 },
+            yaxis: 'y', showlegend: false,
+        });
+        traces.push({
+            x: times, y: data.map(d => d.bb_lower),
+            type: 'scatter', mode: 'lines', name: 'BB Lower',
+            line: { color: 'rgba(156,172,191,0.4)', width: 1 },
+            fill: 'tonexty', fillcolor: 'rgba(156,172,191,0.06)',
+            yaxis: 'y', showlegend: false,
+        });
+        traces.push({
+            x: times, y: data.map(d => d.bb_mid),
+            type: 'scatter', mode: 'lines', name: 'BB Mid',
+            line: { color: 'rgba(156,172,191,0.3)', width: 1, dash: 'dot' },
+            yaxis: 'y', showlegend: false,
+        });
+        ` : ''}
+
+        ${showVWAP ? `
+        // ── VWAP ──
+        traces.push({
+            x: times, y: data.map(d => d.vwap),
+            type: 'scatter', mode: 'lines', name: 'VWAP',
+            line: { color: '#f2a74b', width: 1.5 },
+            yaxis: 'y', showlegend: true,
+        });
+        ` : ''}
+
+        const layout = {
+            template: 'plotly_dark',
+            paper_bgcolor: '#171f2a',
+            plot_bgcolor: '#171f2a',
+            margin: { t: 8, r: 50, b: 30, l: 60 },
+            showlegend: true,
+            legend: { x: 0, y: ${priceTop}, orientation: 'h', font: { size: 10 } },
+            xaxis: {
+                gridcolor: 'rgba(255,255,255,0.06)',
+                rangeslider: { visible: false },
+                type: 'date',
+            },
+            yaxis: {
+                domain: [${priceBottom}, ${priceTop}],
+                gridcolor: 'rgba(255,255,255,0.06)',
+                side: 'right',
+            },
+        };
+
+        ${showRSI ? `
+        // ── RSI subplot ──
+        const rsiIdx = ${subCharts.indexOf("rsi")};
+        const rsiBottom = ${subCharts.indexOf("rsi")} * ${subHeight + gap};
+        const rsiTop = rsiBottom + ${subHeight};
+        traces.push({
+            x: times, y: data.map(d => d.rsi),
+            type: 'scatter', mode: 'lines', name: 'RSI',
+            line: { color: '#ab47bc', width: 1.5 },
+            yaxis: 'y2', showlegend: true,
+        });
+        // RSI overbought/oversold
+        traces.push({
+            x: [times[0], times[times.length-1]],
+            y: [70, 70],
+            type: 'scatter', mode: 'lines',
+            line: { color: 'rgba(239,83,80,0.4)', width: 1, dash: 'dot' },
+            yaxis: 'y2', showlegend: false,
+        });
+        traces.push({
+            x: [times[0], times[times.length-1]],
+            y: [30, 30],
+            type: 'scatter', mode: 'lines',
+            line: { color: 'rgba(38,166,154,0.4)', width: 1, dash: 'dot' },
+            yaxis: 'y2', showlegend: false,
+        });
+        layout.yaxis2 = {
+            domain: [rsiBottom, rsiTop],
+            gridcolor: 'rgba(255,255,255,0.06)',
+            range: [0, 100],
+            dtick: 30,
+            side: 'right',
+            title: { text: 'RSI', font: { size: 9 } },
+        };
+        ` : ''}
+
+        ${showMACD ? `
+        // ── MACD subplot ──
+        const macdIdx = ${subCharts.indexOf("macd")};
+        const macdBottom = macdIdx * ${subHeight + gap};
+        const macdTop = macdBottom + ${subHeight};
+        traces.push({
+            x: times, y: data.map(d => d.macd),
+            type: 'scatter', mode: 'lines', name: 'MACD',
+            line: { color: '#42a5f5', width: 1.5 },
+            yaxis: 'y3', showlegend: true,
+        });
+        traces.push({
+            x: times, y: data.map(d => d.macd_signal),
+            type: 'scatter', mode: 'lines', name: 'Signal',
+            line: { color: '#ff7043', width: 1.5 },
+            yaxis: 'y3', showlegend: true,
+        });
+        traces.push({
+            x: times,
+            y: data.map(d => d.macd_hist),
+            type: 'bar', name: 'Histogram',
+            marker: { color: data.map(d => (d.macd_hist || 0) >= 0 ? 'rgba(38,166,154,0.5)' : 'rgba(239,83,80,0.5)') },
+            yaxis: 'y3', showlegend: false,
+        });
+        layout.yaxis3 = {
+            domain: [macdBottom, macdTop],
+            gridcolor: 'rgba(255,255,255,0.06)',
+            side: 'right',
+            title: { text: 'MACD', font: { size: 9 } },
+        };
+        ` : ''}
+
+        Plotly.newPlot('chart', traces, layout, { responsive: true, displayModeBar: false });
+    `;
 
     const html = `<!DOCTYPE html>
 <html><head>

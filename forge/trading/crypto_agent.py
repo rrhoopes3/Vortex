@@ -139,8 +139,8 @@ Rules:
 - You ARE authorized to execute trades autonomously. Do not ask for confirmation.
 - Respect the max position size constraint strictly.
 - Use get_market_quote with provider='robinhood-crypto' for price data.
-- Use get_portfolio to check current holdings before trading.
-- Use execute_trade to place orders. Always specify the ticker and quantity.
+- Use get_portfolio with provider='robinhood-crypto' to check current holdings before trading.
+- Use execute_trade with provider='robinhood-crypto' to place orders. Always specify the ticker and quantity.
 - Be conservative with position sizes. Never go all-in.
 - End your response with a clear DECISION line: BUY X qty / SELL X qty / HOLD — reason.
 """
@@ -257,6 +257,7 @@ def _persist_decision(config: AgentConfig, decision: str, cycle: int):
     """Log decision to DB with current price and position for analysis."""
     try:
         from forge.trading.portfolio import get_portfolio_manager
+        from forge.trading.portfolio_view import build_portfolio_summary
         from forge.trading.engine import get_engine
 
         pm = get_portfolio_manager()
@@ -273,10 +274,11 @@ def _persist_decision(config: AgentConfig, decision: str, cycle: int):
         # Get current position
         pos_qty = 0.0
         pos_value = 0.0
-        for p in pm.get_positions():
-            if p.ticker == config.ticker:
-                pos_qty = p.quantity
-                pos_value = (price or p.avg_price) * p.quantity
+        summary = build_portfolio_summary(provider_name="robinhood-crypto")
+        for position in summary.get("positions", []):
+            if position.get("ticker") == config.ticker:
+                pos_qty = float(position.get("quantity", 0) or 0)
+                pos_value = float(position.get("market_value", 0) or 0)
                 break
 
         pm.log_decision(

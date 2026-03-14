@@ -10,8 +10,8 @@ TRADING_PACK = CapabilityPack(
     guardrail_profile="strict",
     budget=PackBudget(max_cost_usd=1.0, max_steps=5, max_iterations_per_step=10),
     ui_panels=["output", "trading_dashboard", "portfolio"],
-    env_required=["FORGE_TRADIER_API_KEY"],
-    env_optional=["FORGE_TRADIER_ACCOUNT_ID"],
+    env_required=[],
+    env_optional=[],
     deps_required=["yfinance"],
     feature_flag="TRADING_ENABLED",
 )

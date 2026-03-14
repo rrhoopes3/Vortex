@@ -310,84 +310,23 @@ def switch_provider():
 def get_portfolio():
     """Get current portfolio positions and P&L.
 
-    When a live crypto provider is active, syncs real holdings from the
-    brokerage so the portfolio reflects the actual account state.
+    When a live crypto provider is active, prefer brokerage holdings so the
+    UI reflects the actual account state instead of stale local fills.
     """
     try:
-        from forge.config import TRADING_DEFAULT_PROVIDER, TRADING_PAPER_MODE
-        from forge.trading.portfolio import get_portfolio_manager
-        from forge.trading.providers import get_provider_from_config, RobinhoodCryptoAPIProvider
+        from forge.trading.portfolio_view import build_portfolio_summary
 
         provider_name = request.args.get("provider", "").strip()
-        pm = get_portfolio_manager()
-
-        # In live mode with a crypto provider, sync holdings from the brokerage
-        effective_provider = provider_name or TRADING_DEFAULT_PROVIDER
-        log.debug("Portfolio sync check: paper=%s, provider=%s", TRADING_PAPER_MODE, effective_provider)
-        if not TRADING_PAPER_MODE and effective_provider in ("robinhood-crypto",):
-            try:
-                provider = get_provider_from_config(provider_name)
-                if isinstance(provider, RobinhoodCryptoAPIProvider):
-                    holdings = provider.get_holdings()
-                    log.info("Synced %d holdings from Robinhood", len(holdings) if holdings else 0)
-                    if holdings:
-                        _sync_holdings_to_portfolio(pm, holdings, provider)
-                else:
-                    log.warning("Provider is %s, not RobinhoodCryptoAPIProvider", type(provider).__name__)
-            except Exception as e:
-                log.warning("Failed to sync live holdings: %s", e)
-
-        price_fetcher = None
-        if provider_name:
-            engine = get_engine()
-            price_fetcher = lambda t: engine.get_quote(t, provider=provider_name).price
-
-        summary = pm.get_summary(price_fetcher=price_fetcher)
-        log.info("Portfolio summary: %d positions, pnl=%s", summary.get("position_count", 0), summary.get("total_pnl", 0))
+        summary = build_portfolio_summary(provider_name=provider_name)
+        log.info(
+            "Portfolio summary (%s): %d positions, pnl=%s",
+            summary.get("source", "local"),
+            summary.get("position_count", 0),
+            summary.get("total_pnl", 0),
+        )
         return jsonify(summary)
     except ImportError:
         return jsonify({"positions": [], "total_pnl": 0, "message": "Portfolio module available"})
-
-
-def _sync_holdings_to_portfolio(pm, holdings: list[dict], provider) -> None:
-    """Sync live brokerage holdings into the local portfolio DB."""
-    import time as _time
-    for h in holdings:
-        log.info("Raw holding: %s", {k: v for k, v in h.items() if k not in ("id",)})
-        code = h.get("asset_code", "") or h.get("currency", {}).get("code", "")
-        qty_str = h.get("total_quantity", "") or h.get("quantity", "") or h.get("quantity_available_for_trading", "") or "0"
-        quantity = float(qty_str)
-        log.info("Parsed holding: code=%s qty=%s (from '%s')", code, quantity, qty_str)
-        if not code or quantity <= 0:
-            log.warning("Skipping holding: code=%s qty=%s", code, quantity)
-            continue
-
-        # Get cost basis for avg price
-        cost_bases = h.get("cost_bases", [])
-        if cost_bases:
-            direct_cost = float(cost_bases[0].get("direct_cost_basis", 0) or 0)
-            direct_qty = float(cost_bases[0].get("direct_quantity", 0) or 0)
-            avg_price = direct_cost / direct_qty if direct_qty > 0 else 0
-        else:
-            avg_price = 0
-
-        # Upsert into local DB — replace with live data
-        with pm._lock:
-            row = pm._conn.execute(
-                "SELECT * FROM positions WHERE ticker = ?", (code,)
-            ).fetchone()
-            now = _time.time()
-            if row is None:
-                pm._conn.execute(
-                    "INSERT INTO positions (ticker, quantity, avg_price, side, updated_at) VALUES (?, ?, ?, ?, ?)",
-                    (code, quantity, avg_price, "long", now),
-                )
-            else:
-                pm._conn.execute(
-                    "UPDATE positions SET quantity = ?, avg_price = ?, updated_at = ? WHERE ticker = ?",
-                    (quantity, avg_price if avg_price > 0 else row["avg_price"], now, code),
-                )
-            pm._conn.commit()
 
 
 @trading_bp.route("/order", methods=["POST"])
@@ -399,6 +338,7 @@ def place_order():
 
         data = request.get_json() or {}
         asset_type = data.get("asset_type", "stock").strip()
+        provider_name = data.get("provider", "").strip()
         ticker = data.get("ticker", "").strip()
         side = data.get("side", "").strip()
         quantity = float(data.get("quantity", 0))
@@ -408,7 +348,8 @@ def place_order():
         if not ticker or not side or quantity <= 0:
             return jsonify({"error": "ticker, side, and positive quantity required"}), 400
 
-        broker = get_broker()
+        broker = get_broker(provider_name)
+        effective_provider = provider_name or TRADING_DEFAULT_PROVIDER
         log.info(
             "Order: asset=%s ticker=%s side=%s qty=%s broker=%s provider=%s paper=%s",
             asset_type,
@@ -416,7 +357,7 @@ def place_order():
             side,
             quantity,
             broker.name,
-            TRADING_DEFAULT_PROVIDER,
+            effective_provider,
             TRADING_PAPER_MODE,
         )
 
@@ -432,10 +373,10 @@ def place_order():
                 ticker, expiry, strike, option_type, side, int(quantity), order_type, price
             )
         elif asset_type == "crypto":
-            if not hasattr(broker, "place_crypto_order"):
-                result = broker.place_order(ticker, side, quantity, order_type, price)
+            if hasattr(broker, "place_crypto_order"):
+                result = broker.place_crypto_order(ticker, side, quantity, order_type, price)
             else:
-                result = broker.place_crypto_order(ticker, side, quantity)
+                result = broker.place_order(ticker, side, quantity, order_type, price)
         else:
             result = broker.place_order(ticker, side, quantity, order_type, price)
 
@@ -451,7 +392,7 @@ def place_order():
                         **result,
                         "_debug": {
                             "broker": broker.name,
-                            "provider": TRADING_DEFAULT_PROVIDER,
+                            "provider": effective_provider,
                             "paper_mode": TRADING_PAPER_MODE,
                             "asset_type": asset_type,
                             "ticker": ticker,
@@ -462,27 +403,29 @@ def place_order():
             )
 
         # Record successful live orders in local portfolio DB
-        if not TRADING_PAPER_MODE and result.get("status") in ("submitted", "filled", "confirmed"):
+        if not TRADING_PAPER_MODE and not result.get("paper_mode"):
             try:
                 from forge.trading.portfolio import get_portfolio_manager
                 from forge.trading.providers import get_provider_from_config
+
                 pm = get_portfolio_manager()
-                # Try to get fill price from quote
-                fill_price = price
-                if not fill_price:
+                live_status = str(result.get("status", "submitted") or "submitted").lower()
+                fill_price = price if live_status == "filled" else None
+                if live_status == "filled" and not fill_price:
                     try:
-                        provider = get_provider_from_config()
+                        provider = get_provider_from_config(provider_name)
                         q = provider.get_quote(ticker)
                         fill_price = q.price
                     except Exception:
                         fill_price = 0
                 pm.record_order(
+                    order_id=str(result.get("order_id") or ""),
                     ticker=ticker, side=side, quantity=quantity,
                     order_type=order_type, price=price,
-                    fill_price=fill_price,
-                    status="filled", broker=broker.name,
+                    fill_price=fill_price if fill_price else None,
+                    status=live_status, broker=broker.name,
                 )
-                if fill_price:
+                if live_status == "filled" and fill_price:
                     pm.update_position(ticker, quantity, fill_price, side)
                     log.info("Portfolio updated: %s %s %s @ %s", side, quantity, ticker, fill_price)
             except Exception as e:
@@ -506,30 +449,117 @@ def get_orders():
         return jsonify([])
 
 
-@trading_bp.route("/crypto/history/<symbol>")
-def get_crypto_history(symbol: str):
-    """Get crypto price history for charting via yfinance."""
+@trading_bp.route("/price-history/<symbol>")
+def get_price_history(symbol: str):
+    """Get price history + technical indicators for any ticker via yfinance."""
     timeframe = request.args.get("timeframe", "1D").strip()
+    asset_type = request.args.get("type", "stock")  # "stock" or "crypto"
     try:
         import yfinance as yf
+        import numpy as np
 
         tf_map = {
             "1D": ("1d", "5m"),
             "1W": ("5d", "30m"),
             "1M": ("1mo", "1h"),
             "3M": ("3mo", "1d"),
+            "6M": ("6mo", "1d"),
+            "1Y": ("1y", "1d"),
         }
         period, interval = tf_map.get(timeframe, ("1d", "5m"))
 
-        yf_symbol = f"{symbol.upper()}-USD"
+        yf_symbol = f"{symbol.upper()}-USD" if asset_type == "crypto" else symbol.upper()
         ticker = yf.Ticker(yf_symbol)
         hist = ticker.history(period=period, interval=interval)
 
         if hist.empty:
             return jsonify({"symbol": symbol, "candles": [], "timeframe": timeframe})
 
+        closes = hist["Close"].values.astype(float)
+        highs = hist["High"].values.astype(float)
+        lows = hist["Low"].values.astype(float)
+        volumes = hist["Volume"].values.astype(float)
+
+        # ── Bollinger Bands (20-period, 2 std) ──
+        bb_period = 20
+        bb_upper, bb_lower, bb_mid = [], [], []
+        for i in range(len(closes)):
+            if i < bb_period - 1:
+                bb_upper.append(None)
+                bb_lower.append(None)
+                bb_mid.append(None)
+            else:
+                window = closes[i - bb_period + 1:i + 1]
+                mean = float(np.mean(window))
+                std = float(np.std(window))
+                bb_mid.append(round(mean, 4))
+                bb_upper.append(round(mean + 2 * std, 4))
+                bb_lower.append(round(mean - 2 * std, 4))
+
+        # ── VWAP ──
+        cumvol = np.cumsum(volumes)
+        cum_tp_vol = np.cumsum(((highs + lows + closes) / 3) * volumes)
+        vwap = []
+        for i in range(len(closes)):
+            if cumvol[i] > 0:
+                vwap.append(round(float(cum_tp_vol[i] / cumvol[i]), 4))
+            else:
+                vwap.append(None)
+
+        # ── RSI (14-period) ──
+        rsi_period = 14
+        rsi = [None] * len(closes)
+        if len(closes) > rsi_period:
+            deltas = np.diff(closes)
+            gains = np.where(deltas > 0, deltas, 0)
+            losses = np.where(deltas < 0, -deltas, 0)
+            avg_gain = float(np.mean(gains[:rsi_period]))
+            avg_loss = float(np.mean(losses[:rsi_period]))
+            for i in range(rsi_period, len(closes)):
+                if i > rsi_period:
+                    avg_gain = (avg_gain * (rsi_period - 1) + gains[i - 1]) / rsi_period
+                    avg_loss = (avg_loss * (rsi_period - 1) + losses[i - 1]) / rsi_period
+                if avg_loss == 0:
+                    rsi[i] = 100.0
+                else:
+                    rs = avg_gain / avg_loss
+                    rsi[i] = round(100 - (100 / (1 + rs)), 2)
+
+        # ── MACD (12, 26, 9) ──
+        def ema(data, span):
+            result = [None] * len(data)
+            if len(data) < span:
+                return result
+            k = 2 / (span + 1)
+            result[span - 1] = float(np.mean(data[:span]))
+            for i in range(span, len(data)):
+                result[i] = data[i] * k + result[i - 1] * (1 - k)
+            return result
+
+        ema12 = ema(closes, 12)
+        ema26 = ema(closes, 26)
+        macd_line = [None] * len(closes)
+        for i in range(len(closes)):
+            if ema12[i] is not None and ema26[i] is not None:
+                macd_line[i] = round(ema12[i] - ema26[i], 4)
+
+        macd_valid = [v for v in macd_line if v is not None]
+        signal_line = [None] * len(closes)
+        if len(macd_valid) >= 9:
+            sig = ema(macd_valid, 9)
+            offset = len(closes) - len(macd_valid)
+            for i, v in enumerate(sig):
+                if v is not None:
+                    signal_line[i + offset] = round(v, 4)
+
+        macd_hist = [None] * len(closes)
+        for i in range(len(closes)):
+            if macd_line[i] is not None and signal_line[i] is not None:
+                macd_hist[i] = round(macd_line[i] - signal_line[i], 4)
+
+        # ── Build candles with indicators ──
         candles = []
-        for idx, row in hist.iterrows():
+        for j, (idx, row) in enumerate(hist.iterrows()):
             candles.append({
                 "time": idx.isoformat(),
                 "open": round(float(row.get("Open", 0)), 4),
@@ -537,12 +567,29 @@ def get_crypto_history(symbol: str):
                 "low": round(float(row.get("Low", 0)), 4),
                 "close": round(float(row.get("Close", 0)), 4),
                 "volume": int(row.get("Volume", 0) or 0),
+                "bb_upper": bb_upper[j],
+                "bb_mid": bb_mid[j],
+                "bb_lower": bb_lower[j],
+                "vwap": vwap[j],
+                "rsi": rsi[j],
+                "macd": macd_line[j],
+                "macd_signal": signal_line[j],
+                "macd_hist": macd_hist[j],
             })
 
         return jsonify({"symbol": symbol, "candles": candles, "timeframe": timeframe})
     except Exception as e:
-        log.warning("Crypto history failed for %s: %s", symbol, e)
+        log.warning("Price history failed for %s: %s", symbol, e)
         return jsonify({"symbol": symbol, "candles": [], "error": str(e)})
+
+
+# Keep old crypto endpoint as alias
+@trading_bp.route("/crypto/history/<symbol>")
+def get_crypto_history(symbol: str):
+    """Alias — redirects to unified price-history."""
+    from flask import redirect, url_for
+    return redirect(url_for("trading.get_price_history", symbol=symbol,
+                            timeframe=request.args.get("timeframe", "1D"), type="crypto"))
 
 
 # ── Crypto Agent endpoints ───────────────────────────────────────────────────

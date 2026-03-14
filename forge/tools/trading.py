@@ -68,19 +68,20 @@ def set_alert(ticker: str, metric: str = "vol_ratio", threshold: str = "1.0",
         return json.dumps({"error": f"{type(e).__name__}: {e}"})
 
 
-def get_portfolio() -> str:
+def get_portfolio(provider: str = "") -> str:
     """Get current portfolio positions, P&L, and summary."""
     try:
-        from forge.trading.portfolio import get_portfolio_manager
-        pm = get_portfolio_manager()
-        summary = pm.get_summary()
+        from forge.trading.portfolio_view import build_portfolio_summary
+
+        summary = build_portfolio_summary(provider_name=provider)
         return json.dumps(summary)
     except Exception as e:
         return json.dumps({"error": f"{type(e).__name__}: {e}"})
 
 
 def execute_trade(ticker: str, side: str, quantity: str,
-                  order_type: str = "market", price: str = "") -> str:
+                  order_type: str = "market", price: str = "",
+                  provider: str = "") -> str:
     """Execute a trade order. Paper mode by default.
 
     ticker: stock/crypto symbol
@@ -91,7 +92,7 @@ def execute_trade(ticker: str, side: str, quantity: str,
     """
     try:
         from forge.trading.brokers import get_broker
-        broker = get_broker()
+        broker = get_broker(provider)
         result = broker.place_order(
             ticker=ticker,
             side=side,
@@ -238,12 +239,17 @@ def register(registry: ToolRegistry):
         name="get_portfolio",
         description=(
             "Get locally tracked portfolio: positions, unrealized/realized P&L, "
-            "and market values with live price updates. Note: this tracks orders "
-            "placed through Forge — it may not reflect your full brokerage account."
+            "and market values with live price updates. When provider is set to a "
+            "live Robinhood crypto provider, prefer brokerage-backed holdings."
         ),
         parameters={
             "type": "object",
-            "properties": {},
+            "properties": {
+                "provider": {
+                    "type": "string",
+                    "description": "Optional provider override (e.g. robinhood-crypto)",
+                },
+            },
         },
         handler=get_portfolio,
     )
@@ -264,6 +270,7 @@ def register(registry: ToolRegistry):
                 "quantity": {"type": "string", "description": "Number of shares/units to trade"},
                 "order_type": {"type": "string", "description": "Order type: market (default) or limit"},
                 "price": {"type": "string", "description": "Limit price (required for limit orders)"},
+                "provider": {"type": "string", "description": "Optional broker/provider override"},
             },
             "required": ["ticker", "side", "quantity"],
         },

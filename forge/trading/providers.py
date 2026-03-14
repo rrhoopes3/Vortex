@@ -505,12 +505,17 @@ class RobinhoodProvider(DataProvider):
                 log.warning("Robinhood positions failed: %s", e)
                 return []
 
-    def order_crypto(self, symbol: str, side: str, quantity: float) -> dict:
+    def order_crypto(self, symbol: str, side: str, quantity: float,
+                     order_type: str = "market", price: float | None = None) -> dict:
         """Place a crypto order. side: 'buy' | 'sell'."""
         with self._lock:
             try:
                 self._ensure_login()
                 import robin_stocks.robinhood as r
+                if order_type != "market":
+                    return {
+                        "error": "Robinhood legacy crypto orders currently support market orders only"
+                    }
                 if side == "buy":
                     result = r.orders.order_buy_crypto_by_quantity(symbol, quantity)
                 else:

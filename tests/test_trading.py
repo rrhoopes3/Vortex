@@ -383,7 +383,7 @@ class TestTradingTools:
         from forge.tools.trading import register
         reg = ToolRegistry()
         register(reg)
-        assert len(reg.list_tools()) == 7
+        assert len(reg.list_tools()) == 10
 
 
 # ── Trading Category in Registry ─────────────────────────────────────────────
@@ -481,7 +481,7 @@ class TestTradingEndpoints:
         class DummyBroker:
             name = "robinhood-crypto"
 
-            def place_crypto_order(self, ticker, side, quantity):
+            def place_crypto_order(self, ticker, side, quantity, order_type="market", price=None):
                 return {
                     "error": (
                         "RuntimeError: Robinhood Crypto API requires the optional package "
@@ -490,7 +490,7 @@ class TestTradingEndpoints:
                     )
                 }
 
-        monkeypatch.setattr(broker_mod, "get_broker", lambda: DummyBroker())
+        monkeypatch.setattr(broker_mod, "get_broker", lambda provider="": DummyBroker())
 
         r = client.post("/api/trading/order", json={
             "asset_type": "crypto",
@@ -501,6 +501,90 @@ class TestTradingEndpoints:
         assert r.status_code == 400
         data = r.get_json()
         assert "cryptography" in data["error"]
+
+    def test_order_provider_override_used_for_crypto(self, client, monkeypatch):
+        from forge.trading import brokers as broker_mod
+
+        captured = {}
+
+        class DummyBroker:
+            name = "robinhood-crypto"
+
+            def place_crypto_order(self, ticker, side, quantity, order_type="market", price=None):
+                captured["trade"] = (ticker, side, quantity, order_type, price)
+                return {"status": "submitted", "order_id": "live-1"}
+
+        class DummyPortfolio:
+            def record_order(self, **kwargs):
+                captured["record"] = kwargs
+                return kwargs
+
+            def update_position(self, *args, **kwargs):
+                captured["updated"] = True
+
+        def fake_get_broker(provider=""):
+            captured["provider"] = provider
+            return DummyBroker()
+
+        monkeypatch.setattr(broker_mod, "get_broker", fake_get_broker)
+        monkeypatch.setattr("forge.trading.portfolio.get_portfolio_manager", lambda: DummyPortfolio())
+
+        import forge.config as cfg
+        orig = cfg.TRADING_PAPER_MODE
+        cfg.TRADING_PAPER_MODE = False
+        try:
+            r = client.post("/api/trading/order", json={
+                "asset_type": "crypto",
+                "provider": "robinhood-crypto",
+                "ticker": "DOGE",
+                "side": "buy",
+                "quantity": 1,
+                "order_type": "limit",
+                "price": 0.1,
+            })
+            assert r.status_code == 200
+            assert captured["provider"] == "robinhood-crypto"
+            assert captured["trade"] == ("DOGE", "buy", 1.0, "limit", 0.1)
+        finally:
+            cfg.TRADING_PAPER_MODE = orig
+
+    def test_live_submitted_order_not_marked_filled(self, client, monkeypatch):
+        from forge.trading import brokers as broker_mod
+
+        captured = {"updated": False}
+
+        class DummyBroker:
+            name = "tradier"
+
+            def place_order(self, ticker, side, quantity, order_type="market", price=None):
+                return {"status": "submitted", "order_id": "live-2"}
+
+        class DummyPortfolio:
+            def record_order(self, **kwargs):
+                captured["record"] = kwargs
+                return kwargs
+
+            def update_position(self, *args, **kwargs):
+                captured["updated"] = True
+
+        monkeypatch.setattr(broker_mod, "get_broker", lambda provider="": DummyBroker())
+        monkeypatch.setattr("forge.trading.portfolio.get_portfolio_manager", lambda: DummyPortfolio())
+
+        import forge.config as cfg
+        orig = cfg.TRADING_PAPER_MODE
+        cfg.TRADING_PAPER_MODE = False
+        try:
+            r = client.post("/api/trading/order", json={
+                "ticker": "SPY",
+                "side": "buy",
+                "quantity": 1,
+            })
+            assert r.status_code == 200
+            assert captured["record"]["status"] == "submitted"
+            assert captured["record"]["fill_price"] is None
+            assert captured["updated"] is False
+        finally:
+            cfg.TRADING_PAPER_MODE = orig
 
     def test_orders_endpoint(self, client):
         r = client.get("/api/trading/orders")
@@ -647,12 +731,26 @@ class TestProviderReadiness:
     def test_readiness_tradier_partial_creds(self):
         """Tradier API key set but account_id missing → degraded."""
         import forge.config as cfg
-        orig = (cfg.TRADING_ENABLED, cfg.TRADING_PAPER_MODE,
-                cfg.TRADING_TRADIER_API_KEY, cfg.TRADING_TRADIER_ACCOUNT_ID)
+        orig = (
+            cfg.TRADING_ENABLED,
+            cfg.TRADING_PAPER_MODE,
+            cfg.TRADING_TRADIER_API_KEY,
+            cfg.TRADING_TRADIER_ACCOUNT_ID,
+            cfg.TRADING_DEFAULT_PROVIDER,
+            cfg.TRADING_ROBINHOOD_USER,
+            cfg.TRADING_ROBINHOOD_PASS,
+            cfg.TRADING_ROBINHOOD_API_KEY,
+            cfg.TRADING_ROBINHOOD_API_SECRET,
+        )
         cfg.TRADING_ENABLED = True
         cfg.TRADING_PAPER_MODE = False
         cfg.TRADING_TRADIER_API_KEY = "test-key-123"
         cfg.TRADING_TRADIER_ACCOUNT_ID = ""
+        cfg.TRADING_DEFAULT_PROVIDER = "tradier"
+        cfg.TRADING_ROBINHOOD_USER = ""
+        cfg.TRADING_ROBINHOOD_PASS = ""
+        cfg.TRADING_ROBINHOOD_API_KEY = ""
+        cfg.TRADING_ROBINHOOD_API_SECRET = ""
         try:
             from forge.trading import check_trading_readiness
             result = check_trading_readiness()
@@ -660,8 +758,17 @@ class TestProviderReadiness:
             assert result["broker"] == "paper"
             assert any("account_id" in issue.lower() for issue in result["issues"])
         finally:
-            (cfg.TRADING_ENABLED, cfg.TRADING_PAPER_MODE,
-             cfg.TRADING_TRADIER_API_KEY, cfg.TRADING_TRADIER_ACCOUNT_ID) = orig
+            (
+                cfg.TRADING_ENABLED,
+                cfg.TRADING_PAPER_MODE,
+                cfg.TRADING_TRADIER_API_KEY,
+                cfg.TRADING_TRADIER_ACCOUNT_ID,
+                cfg.TRADING_DEFAULT_PROVIDER,
+                cfg.TRADING_ROBINHOOD_USER,
+                cfg.TRADING_ROBINHOOD_PASS,
+                cfg.TRADING_ROBINHOOD_API_KEY,
+                cfg.TRADING_ROBINHOOD_API_SECRET,
+            ) = orig
 
     def test_readiness_tradier_full_creds(self):
         """Tradier with full credentials → ready, broker=tradier."""
@@ -688,20 +795,43 @@ class TestProviderReadiness:
     def test_readiness_no_broker_creds_falls_back(self):
         """No broker credentials, not paper mode → degraded with paper fallback."""
         import forge.config as cfg
-        orig = (cfg.TRADING_ENABLED, cfg.TRADING_PAPER_MODE,
-                cfg.TRADING_TRADIER_API_KEY, cfg.TRADING_TRADIER_ACCOUNT_ID)
+        orig = (
+            cfg.TRADING_ENABLED,
+            cfg.TRADING_PAPER_MODE,
+            cfg.TRADING_TRADIER_API_KEY,
+            cfg.TRADING_TRADIER_ACCOUNT_ID,
+            cfg.TRADING_DEFAULT_PROVIDER,
+            cfg.TRADING_ROBINHOOD_USER,
+            cfg.TRADING_ROBINHOOD_PASS,
+            cfg.TRADING_ROBINHOOD_API_KEY,
+            cfg.TRADING_ROBINHOOD_API_SECRET,
+        )
         cfg.TRADING_ENABLED = True
         cfg.TRADING_PAPER_MODE = False
         cfg.TRADING_TRADIER_API_KEY = ""
         cfg.TRADING_TRADIER_ACCOUNT_ID = ""
+        cfg.TRADING_DEFAULT_PROVIDER = "yfinance"
+        cfg.TRADING_ROBINHOOD_USER = ""
+        cfg.TRADING_ROBINHOOD_PASS = ""
+        cfg.TRADING_ROBINHOOD_API_KEY = ""
+        cfg.TRADING_ROBINHOOD_API_SECRET = ""
         try:
             from forge.trading import check_trading_readiness
             result = check_trading_readiness()
             assert result["state"] == "degraded"
             assert result["broker"] == "paper"
         finally:
-            (cfg.TRADING_ENABLED, cfg.TRADING_PAPER_MODE,
-             cfg.TRADING_TRADIER_API_KEY, cfg.TRADING_TRADIER_ACCOUNT_ID) = orig
+            (
+                cfg.TRADING_ENABLED,
+                cfg.TRADING_PAPER_MODE,
+                cfg.TRADING_TRADIER_API_KEY,
+                cfg.TRADING_TRADIER_ACCOUNT_ID,
+                cfg.TRADING_DEFAULT_PROVIDER,
+                cfg.TRADING_ROBINHOOD_USER,
+                cfg.TRADING_ROBINHOOD_PASS,
+                cfg.TRADING_ROBINHOOD_API_KEY,
+                cfg.TRADING_ROBINHOOD_API_SECRET,
+            ) = orig
 
 
     def test_readiness_robinhood_crypto_missing_dependency(self, monkeypatch):
@@ -848,3 +978,24 @@ class TestConfiguredProviderSelection:
         engine = engine_mod.TradingEngine(data_dir=tmp_path)
         assert engine._get_provider("robinhood-crypto") is dummy
         assert calls == ["robinhood-crypto"]
+
+
+class TestPolymarketRotationConfig:
+    def test_cycle_config_preserves_live_flags(self):
+        from forge.trading.polymarket_agent import PolyAgentConfig, _cycle_config_for_slug
+
+        config = PolyAgentConfig(
+            model="grok-4-1-fast-reasoning",
+            strategy="momentum",
+            event_slug="btc-updown-15m-1",
+            event_url="https://polymarket.com/event/btc-updown-15m-1",
+            max_position_usd=75,
+            interval_minutes=5,
+            live_trading=True,
+            dry_run=False,
+        )
+
+        rotated = _cycle_config_for_slug(config, "btc-updown-15m-2")
+        assert rotated.event_slug == "btc-updown-15m-2"
+        assert rotated.live_trading is True
+        assert rotated.dry_run is False

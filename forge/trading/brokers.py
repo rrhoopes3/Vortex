@@ -181,11 +181,12 @@ class RobinhoodBroker(BrokerAdapter):
             )
         return {"error": "Robinhood legacy provider not configured for options"}
 
-    def place_crypto_order(self, symbol: str, side: str, quantity: float) -> dict:
+    def place_crypto_order(self, symbol: str, side: str, quantity: float,
+                           order_type: str = "market", price: float | None = None) -> dict:
         """Place a crypto order."""
         provider = get_provider_from_config("robinhood")
         if hasattr(provider, "order_crypto"):
-            return provider.order_crypto(symbol, side, quantity)
+            return provider.order_crypto(symbol, side, quantity, order_type, price)
         return {"error": "Robinhood legacy provider not configured for crypto"}
 
     def cancel_order(self, order_id: str) -> bool:
@@ -206,6 +207,10 @@ class RobinhoodCryptoAPIBroker(BrokerAdapter):
             return provider.order_crypto(ticker, side, quantity, order_type, price)
         return {"error": "Robinhood Crypto API provider not configured"}
 
+    def place_crypto_order(self, ticker: str, side: str, quantity: float,
+                           order_type: str = "market", price: float | None = None) -> dict:
+        return self.place_order(ticker, side, quantity, order_type, price)
+
     def cancel_order(self, order_id: str) -> bool:
         return False
 
@@ -216,29 +221,47 @@ _broker: BrokerAdapter | None = None
 _broker_lock = threading.Lock()
 
 
-def get_broker() -> BrokerAdapter:
+def _build_broker(provider_name: str, *, allow_tradier_fallback: bool = False) -> BrokerAdapter:
+    from forge.config import (
+        TRADING_PAPER_MODE,
+        TRADING_TRADIER_API_KEY,
+        TRADING_TRADIER_ACCOUNT_ID,
+        TRADING_TRADIER_SANDBOX,
+        TRADING_ROBINHOOD_USER,
+        TRADING_ROBINHOOD_PASS,
+        TRADING_ROBINHOOD_API_KEY,
+        TRADING_ROBINHOOD_API_SECRET,
+    )
+
+    if TRADING_PAPER_MODE:
+        return PaperBroker(provider_name=provider_name)
+    if provider_name == "robinhood" and TRADING_ROBINHOOD_USER and TRADING_ROBINHOOD_PASS:
+        return RobinhoodBroker()
+    if provider_name == "robinhood-crypto" and TRADING_ROBINHOOD_API_KEY and TRADING_ROBINHOOD_API_SECRET:
+        return RobinhoodCryptoAPIBroker()
+    if provider_name == "tradier" and TRADING_TRADIER_API_KEY and TRADING_TRADIER_ACCOUNT_ID:
+        return TradierBroker(
+            api_key=TRADING_TRADIER_API_KEY,
+            account_id=TRADING_TRADIER_ACCOUNT_ID,
+            sandbox=TRADING_TRADIER_SANDBOX,
+        )
+    if allow_tradier_fallback and TRADING_TRADIER_API_KEY and TRADING_TRADIER_ACCOUNT_ID:
+        return TradierBroker(
+            api_key=TRADING_TRADIER_API_KEY,
+            account_id=TRADING_TRADIER_ACCOUNT_ID,
+            sandbox=TRADING_TRADIER_SANDBOX,
+        )
+    return PaperBroker(provider_name=provider_name or "yfinance")
+
+
+def get_broker(provider_name: str = "") -> BrokerAdapter:
     global _broker
+    if provider_name:
+        return _build_broker(provider_name)
+
     with _broker_lock:
         if _broker is None:
-            from forge.config import (
-                TRADING_PAPER_MODE, TRADING_DEFAULT_PROVIDER,
-                TRADING_TRADIER_API_KEY, TRADING_TRADIER_ACCOUNT_ID,
-                TRADING_TRADIER_SANDBOX,
-                TRADING_ROBINHOOD_USER, TRADING_ROBINHOOD_PASS,
-                TRADING_ROBINHOOD_API_KEY, TRADING_ROBINHOOD_API_SECRET,
-            )
-            if TRADING_PAPER_MODE:
-                _broker = PaperBroker(provider_name=TRADING_DEFAULT_PROVIDER)
-            elif TRADING_DEFAULT_PROVIDER == "robinhood" and TRADING_ROBINHOOD_USER and TRADING_ROBINHOOD_PASS:
-                _broker = RobinhoodBroker()
-            elif TRADING_DEFAULT_PROVIDER == "robinhood-crypto" and TRADING_ROBINHOOD_API_KEY and TRADING_ROBINHOOD_API_SECRET:
-                _broker = RobinhoodCryptoAPIBroker()
-            elif TRADING_TRADIER_API_KEY and TRADING_TRADIER_ACCOUNT_ID:
-                _broker = TradierBroker(
-                    api_key=TRADING_TRADIER_API_KEY,
-                    account_id=TRADING_TRADIER_ACCOUNT_ID,
-                    sandbox=TRADING_TRADIER_SANDBOX,
-                )
-            else:
-                _broker = PaperBroker(provider_name=TRADING_DEFAULT_PROVIDER)
+            from forge.config import TRADING_DEFAULT_PROVIDER
+
+            _broker = _build_broker(TRADING_DEFAULT_PROVIDER, allow_tradier_fallback=True)
         return _broker

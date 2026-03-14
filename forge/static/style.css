@@ -1413,7 +1413,7 @@ input[type="range"] {
 /* ── Trading Tab ────────────────────────────────────────────────── */
 
 .trading-layout {
-    grid-template-columns: 280px 1fr;
+    grid-template-columns: 320px 1fr;
 }
 .trading-layout.has-agent-log {
     grid-template-columns: 240px 320px 1fr;
@@ -1874,13 +1874,14 @@ input[type="range"] {
 .trading-chart-panel {
     display: flex;
     flex-direction: column;
+    max-height: calc(100vh - 60px);
+    overflow: hidden;
 }
 
 .trading-chart-container {
     flex: 1;
     position: relative;
-    min-height: 280px;
-    max-height: 40vh;
+    min-height: 200px;
 }
 
 .trading-chart-container iframe {
@@ -1893,6 +1894,37 @@ input[type="range"] {
     left: 0;
 }
 
+.chart-controls-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+.chart-tf-btns {
+    display: flex;
+    gap: 2px;
+}
+.chart-indicator-toggles {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.indicator-toggle {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+}
+.indicator-toggle input {
+    width: 13px;
+    height: 13px;
+    accent-color: var(--accent);
+}
+.indicator-toggle input:checked + span {
+    color: var(--text-primary);
+}
 .chart-mode-btns {
     display: flex;
     gap: 2px;
