@@ -980,6 +980,125 @@ class TestConfiguredProviderSelection:
         assert calls == ["robinhood-crypto"]
 
 
+class TestDailyRecap:
+    """Tests for the daily trading recap feature."""
+
+    @pytest.fixture
+    def client(self):
+        from forge.app import app
+        app.config["TESTING"] = True
+        with app.test_client() as c:
+            yield c
+
+    def test_empty_recap(self, tmp_path):
+        """Recap with no activity returns zeroed stats."""
+        from forge.trading.portfolio import PortfolioManager
+        pm = PortfolioManager(str(tmp_path / "recap.db"))
+        recap = pm.get_daily_recap("2026-03-14")
+        assert recap["date"] == "2026-03-14"
+        assert recap["stats"]["total_orders"] == 0
+        assert recap["stats"]["trades_closed"] == 0
+        assert recap["stats"]["win_rate"] is None
+        assert recap["stats"]["best_trade"] is None
+        assert recap["orders"] == []
+        assert recap["realized_trades"] == []
+        assert recap["decisions"] == []
+
+    def test_recap_with_trades(self, tmp_path):
+        """Recap captures orders and realized P&L for the target day."""
+        import datetime as dt
+        from forge.trading.portfolio import PortfolioManager
+        pm = PortfolioManager(str(tmp_path / "recap2.db"))
+
+        # Target day: 2026-03-14
+        day = dt.date(2026, 3, 14)
+        mid_day = dt.datetime.combine(day, dt.time(12, 0)).timestamp()
+
+        # Buy then sell — creates a realized P&L entry
+        pm.record_order(ticker="BTC", side="buy", quantity=1.0,
+                        fill_price=60000, status="filled", broker="paper")
+        pm.update_position("BTC", 1.0, 60000, "buy")
+
+        # Manually set order timestamps to target day
+        pm._conn.execute("UPDATE orders SET created_at = ?", (mid_day,))
+
+        pm.record_order(ticker="BTC", side="sell", quantity=1.0,
+                        fill_price=61000, status="filled", broker="paper")
+        pm.update_position("BTC", 1.0, 61000, "sell")
+
+        # Set all timestamps to target day
+        pm._conn.execute("UPDATE orders SET created_at = ?", (mid_day,))
+        pm._conn.execute("UPDATE realized_pnl SET closed_at = ?", (mid_day,))
+        pm._conn.commit()
+
+        recap = pm.get_daily_recap("2026-03-14")
+        assert recap["stats"]["total_orders"] == 2
+        assert recap["stats"]["buy_orders"] == 1
+        assert recap["stats"]["sell_orders"] == 1
+        assert recap["stats"]["trades_closed"] == 1
+        assert recap["stats"]["wins"] == 1
+        assert recap["stats"]["losses"] == 0
+        assert recap["stats"]["win_rate"] == 100.0
+        assert recap["stats"]["realized_pnl"] == 1000.0
+        assert recap["stats"]["best_trade"]["ticker"] == "BTC"
+        assert recap["stats"]["best_trade"]["pnl"] == 1000.0
+
+    def test_recap_with_decisions(self, tmp_path):
+        """Recap captures agent decisions and action breakdown."""
+        import datetime as dt
+        from forge.trading.portfolio import PortfolioManager
+        pm = PortfolioManager(str(tmp_path / "recap3.db"))
+
+        day = dt.date(2026, 3, 14)
+        mid_day = dt.datetime.combine(day, dt.time(12, 0)).timestamp()
+
+        pm.log_decision(ticker="BTC", strategy="momentum", model="grok",
+                        price=60000, decision="HOLD — no edge",
+                        cycle=1)
+        pm.log_decision(ticker="BTC", strategy="momentum", model="grok",
+                        price=60500, decision="BUY 0.5 BTC",
+                        cycle=2)
+
+        # Set timestamps to target day
+        pm._conn.execute("UPDATE decisions SET timestamp = ?", (mid_day,))
+        pm._conn.commit()
+
+        recap = pm.get_daily_recap("2026-03-14")
+        assert recap["stats"]["agent_decisions"] == 2
+        assert recap["stats"]["agent_actions"]["HOLD"] == 1
+        assert recap["stats"]["agent_actions"]["BUY"] == 1
+
+    def test_recap_excludes_other_days(self, tmp_path):
+        """Recap only returns activity from the requested day."""
+        import datetime as dt
+        from forge.trading.portfolio import PortfolioManager
+        pm = PortfolioManager(str(tmp_path / "recap4.db"))
+
+        # Create order on March 13
+        march_13 = dt.datetime(2026, 3, 13, 12, 0).timestamp()
+        pm.record_order(ticker="ETH", side="buy", quantity=2.0,
+                        fill_price=3000, status="filled", broker="paper")
+        pm._conn.execute("UPDATE orders SET created_at = ?", (march_13,))
+        pm._conn.commit()
+
+        # March 14 recap should be empty
+        recap = pm.get_daily_recap("2026-03-14")
+        assert recap["stats"]["total_orders"] == 0
+
+    def test_recap_endpoint(self, client):
+        """GET /api/trading/recap returns JSON."""
+        resp = client.get("/api/trading/recap?date=2026-03-14")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["date"] == "2026-03-14"
+        assert "stats" in data
+
+    def test_recap_invalid_date(self, client):
+        """Invalid date returns 400."""
+        resp = client.get("/api/trading/recap?date=not-a-date")
+        assert resp.status_code == 400
+
+
 class TestPolymarketRotationConfig:
     def test_cycle_config_preserves_live_flags(self):
         from forge.trading.polymarket_agent import PolyAgentConfig, _cycle_config_for_slug

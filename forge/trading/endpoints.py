@@ -449,6 +449,23 @@ def get_orders():
         return jsonify([])
 
 
+@trading_bp.route("/recap")
+def daily_recap():
+    """Get a daily trading recap — orders, P&L, agent decisions, win rate."""
+    from forge.trading.portfolio import get_portfolio_manager
+
+    date_str = request.args.get("date", "").strip() or None
+    try:
+        pm = get_portfolio_manager()
+        recap = pm.get_daily_recap(date_str)
+        return jsonify(recap)
+    except ValueError as e:
+        return jsonify({"error": f"Invalid date: {e}"}), 400
+    except Exception as e:
+        log.exception("Recap failed")
+        return jsonify({"error": str(e)}), 500
+
+
 @trading_bp.route("/price-history/<symbol>")
 def get_price_history(symbol: str):
     """Get price history + technical indicators for any ticker via yfinance."""

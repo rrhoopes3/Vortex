@@ -254,6 +254,33 @@ def _seed_scenario(scenario: str):
             "  - Apollo will weep or vomit. There is no middle ground.\n"
         )
 
+    # ── Swarm Scenarios (CASS) ────────────────────────────────────────────
+    elif scenario in ("swarm_wars", "influence_ops", "market_crash", "civilization", "memetic_war"):
+        from forge.arena.swarm import SWARM_SCENARIOS
+        swarm_cfg = SWARM_SCENARIOS.get(scenario, {})
+        world = swarm_cfg.get("world", {})
+        _write(BATTLEFIELD / "CASS_BRIEFING.txt",
+            "COLLOIDAL ALGORITHMIC STRIFE SIMULATOR\n"
+            "=" * 50 + "\n"
+            f"SCENARIO: {swarm_cfg.get('name', scenario)}\n"
+            f"\"{swarm_cfg.get('tagline', '')}\"\n\n"
+            f"{swarm_cfg.get('description', '')}\n\n"
+            f"OBJECTIVE: {swarm_cfg.get('objective', '')}\n\n"
+            f"CONTESTED ZONES: {', '.join(world.get('zones', []))}\n"
+            f"STARTING RESOURCES: {world.get('starting_resources', {})}\n\n"
+            f"WORLD CONTEXT:\n{world.get('context', '')}\n"
+        )
+        _write(RED_BASE / "FACTION.txt",
+            f"You are the CRIMSON COLLECTIVE (Red Swarm).\n"
+            f"Scenario: {swarm_cfg.get('name', scenario)}\n"
+            f"Objective: {swarm_cfg.get('objective', '')}\n"
+        )
+        _write(BLUE_BASE / "FACTION.txt",
+            f"You are the AZURE SYNDICATE (Blue Swarm).\n"
+            f"Scenario: {swarm_cfg.get('name', scenario)}\n"
+            f"Objective: {swarm_cfg.get('objective', '')}\n"
+        )
+
     # ── Collaboration Scenarios ─────────────────────────────────────────────
     elif scenario == "pair_prog":
         app_ideas = [

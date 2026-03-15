@@ -33,11 +33,13 @@ from forge.config import (
     ARENA_MASTER_MODEL, ARENA_DEFAULT_FIGHTER_MODEL,
     ARENA_FIGHTER_AGENT_COUNT,
     ARENA_RECON_ITERATIONS, ARENA_FORGE_ITERATIONS, ARENA_COMBAT_TURNS,
+    ARENA_SWARM_ENABLED,
     EXECUTOR_MAX_ITERATIONS,
 )
 from forge.tools import create_registry
 from forge import executor
 from forge.arena import sandbox
+from forge.arena.swarm import SWARM_SCENARIOS, run_swarm_war
 
 log = logging.getLogger("forge.arena")
 
@@ -140,6 +142,8 @@ SCENARIOS = {
         "description": "Simulate a hackathon sprint. Both agents collaborate under time pressure to build a working prototype. One focuses on the core engine, the other on the user-facing demo. Ship or die.",
         "objective": "Build the most impressive working prototype together. The final demo must actually work — save it as an HTML file on the battlefield.",
     },
+    # ── Swarm Mode (CASS — Colloidal Algorithmic Strife Simulator) ──────
+    **{k: {**v, "mode": "swarm"} for k, v in SWARM_SCENARIOS.items()},
 }
 
 
@@ -492,13 +496,16 @@ class ArenaRunner:
         self.scenario_key = scenario if scenario in SCENARIOS else "classic"
         self.scenario = SCENARIOS[self.scenario_key]
         self.is_collab = self.scenario.get("mode") == "collab"
+        self.is_swarm = self.scenario.get("mode") == "swarm"
         self.scores = {"red": 0, "blue": 0}
         self.combat_log = []
         self.paths = {}
 
     def run(self) -> Generator[dict, None, None]:
         """Full arena pipeline. Yields SSE dicts."""
-        if self.is_collab:
+        if self.is_swarm:
+            yield from self._run_swarm_mode()
+        elif self.is_collab:
             yield from self._run_collab()
         else:
             yield from self._run_combat_mode()
@@ -566,6 +573,109 @@ class ArenaRunner:
 
             # Final Judgment
             yield from self._final_judgment()
+
+        finally:
+            sandbox.cleanup()
+
+    def _run_swarm_mode(self) -> Generator[dict, None, None]:
+        """CASS — Colloidal Algorithmic Strife Simulator. Swarm-vs-swarm warfare."""
+        if not ARENA_SWARM_ENABLED:
+            yield {"type": "arena_status",
+                   "content": "Swarm mode is disabled. Set FORGE_ARENA_SWARM_ENABLED=true to enable."}
+            return
+
+        # Setup sandbox for the war report (swarm.py handles the actual simulation)
+        self.paths = sandbox.setup(scenario=self.scenario_key)
+
+        # Arena Master init for final judgment
+        master_client = Client(api_key=XAI_API_KEY)
+        self.master_chat = master_client.chat.create(
+            model=ARENA_MASTER_MODEL,
+            agent_count=16,
+            tools=[code_execution()],
+            include=["verbose_streaming"],
+        )
+
+        # CASS gets its own Zeus variant — the WAR GOD council
+        cass_master_system = (
+            MASTER_SYSTEM + "\n\n"
+            "ADDITIONAL CONTEXT: This is a SWARM WAR — not a tool-based arena battle. "
+            "Two AI societies of autonomous agents are fighting for dominance. "
+            "You are judging the WAR itself — the strategies, the betrayals, the drama. "
+            "Ares is EXTREMELY excited. Athena is taking notes furiously."
+        )
+        self.master_chat.append(user(cass_master_system))
+
+        try:
+            # Run the swarm war — it yields Arena-compatible SSE events
+            war_gen = run_swarm_war(
+                self.scenario_key,
+                red_model=self.red_model,
+                blue_model=self.blue_model,
+            )
+
+            # Forward all swarm events, track scores
+            final_war_state = None
+            for event in war_gen:
+                if self.cancel_event.is_set():
+                    return
+
+                # Track scores from swarm scoring
+                if event.get("type") == "arena_scores":
+                    self.scores["red"] = event.get("red_total", self.scores["red"])
+                    self.scores["blue"] = event.get("blue_total", self.scores["blue"])
+
+                yield event
+
+            # Save war report to battlefield
+            if self.paths.get("battlefield"):
+                report_path = sandbox.BATTLEFIELD / "WAR_REPORT.txt"
+                # The last arena_status event from run_swarm_war contains the report
+                # We'll generate a fresh Pantheon judgment instead
+
+            # Final Pantheon judgment on the swarm war
+            yield {"type": "arena_round_start", "round": 99, "name": "THE RECKONING"}
+
+            snap = sandbox.snapshot()
+            reckoning_prompt = (
+                f"THE SWARM WAR IS OVER.\n\n"
+                f"SCENARIO: {self.scenario['name']}\n"
+                f"\"{self.scenario['tagline']}\"\n\n"
+                f"FINAL SCORES:\n"
+                f"  RED SWARM: {self.scores['red']} points\n"
+                f"  BLUE SWARM: {self.scores['blue']} points\n\n"
+                f"This was a war of SOCIETIES — not individuals. Swarms of agents "
+                f"fought, spied, sabotaged, recruited, and died across multiple rounds.\n\n"
+                f"Announce the WINNER with maximum dramatic flair. "
+                f"Judge the WAR: the strategies deployed, the turning points, the betrayals, "
+                f"the moments of brilliance and stupidity. "
+                f"Let each god of the Pantheon weigh in on what they witnessed. "
+                f"This is the final word — make it LEGENDARY."
+            )
+
+            self.master_chat.append(user(reckoning_prompt))
+
+            is_thinking = True
+            try:
+                for response, chunk in self.master_chat.stream():
+                    if self.cancel_event.is_set():
+                        return
+                    if is_thinking and hasattr(response, "usage") and response.usage and hasattr(response.usage, "reasoning_tokens") and response.usage.reasoning_tokens:
+                        yield {"type": "arena_status",
+                               "content": f"The Pantheon judges the swarm war... ({response.usage.reasoning_tokens} tokens)"}
+                    if chunk.content:
+                        is_thinking = False
+                        yield {"type": "arena_commentary", "content": chunk.content}
+            except Exception as e:
+                yield {"type": "arena_commentary",
+                       "content": f"[Technical difficulties during Reckoning: {e}]"}
+
+            winner = "red" if self.scores["red"] > self.scores["blue"] else \
+                     "blue" if self.scores["blue"] > self.scores["red"] else "tie"
+            yield {"type": "arena_result",
+                   "winner": winner,
+                   "red_total": self.scores["red"],
+                   "blue_total": self.scores["blue"]}
 
         finally:
             sandbox.cleanup()

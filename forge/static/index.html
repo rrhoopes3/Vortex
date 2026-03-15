@@ -18,6 +18,8 @@
             <button class="tab-btn" data-tab="memory">Memory</button>
             <button class="tab-btn" data-tab="safety">Safety</button>
             <button class="tab-btn" data-tab="trading">Trading</button>
+            <button class="tab-btn" data-tab="prophecy">Prophecy</button>
+            <button class="tab-btn" data-tab="surgeon">Surgeon</button>
             <button class="tab-btn" data-tab="runtime">Runtime</button>
         </nav>
         <div class="feature-badges" id="feature-badges"></div>
@@ -147,6 +149,13 @@
                                     <option value="startup">Startup Pitch</option>
                                     <option value="world_build">World Building</option>
                                     <option value="hackathon">Hackathon</option>
+                                </optgroup>
+                                <optgroup label="Swarm Wars (CASS)">
+                                    <option value="swarm_wars">Swarm Wars</option>
+                                    <option value="influence_ops">Influence Operations</option>
+                                    <option value="market_crash">Market Crash</option>
+                                    <option value="civilization">Civilization</option>
+                                    <option value="memetic_war">Memetic Warfare</option>
                                 </optgroup>
                             </select>
                         </label>
@@ -868,6 +877,195 @@
         </div>
         </div><!-- /trading-pane-polymarket -->
 
+    </div>
+
+    <!-- ── TAB: Prophecy Engine ───────────────────────────────────── -->
+    <div class="tab-content" id="tab-prophecy">
+        <div class="tab-layout-split">
+            <!-- Left: Create + Controls -->
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>Prophecy Engine</h3>
+                    <span class="badge badge-info">Swarm Prediction</span>
+                </div>
+                <div class="prophecy-create-form">
+                    <label>
+                        <span>Topic / Question</span>
+                        <textarea id="prophecy-topic" rows="2" placeholder="Will the Fed cut rates in Q3 2026?"></textarea>
+                    </label>
+                    <label>
+                        <span>Seed Material (optional context)</span>
+                        <textarea id="prophecy-seed" rows="2" placeholder="Recent CPI data shows inflation at 2.1%..."></textarea>
+                    </label>
+                    <div class="prophecy-config-row">
+                        <label>
+                            <span>Prophets</span>
+                            <input type="number" id="prophecy-prophets" value="12" min="4" max="24">
+                        </label>
+                        <label>
+                            <span>Rounds</span>
+                            <input type="number" id="prophecy-rounds" value="8" min="3" max="20">
+                        </label>
+                        <label>
+                            <span>Type</span>
+                            <select id="prophecy-type">
+                                <option value="general">General</option>
+                                <option value="market">Market</option>
+                                <option value="geopolitical">Geopolitical</option>
+                                <option value="technology">Technology</option>
+                                <option value="social">Social</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="prophecy-config-row" style="margin-top: 0.5rem;">
+                        <label style="flex: 1;">
+                            <span>Deliberation Mode</span>
+                            <select id="prophecy-deliberation-mode">
+                                <option value="hivemind">Hivemind (fast, 1 call/round)</option>
+                                <option value="independent">Independent Minds (parallel, richer)</option>
+                            </select>
+                        </label>
+                        <div id="deliberation-mode-hint" class="hint-text" style="flex: 2; align-self: flex-end; padding-bottom: 0.4rem; font-size: 0.75rem; color: var(--muted);">
+                            One LLM call simulates all prophets. Fast and cheap.
+                        </div>
+                    </div>
+                    <div class="prophecy-actions">
+                        <button id="prophecy-create-btn" class="accent-btn">Seed Simulation</button>
+                        <button id="prophecy-full-btn" class="ghost-btn">Full Pipeline</button>
+                    </div>
+                </div>
+
+                <!-- Simulations list -->
+                <div class="panel-header" style="margin-top: 1.5rem;">
+                    <h3>Simulations</h3>
+                    <button id="prophecy-refresh-btn" class="ghost-btn ghost-btn-sm">Refresh</button>
+                </div>
+                <div id="prophecy-list" class="prophecy-sim-list">
+                    <div class="empty-state">No simulations yet. Create one above.</div>
+                </div>
+            </section>
+
+            <!-- Right: Active simulation detail -->
+            <section class="panel">
+                <div class="panel-header">
+                    <h3 id="prophecy-detail-title">Select a Simulation</h3>
+                    <div class="prophecy-detail-actions">
+                        <button id="prophecy-run-btn" class="accent-btn" disabled>Run Rounds</button>
+                        <button id="prophecy-report-btn" class="ghost-btn" disabled>Generate Report</button>
+                    </div>
+                </div>
+                <div id="prophecy-detail" class="prophecy-detail">
+                    <div class="empty-state">Select a simulation from the list to view details, run rounds, generate reports, or interview prophets.</div>
+                </div>
+
+                <!-- Interview panel -->
+                <div id="prophecy-interview-panel" class="prophecy-interview hidden">
+                    <div class="panel-header">
+                        <h3>Interview Prophet</h3>
+                    </div>
+                    <div class="prophecy-interview-controls">
+                        <select id="prophecy-interview-prophet"></select>
+                        <input type="text" id="prophecy-interview-question" placeholder="Ask a question...">
+                        <button id="prophecy-interview-btn" class="accent-btn">Ask</button>
+                    </div>
+                    <div id="prophecy-interview-response" class="prophecy-interview-response"></div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- ── TAB: Surgeon (OBLITERATUS) ──────────────────────────────── -->
+    <div class="tab-content" id="tab-surgeon">
+        <div class="tab-layout-split">
+            <!-- Left: Controls -->
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>Surgeon</h3>
+                    <span class="badge badge-warning">OBLITERATUS</span>
+                </div>
+
+                <!-- Dependency check -->
+                <div id="surgeon-deps" class="surgeon-deps">
+                    <button id="surgeon-check-btn" class="accent-btn">Check Dependencies</button>
+                    <div id="surgeon-deps-result"></div>
+                </div>
+
+                <!-- Model input -->
+                <div class="surgeon-form">
+                    <label>
+                        <span>Model (HuggingFace ID)</span>
+                        <input type="text" id="surgeon-model" placeholder="meta-llama/Llama-3.1-8B-Instruct">
+                    </label>
+                    <div class="surgeon-config-row">
+                        <label>
+                            <span>Method</span>
+                            <select id="surgeon-method">
+                                <option value="advanced">Advanced (recommended)</option>
+                                <option value="basic">Basic</option>
+                                <option value="surgical">Surgical</option>
+                                <option value="gradient_based">Gradient-Based</option>
+                                <option value="iterative">Iterative</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span>Device</span>
+                            <select id="surgeon-device">
+                                <option value="auto">Auto</option>
+                                <option value="cuda">CUDA</option>
+                                <option value="cpu">CPU</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span>Dtype</span>
+                            <select id="surgeon-dtype">
+                                <option value="float16">float16</option>
+                                <option value="bfloat16">bfloat16</option>
+                                <option value="float32">float32</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="surgeon-actions">
+                        <button id="surgeon-scan-btn" class="ghost-btn">Scan Only</button>
+                        <button id="surgeon-operate-btn" class="accent-btn">Operate</button>
+                    </div>
+                </div>
+
+                <!-- Methods reference -->
+                <div class="panel-header" style="margin-top: 1.5rem;">
+                    <h3>Methods</h3>
+                    <button id="surgeon-methods-btn" class="ghost-btn ghost-btn-sm">Load</button>
+                </div>
+                <div id="surgeon-methods-list" class="surgeon-methods-list"></div>
+            </section>
+
+            <!-- Right: Results -->
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>Operations</h3>
+                    <button id="surgeon-ops-refresh-btn" class="ghost-btn ghost-btn-sm">Refresh</button>
+                </div>
+                <div id="surgeon-ops-list" class="surgeon-ops-list">
+                    <div class="empty-state">No operations yet. Scan or operate on a model to begin.</div>
+                </div>
+
+                <!-- Active operation / scan result -->
+                <div id="surgeon-result" class="surgeon-result hidden">
+                    <div class="panel-header">
+                        <h3 id="surgeon-result-title">Result</h3>
+                    </div>
+                    <div id="surgeon-result-content"></div>
+                </div>
+
+                <!-- Live operation logs -->
+                <div id="surgeon-live-logs" class="surgeon-live-logs hidden">
+                    <div class="panel-header">
+                        <h3>Live Logs</h3>
+                        <span id="surgeon-live-status" class="badge">Running</span>
+                    </div>
+                    <pre id="surgeon-log-output" class="log-output"></pre>
+                </div>
+            </section>
+        </div>
     </div>
 
     <!-- ── TAB: Runtime ───────────────────────────────────────────── -->

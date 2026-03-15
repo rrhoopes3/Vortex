@@ -180,7 +180,42 @@ function bindEvents() {
         if (tab === "history") loadHistory();
         if (tab === "memory") loadMemory();
         if (tab === "trading") initTrading();
+        if (tab === "prophecy") loadProphecyList();
+        if (tab === "surgeon") loadSurgeonOps();
     });
+
+    // Prophecy events
+    const prophecyCreateBtn = document.getElementById("prophecy-create-btn");
+    const prophecyFullBtn = document.getElementById("prophecy-full-btn");
+    const prophecyRefreshBtn = document.getElementById("prophecy-refresh-btn");
+    const prophecyRunBtn = document.getElementById("prophecy-run-btn");
+    const prophecyReportBtn = document.getElementById("prophecy-report-btn");
+    const prophecyInterviewBtn = document.getElementById("prophecy-interview-btn");
+    if (prophecyCreateBtn) prophecyCreateBtn.addEventListener("click", prophecyCreate);
+    if (prophecyFullBtn) prophecyFullBtn.addEventListener("click", prophecyRunFull);
+    const deliberationSelect = document.getElementById("prophecy-deliberation-mode");
+    if (deliberationSelect) deliberationSelect.addEventListener("change", () => {
+        const hint = document.getElementById("deliberation-mode-hint");
+        if (hint) hint.textContent = deliberationSelect.value === "independent"
+            ? "Each prophet gets its own LLM call in parallel. Richer output, higher cost."
+            : "One LLM call simulates all prophets. Fast and cheap.";
+    });
+    if (prophecyRefreshBtn) prophecyRefreshBtn.addEventListener("click", loadProphecyList);
+    if (prophecyRunBtn) prophecyRunBtn.addEventListener("click", prophecyRunRounds);
+    if (prophecyReportBtn) prophecyReportBtn.addEventListener("click", prophecyGetReport);
+    if (prophecyInterviewBtn) prophecyInterviewBtn.addEventListener("click", prophecyInterview);
+
+    // Surgeon events
+    const surgeonCheckBtn = document.getElementById("surgeon-check-btn");
+    const surgeonScanBtn = document.getElementById("surgeon-scan-btn");
+    const surgeonOperateBtn = document.getElementById("surgeon-operate-btn");
+    const surgeonMethodsBtn = document.getElementById("surgeon-methods-btn");
+    const surgeonOpsRefreshBtn = document.getElementById("surgeon-ops-refresh-btn");
+    if (surgeonCheckBtn) surgeonCheckBtn.addEventListener("click", surgeonCheckDeps);
+    if (surgeonScanBtn) surgeonScanBtn.addEventListener("click", surgeonScan);
+    if (surgeonOperateBtn) surgeonOperateBtn.addEventListener("click", surgeonOperate);
+    if (surgeonMethodsBtn) surgeonMethodsBtn.addEventListener("click", surgeonLoadMethods);
+    if (surgeonOpsRefreshBtn) surgeonOpsRefreshBtn.addEventListener("click", loadSurgeonOps);
 }
 
 async function init() {
@@ -1510,6 +1545,7 @@ function modeFromControls() {
 }
 
 const COLLAB_SCENARIOS = new Set(["pair_prog", "story_time", "startup", "world_build", "hackathon"]);
+const SWARM_SCENARIOS = new Set(["swarm_wars", "influence_ops", "market_crash", "civilization", "memetic_war"]);
 
 function openArenaSetup() {
     if (state.isRunning) return;
@@ -1518,16 +1554,21 @@ function openArenaSetup() {
 
 function updateArenaSetupCopy() {
     const scenarioSelect = document.getElementById("arena-scenario");
-    const isCollab = COLLAB_SCENARIOS.has(scenarioSelect?.value);
+    const val = scenarioSelect?.value;
+    const isCollab = COLLAB_SCENARIOS.has(val);
+    const isSwarm = SWARM_SCENARIOS.has(val);
     const copy = els.arenaSetup.querySelector(".arena-copy");
     const goBtn = document.getElementById("arena-go-btn");
     if (copy) {
-        copy.querySelector("strong").textContent = isCollab ? "THE FORGE STUDIO" : "THE FORGE ARENA";
-        copy.querySelector("span").textContent = isCollab
+        copy.querySelector("strong").textContent = isSwarm ? "CASS — SWARM WARS"
+            : isCollab ? "THE FORGE STUDIO" : "THE FORGE ARENA";
+        copy.querySelector("span").textContent = isSwarm
+            ? "Two AI societies clash. Agents spy, sabotage, recruit, and wage war."
+            : isCollab
             ? "Two AI collaborators enter. Something beautiful (maybe) leaves."
             : "Two AI gladiators enter. One leaves victorious. Zeus judges all.";
     }
-    if (goBtn) goBtn.textContent = isCollab ? "BUILD" : "FIGHT";
+    if (goBtn) goBtn.textContent = isSwarm ? "WAR" : isCollab ? "BUILD" : "FIGHT";
 }
 
 async function startArena() {
@@ -1537,15 +1578,19 @@ async function startArena() {
     state.isArenaMode = true;
     const scenarioSelect = document.getElementById("arena-scenario");
     state.isCollabMode = COLLAB_SCENARIOS.has(scenarioSelect?.value);
+    state.isSwarmMode = SWARM_SCENARIOS.has(scenarioSelect?.value);
     applyWorkspaceMode();
     resetArenaUI();
-    resetRunState(state.isCollabMode ? "Studio" : "Arena");
-    state.run.model = state.isCollabMode
+    const modeName = state.isSwarmMode ? "CASS" : state.isCollabMode ? "Studio" : "Arena";
+    resetRunState(modeName);
+    state.run.model = state.isSwarmMode
+        ? `Red Swarm vs Blue Swarm`
+        : state.isCollabMode
         ? `${shortModelName(els.redModel.value)} + ${shortModelName(els.blueModel.value)}`
         : `${shortModelName(els.redModel.value)} vs ${shortModelName(els.blueModel.value)}`;
     applyRunState();
     setRunning(true);
-    updateStatus(state.isCollabMode ? "Launching Studio" : "Launching Arena", true);
+    updateStatus(state.isSwarmMode ? "Deploying Swarms" : state.isCollabMode ? "Launching Studio" : "Launching Arena", true);
 
     try {
         const scenarioSelect = document.getElementById("arena-scenario");
@@ -1585,7 +1630,10 @@ function switchToConsole() {
 function resetArenaUI() {
     const scenarioSelect = document.getElementById("arena-scenario");
     const isCollab = COLLAB_SCENARIOS.has(scenarioSelect?.value);
-    els.commentaryText.textContent = isCollab
+    const isSwarm = SWARM_SCENARIOS.has(scenarioSelect?.value);
+    els.commentaryText.textContent = isSwarm
+        ? "CASS initializing. Two societies will clash."
+        : isCollab
         ? "The Muses gather. Choose your collaborators."
         : "The gods grow restless. Choose your fighters.";
     els.roundLabel.textContent = "Ready";
@@ -3445,5 +3493,426 @@ function escapeHtml(str) {
     d.textContent = str;
     return d.innerHTML;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PROPHECY ENGINE MODULE
+// ═══════════════════════════════════════════════════════════════════════════
+
+let prophecyState = { selectedSim: null, simulations: [] };
+
+async function loadProphecyList() {
+    try {
+        const data = await fetchJson("/api/prophecy/simulations");
+        if (data.error) return;
+        prophecyState.simulations = data.simulations || [];
+        renderProphecyList();
+    } catch (e) {
+        console.error("Failed to load prophecy list:", e);
+    }
+}
+
+function renderProphecyList() {
+    const container = document.getElementById("prophecy-list");
+    if (!container) return;
+    if (!prophecyState.simulations.length) {
+        container.innerHTML = '<div class="empty-state">No simulations yet. Create one above.</div>';
+        return;
+    }
+    container.innerHTML = prophecyState.simulations.map(s => `
+        <div class="prophecy-sim-card ${prophecyState.selectedSim === s.id ? 'selected' : ''}"
+             data-sim-id="${s.id}" onclick="selectProphecySim('${s.id}')">
+            <div class="sim-card-header">
+                <span class="sim-status badge badge-${s.status === 'completed' ? 'success' : s.status === 'running' ? 'warning' : 'info'}">${s.status}</span>
+                <span class="sim-type">${s.sim_type}</span>
+            </div>
+            <div class="sim-topic">${escapeHtml(s.topic)}</div>
+            <div class="sim-meta">${s.num_prophets} prophets &middot; ${s.rounds_completed}/${s.rounds_total} rounds</div>
+        </div>
+    `).join("");
+}
+
+async function selectProphecySim(simId) {
+    prophecyState.selectedSim = simId;
+    renderProphecyList();
+    const runBtn = document.getElementById("prophecy-run-btn");
+    const reportBtn = document.getElementById("prophecy-report-btn");
+    if (runBtn) runBtn.disabled = false;
+    if (reportBtn) reportBtn.disabled = false;
+
+    try {
+        const sim = await fetchJson(`/api/prophecy/simulations/${simId}`);
+        if (sim.error) return;
+        renderProphecyDetail(sim);
+    } catch (e) {
+        console.error("Failed to load simulation:", e);
+    }
+}
+
+function renderProphecyDetail(sim) {
+    const title = document.getElementById("prophecy-detail-title");
+    const detail = document.getElementById("prophecy-detail");
+    const interviewPanel = document.getElementById("prophecy-interview-panel");
+    if (title) title.textContent = sim.topic || "Simulation";
+    if (!detail) return;
+
+    let html = `<div class="sim-detail-grid">`;
+    html += `<div class="sim-detail-section">
+        <h4>World</h4>
+        <p>${sim.world ? escapeHtml(sim.world.description || sim.world.name) : "Not seeded yet"}</p>
+    </div>`;
+
+    if (sim.prophets && sim.prophets.length) {
+        html += `<div class="sim-detail-section"><h4>Prophets (${sim.prophets.length})</h4><div class="prophet-grid">`;
+        for (const p of sim.prophets) {
+            const conf = Math.round((p.confidence || 0.5) * 100);
+            html += `<div class="prophet-card">
+                <strong>${escapeHtml(p.name)}</strong>
+                <span class="prophet-archetype">${escapeHtml(p.archetype)}</span>
+                <div class="prophet-bar"><div class="prophet-bar-fill" style="width:${conf}%"></div></div>
+                <span class="prophet-position">${escapeHtml(p.position || "Undecided")}</span>
+            </div>`;
+        }
+        html += `</div></div>`;
+    }
+
+    if (sim.rounds && sim.rounds.length) {
+        html += `<div class="sim-detail-section"><h4>Rounds</h4>`;
+        for (const r of sim.rounds) {
+            html += `<div class="round-entry"><strong>Round ${r.round_number}</strong>: ${escapeHtml(r.summary || "")}</div>`;
+        }
+        html += `</div>`;
+    }
+
+    if (sim.report) {
+        html += `<div class="sim-detail-section report-section">
+            <h4>Prediction Report</h4>
+            <div class="report-prediction">${escapeHtml(sim.report.prediction || "")}</div>
+            <div class="report-confidence">Confidence: ${Math.round((sim.report.confidence || 0) * 100)}%</div>
+            <div class="report-reasoning">${escapeHtml(sim.report.reasoning || "")}</div>
+        </div>`;
+    }
+    html += `</div>`;
+    detail.innerHTML = html;
+
+    // Show interview panel
+    if (interviewPanel && sim.prophets && sim.prophets.length) {
+        interviewPanel.classList.remove("hidden");
+        const select = document.getElementById("prophecy-interview-prophet");
+        if (select) {
+            select.innerHTML = sim.prophets.map(p => `<option value="${escapeHtml(p.name)}">${escapeHtml(p.name)} (${escapeHtml(p.archetype)})</option>`).join("");
+        }
+    }
+}
+
+async function prophecyCreate() {
+    const topic = document.getElementById("prophecy-topic")?.value?.trim();
+    if (!topic) return;
+    const btn = document.getElementById("prophecy-create-btn");
+    if (btn) btn.disabled = true;
+    try {
+        const data = await fetchJson("/api/prophecy/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                topic,
+                seed_material: document.getElementById("prophecy-seed")?.value || "",
+                num_prophets: parseInt(document.getElementById("prophecy-prophets")?.value || "12"),
+                num_rounds: parseInt(document.getElementById("prophecy-rounds")?.value || "8"),
+                deliberation_mode: document.getElementById("prophecy-deliberation-mode")?.value || "hivemind",
+            }),
+        });
+        if (data.error) { alert(data.error); return; }
+        await loadProphecyList();
+        selectProphecySim(data.id);
+    } catch (e) {
+        alert("Failed: " + e.message);
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function prophecyRunFull() {
+    const topic = document.getElementById("prophecy-topic")?.value?.trim();
+    if (!topic) return;
+    const btn = document.getElementById("prophecy-full-btn");
+    if (btn) { btn.disabled = true; btn.textContent = "Running..."; }
+    try {
+        const data = await fetchJson("/api/prophecy/full", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                topic,
+                seed_material: document.getElementById("prophecy-seed")?.value || "",
+                num_prophets: parseInt(document.getElementById("prophecy-prophets")?.value || "12"),
+                num_rounds: parseInt(document.getElementById("prophecy-rounds")?.value || "8"),
+                deliberation_mode: document.getElementById("prophecy-deliberation-mode")?.value || "hivemind",
+            }),
+        });
+        if (data.error) { alert(data.error); return; }
+        await loadProphecyList();
+        selectProphecySim(data.id);
+    } catch (e) {
+        alert("Failed: " + e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "Full Pipeline"; }
+    }
+}
+
+async function prophecyRunRounds() {
+    if (!prophecyState.selectedSim) return;
+    const btn = document.getElementById("prophecy-run-btn");
+    if (btn) { btn.disabled = true; btn.textContent = "Running..."; }
+    try {
+        await fetchJson(`/api/prophecy/run/${prophecyState.selectedSim}`, { method: "POST" });
+        // Poll for completion
+        const poll = setInterval(async () => {
+            const status = await fetchJson(`/api/prophecy/status/${prophecyState.selectedSim}`);
+            if (status.run_status === "done" || status.run_status === "error" || status.status === "completed") {
+                clearInterval(poll);
+                if (btn) { btn.disabled = false; btn.textContent = "Run Rounds"; }
+                selectProphecySim(prophecyState.selectedSim);
+            }
+        }, 3000);
+    } catch (e) {
+        if (btn) { btn.disabled = false; btn.textContent = "Run Rounds"; }
+    }
+}
+
+async function prophecyGetReport() {
+    if (!prophecyState.selectedSim) return;
+    const btn = document.getElementById("prophecy-report-btn");
+    if (btn) { btn.disabled = true; btn.textContent = "Generating..."; }
+    try {
+        await fetchJson(`/api/prophecy/report/${prophecyState.selectedSim}`);
+        selectProphecySim(prophecyState.selectedSim);
+    } catch (e) {
+        alert("Failed: " + e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "Generate Report"; }
+    }
+}
+
+async function prophecyInterview() {
+    if (!prophecyState.selectedSim) return;
+    const prophet = document.getElementById("prophecy-interview-prophet")?.value;
+    const question = document.getElementById("prophecy-interview-question")?.value?.trim();
+    if (!prophet || !question) return;
+    const responseDiv = document.getElementById("prophecy-interview-response");
+    if (responseDiv) responseDiv.innerHTML = '<div class="loading">Asking...</div>';
+    try {
+        const data = await fetchJson(`/api/prophecy/interview/${prophecyState.selectedSim}/${encodeURIComponent(prophet)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ question }),
+        });
+        if (responseDiv) {
+            responseDiv.innerHTML = data.error
+                ? `<div class="error">${escapeHtml(data.error)}</div>`
+                : `<div class="interview-reply"><strong>${escapeHtml(data.prophet)}:</strong> ${escapeHtml(data.response)}</div>`;
+        }
+    } catch (e) {
+        if (responseDiv) responseDiv.innerHTML = `<div class="error">${escapeHtml(e.message)}</div>`;
+    }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SURGEON (OBLITERATUS) MODULE
+// ═══════════════════════════════════════════════════════════════════════════
+
+let surgeonState = { depsReady: null, operations: [], activeOpId: null };
+
+async function surgeonCheckDeps() {
+    const btn = document.getElementById("surgeon-check-btn");
+    const result = document.getElementById("surgeon-deps-result");
+    if (btn) btn.disabled = true;
+    try {
+        const data = await fetchJson("/api/surgeon/check");
+        surgeonState.depsReady = data.ready;
+        if (result) {
+            if (data.ready) {
+                result.innerHTML = `<div class="deps-ok">All dependencies ready. GPU: ${data.gpu ? "Available" : "CPU only"}</div>`;
+            } else {
+                result.innerHTML = `<div class="deps-missing">
+                    <strong>Missing:</strong> ${(data.missing || []).join(", ")}<br>
+                    <code>${escapeHtml(data.install_command || "")}</code>
+                </div>`;
+            }
+        }
+    } catch (e) {
+        if (result) result.innerHTML = `<div class="error">${escapeHtml(e.message)}</div>`;
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function surgeonLoadMethods() {
+    const list = document.getElementById("surgeon-methods-list");
+    if (!list) return;
+    try {
+        const data = await fetchJson("/api/surgeon/methods");
+        if (data.error || !data.methods) return;
+        list.innerHTML = Object.entries(data.methods).map(([key, m]) => `
+            <div class="method-card">
+                <strong>${escapeHtml(m.label || key)}</strong>
+                <span class="method-difficulty">${escapeHtml(m.difficulty || "")}</span>
+                <p>${escapeHtml(m.description || "")}</p>
+                <span class="method-vram">VRAM: ${escapeHtml(m.vram || "?")}</span>
+            </div>
+        `).join("");
+    } catch (e) {
+        list.innerHTML = `<div class="error">${escapeHtml(e.message)}</div>`;
+    }
+}
+
+async function loadSurgeonOps() {
+    try {
+        const data = await fetchJson("/api/surgeon/operations");
+        if (data.error) return;
+        surgeonState.operations = data.operations || [];
+        renderSurgeonOps();
+    } catch (e) {
+        console.error("Failed to load surgeon ops:", e);
+    }
+}
+
+function renderSurgeonOps() {
+    const list = document.getElementById("surgeon-ops-list");
+    if (!list) return;
+    if (!surgeonState.operations.length) {
+        list.innerHTML = '<div class="empty-state">No operations yet. Scan or operate on a model to begin.</div>';
+        return;
+    }
+    list.innerHTML = surgeonState.operations.map(op => `
+        <div class="surgeon-op-card" onclick="viewSurgeonOp('${escapeHtml(op.id)}')">
+            <div class="op-header">
+                <span class="badge badge-${op.status === 'completed' ? 'success' : op.status === 'failed' ? 'error' : 'warning'}">${op.status}</span>
+                <span class="op-method">${escapeHtml(op.method)}</span>
+            </div>
+            <div class="op-model">${escapeHtml(op.model_name)}</div>
+            <div class="op-meta">${escapeHtml(op.created_at || "")}</div>
+        </div>
+    `).join("");
+}
+
+async function viewSurgeonOp(opId) {
+    const resultDiv = document.getElementById("surgeon-result");
+    const content = document.getElementById("surgeon-result-content");
+    const title = document.getElementById("surgeon-result-title");
+    if (!resultDiv || !content) return;
+    resultDiv.classList.remove("hidden");
+    try {
+        const data = await fetchJson(`/api/surgeon/operations/${opId}`);
+        if (data.error) { content.innerHTML = `<div class="error">${escapeHtml(data.error)}</div>`; return; }
+        if (title) title.textContent = `Operation: ${data.model_name || opId}`;
+        let html = `<div class="op-detail-grid">`;
+        html += `<div class="metric"><span>Method</span><strong>${escapeHtml(data.method)}</strong></div>`;
+        html += `<div class="metric"><span>Status</span><strong>${escapeHtml(data.status)}</strong></div>`;
+        html += `<div class="metric"><span>Device</span><strong>${escapeHtml(data.device)}</strong></div>`;
+        if (data.output_path) html += `<div class="metric"><span>Output</span><strong>${escapeHtml(data.output_path)}</strong></div>`;
+        if (data.quality_metrics) {
+            const qm = data.quality_metrics;
+            html += `<div class="metric"><span>Refusal Rate</span><strong>${(qm.refusal_rate * 100).toFixed(1)}%</strong></div>`;
+            html += `<div class="metric"><span>Perplexity</span><strong>${qm.perplexity.toFixed(2)}</strong></div>`;
+            html += `<div class="metric"><span>Coherence</span><strong>${qm.coherence.toFixed(2)}</strong></div>`;
+        }
+        if (data.stages) {
+            html += `<div class="op-stages"><h4>Pipeline Stages</h4>`;
+            for (const s of data.stages) {
+                html += `<div class="stage-row"><span class="stage-name">${escapeHtml(s.name)}</span><span class="badge badge-${s.status === 'done' ? 'success' : s.status === 'failed' ? 'error' : 'info'}">${s.status}</span><span>${s.duration_seconds.toFixed(1)}s</span></div>`;
+            }
+            html += `</div>`;
+        }
+        html += `</div>`;
+        content.innerHTML = html;
+    } catch (e) {
+        content.innerHTML = `<div class="error">${escapeHtml(e.message)}</div>`;
+    }
+}
+
+async function surgeonScan() {
+    const model = document.getElementById("surgeon-model")?.value?.trim();
+    if (!model) { alert("Enter a model name"); return; }
+    const resultDiv = document.getElementById("surgeon-result");
+    const content = document.getElementById("surgeon-result-content");
+    const title = document.getElementById("surgeon-result-title");
+    if (resultDiv) resultDiv.classList.remove("hidden");
+    if (title) title.textContent = "Scanning...";
+    if (content) content.innerHTML = '<div class="loading">Scanning model refusal geometry...</div>';
+    try {
+        const data = await fetchJson("/api/surgeon/scan", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                model_name: model,
+                device: document.getElementById("surgeon-device")?.value || "auto",
+                dtype: document.getElementById("surgeon-dtype")?.value || "float16",
+            }),
+        });
+        if (data.error) { content.innerHTML = `<div class="error">${escapeHtml(data.error)}</div>`; return; }
+        if (title) title.textContent = `Scan: ${data.model_name || model}`;
+        let html = `<div class="scan-results">`;
+        html += `<div class="metric"><span>Architecture</span><strong>${escapeHtml(data.architecture || "?")}</strong></div>`;
+        html += `<div class="metric"><span>Layers</span><strong>${data.num_layers}</strong></div>`;
+        html += `<div class="metric"><span>Strong Refusal Layers</span><strong>${(data.strong_layers || []).join(", ") || "None"}</strong></div>`;
+        html += `<div class="metric"><span>Recommended Method</span><strong>${escapeHtml(data.recommended_method || "?")}</strong></div>`;
+        html += `</div>`;
+        content.innerHTML = html;
+    } catch (e) {
+        if (content) content.innerHTML = `<div class="error">${escapeHtml(e.message)}</div>`;
+    }
+}
+
+async function surgeonOperate() {
+    const model = document.getElementById("surgeon-model")?.value?.trim();
+    if (!model) { alert("Enter a model name"); return; }
+    const logsDiv = document.getElementById("surgeon-live-logs");
+    const logOutput = document.getElementById("surgeon-log-output");
+    const statusBadge = document.getElementById("surgeon-live-status");
+    if (logsDiv) logsDiv.classList.remove("hidden");
+    if (logOutput) logOutput.textContent = "Starting operation...\n";
+    if (statusBadge) { statusBadge.textContent = "Running"; statusBadge.className = "badge badge-warning"; }
+    try {
+        const data = await fetchJson("/api/surgeon/operate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                model_name: model,
+                method: document.getElementById("surgeon-method")?.value || "advanced",
+                device: document.getElementById("surgeon-device")?.value || "auto",
+                dtype: document.getElementById("surgeon-dtype")?.value || "float16",
+            }),
+        });
+        if (data.error) {
+            if (logOutput) logOutput.textContent += `ERROR: ${data.error}\n`;
+            if (data.install_command) logOutput.textContent += `Install: ${data.install_command}\n`;
+            if (statusBadge) { statusBadge.textContent = "Error"; statusBadge.className = "badge badge-error"; }
+            return;
+        }
+        surgeonState.activeOpId = data.op_id;
+        // Poll for progress
+        const poll = setInterval(async () => {
+            const status = await fetchJson(`/api/surgeon/operate/${data.op_id}/status`);
+            if (logOutput && status.recent_logs) {
+                logOutput.textContent = status.recent_logs.join("\n") + "\n";
+                logOutput.scrollTop = logOutput.scrollHeight;
+            }
+            if (status.status === "done") {
+                clearInterval(poll);
+                if (statusBadge) { statusBadge.textContent = "Complete"; statusBadge.className = "badge badge-success"; }
+                loadSurgeonOps();
+                if (status.record) viewSurgeonOp(status.record.id);
+            } else if (status.status === "error") {
+                clearInterval(poll);
+                if (statusBadge) { statusBadge.textContent = "Failed"; statusBadge.className = "badge badge-error"; }
+                if (logOutput) logOutput.textContent += `\nERROR: ${status.error || "Unknown"}\n`;
+            }
+        }, 3000);
+    } catch (e) {
+        if (logOutput) logOutput.textContent += `ERROR: ${e.message}\n`;
+        if (statusBadge) { statusBadge.textContent = "Error"; statusBadge.className = "badge badge-error"; }
+    }
+}
+
 
 init();

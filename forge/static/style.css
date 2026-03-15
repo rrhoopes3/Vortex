@@ -2265,3 +2265,330 @@ input[type="range"] {
 .poly-event-market-row:last-child {
     border-bottom: none;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BADGES (reusable)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.badge-info { background: rgba(116, 183, 255, 0.15); color: var(--blue); }
+.badge-success { background: rgba(99, 199, 178, 0.15); color: var(--signal); }
+.badge-warning { background: rgba(245, 195, 91, 0.15); color: var(--warning); }
+.badge-error { background: rgba(255, 123, 123, 0.15); color: var(--danger); }
+
+.ghost-btn-sm {
+    padding: 3px 10px;
+    font-size: 0.72rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PROPHECY ENGINE
+   ═══════════════════════════════════════════════════════════════════════════ */
+.prophecy-create-form label {
+    display: block;
+    margin-bottom: 0.5rem;
+}
+.prophecy-create-form label span {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-bottom: 3px;
+}
+.prophecy-create-form textarea,
+.prophecy-create-form input,
+.prophecy-create-form select {
+    width: 100%;
+    padding: 6px 10px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 0.85rem;
+}
+.prophecy-config-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+.prophecy-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+.prophecy-sim-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    max-height: 300px;
+    overflow-y: auto;
+}
+.prophecy-sim-card {
+    padding: 10px 12px;
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+.prophecy-sim-card:hover { border-color: var(--accent); }
+.prophecy-sim-card.selected { border-color: var(--accent); background: rgba(242, 167, 75, 0.06); }
+.sim-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+.sim-type { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; }
+.sim-topic { font-weight: 600; font-size: 0.85rem; }
+.sim-meta { font-size: 0.72rem; color: var(--muted); margin-top: 3px; }
+
+.prophecy-detail {
+    max-height: 500px;
+    overflow-y: auto;
+}
+.sim-detail-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.sim-detail-section h4 {
+    color: var(--accent);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem;
+}
+.prophet-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 0.4rem;
+}
+.prophet-card {
+    padding: 8px 10px;
+    background: var(--bg-soft);
+    border-radius: 6px;
+    border: 1px solid var(--line);
+}
+.prophet-card strong { display: block; font-size: 0.82rem; }
+.prophet-archetype { font-size: 0.7rem; color: var(--muted); }
+.prophet-bar {
+    height: 3px;
+    background: var(--line);
+    border-radius: 2px;
+    margin: 4px 0;
+}
+.prophet-bar-fill {
+    height: 100%;
+    background: var(--signal);
+    border-radius: 2px;
+    transition: width 0.3s;
+}
+.prophet-position { font-size: 0.7rem; color: var(--text); opacity: 0.7; }
+
+.round-entry {
+    padding: 4px 0;
+    font-size: 0.82rem;
+    border-bottom: 1px solid var(--line);
+}
+.round-entry:last-child { border-bottom: none; }
+
+.report-section {
+    background: rgba(242, 167, 75, 0.05);
+    border: 1px solid rgba(242, 167, 75, 0.2);
+    border-radius: 8px;
+    padding: 12px;
+}
+.report-prediction { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; }
+.report-confidence { font-size: 0.85rem; color: var(--signal); margin-bottom: 0.5rem; }
+.report-reasoning { font-size: 0.82rem; color: var(--muted); line-height: 1.5; }
+
+.prophecy-interview { margin-top: 1rem; }
+.prophecy-interview-controls {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+.prophecy-interview-controls select { flex: 0 0 180px; }
+.prophecy-interview-controls input { flex: 1; }
+.prophecy-interview-response {
+    padding: 10px;
+    background: var(--bg-soft);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    min-height: 60px;
+}
+.interview-reply { line-height: 1.5; }
+.prophecy-interview-controls select,
+.prophecy-interview-controls input {
+    padding: 6px 10px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 0.82rem;
+}
+.prophecy-detail-actions {
+    display: flex;
+    gap: 0.4rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SURGEON (OBLITERATUS)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.surgeon-deps { margin-bottom: 1rem; }
+.deps-ok {
+    padding: 8px 12px;
+    background: rgba(99, 199, 178, 0.1);
+    border: 1px solid rgba(99, 199, 178, 0.2);
+    border-radius: 6px;
+    color: var(--signal);
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+}
+.deps-missing {
+    padding: 8px 12px;
+    background: rgba(255, 123, 123, 0.08);
+    border: 1px solid rgba(255, 123, 123, 0.2);
+    border-radius: 6px;
+    color: var(--danger);
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+}
+.deps-missing code {
+    display: block;
+    margin-top: 4px;
+    padding: 4px 8px;
+    background: var(--bg);
+    border-radius: 4px;
+    font-size: 0.78rem;
+}
+.surgeon-form label {
+    display: block;
+    margin-bottom: 0.5rem;
+}
+.surgeon-form label span {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-bottom: 3px;
+}
+.surgeon-form input,
+.surgeon-form select {
+    width: 100%;
+    padding: 6px 10px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 0.85rem;
+}
+.surgeon-config-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+.surgeon-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.surgeon-methods-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    max-height: 300px;
+    overflow-y: auto;
+}
+.method-card {
+    padding: 8px 12px;
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+}
+.method-card strong { font-size: 0.85rem; }
+.method-card p { font-size: 0.78rem; color: var(--muted); margin: 3px 0; }
+.method-difficulty { font-size: 0.7rem; color: var(--warning); margin-left: 0.5rem; }
+.method-vram { font-size: 0.7rem; color: var(--muted); }
+
+.surgeon-ops-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    max-height: 250px;
+    overflow-y: auto;
+}
+.surgeon-op-card {
+    padding: 10px 12px;
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+.surgeon-op-card:hover { border-color: var(--accent); }
+.op-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 3px;
+}
+.op-method { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; }
+.op-model { font-weight: 600; font-size: 0.85rem; }
+.op-meta { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+
+.surgeon-result { margin-top: 1rem; }
+.op-detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+}
+.scan-results {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+}
+.op-stages { grid-column: 1 / -1; }
+.op-stages h4 {
+    font-size: 0.8rem;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 0.3rem;
+}
+.stage-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 3px 0;
+    font-size: 0.82rem;
+    border-bottom: 1px solid var(--line);
+}
+.stage-row:last-child { border-bottom: none; }
+.stage-name { flex: 1; }
+
+.surgeon-live-logs { margin-top: 1rem; }
+.log-output {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 10px;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 0.78rem;
+    max-height: 250px;
+    overflow-y: auto;
+    color: var(--muted);
+    white-space: pre-wrap;
+}
+
+/* Loading and error states */
+.loading { color: var(--muted); font-style: italic; padding: 10px 0; }
+.error { color: var(--danger); padding: 6px 0; }

@@ -51,6 +51,10 @@ TOOL_CATEGORIES = {
     "trading": {"fetch_pcr", "analyze_sentiment", "get_options_chain",
                 "set_alert", "get_portfolio", "execute_trade", "get_market_quote",
                 "start_trading_agent", "stop_trading_agent", "get_trading_agent_status"},
+    "prophecy": {"prophecy_create", "prophecy_run", "prophecy_report", "prophecy_full",
+                 "prophecy_status", "prophecy_interview", "prophecy_list", "prophecy_inject"},
+    "surgeon":  {"surgeon_check", "surgeon_methods", "surgeon_scan", "surgeon_operate",
+                 "surgeon_analyze", "surgeon_compare", "surgeon_status", "surgeon_list"},
 }
 
 # Reverse map: tool_name → category

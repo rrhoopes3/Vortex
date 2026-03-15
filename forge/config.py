@@ -189,6 +189,25 @@ TRADING_DATA_DIR = DATA_DIR / "trading"
 TRADING_DATA_DIR.mkdir(exist_ok=True)
 TRADING_PAPER_MODE = os.getenv("FORGE_TRADING_PAPER_MODE", "true").lower() == "true"
 
+# ── Prophecy Engine ────────────────────────────────────────────────────────
+PROPHECY_ENABLED = os.getenv("FORGE_PROPHECY_ENABLED", "true").lower() == "true"
+PROPHECY_DEFAULT_PROPHETS = int(os.getenv("FORGE_PROPHECY_DEFAULT_PROPHETS", "12"))
+PROPHECY_DEFAULT_ROUNDS = int(os.getenv("FORGE_PROPHECY_DEFAULT_ROUNDS", "8"))
+PROPHECY_MAX_PROPHETS = int(os.getenv("FORGE_PROPHECY_MAX_PROPHETS", "24"))
+PROPHECY_MAX_ROUNDS = int(os.getenv("FORGE_PROPHECY_MAX_ROUNDS", "20"))
+PROPHECY_DATA_DIR = DATA_DIR / "prophecy"
+PROPHECY_DATA_DIR.mkdir(exist_ok=True)
+
+# ── Surgeon (OBLITERATUS Integration) ─────────────────────────────────────
+SURGEON_ENABLED = os.getenv("FORGE_SURGEON_ENABLED", "true").lower() == "true"
+SURGEON_DATA_DIR = DATA_DIR / "surgeon"
+SURGEON_DATA_DIR.mkdir(exist_ok=True)
+SURGEON_MODELS_DIR = SURGEON_DATA_DIR / "models"
+SURGEON_MODELS_DIR.mkdir(exist_ok=True)
+SURGEON_DEFAULT_METHOD = os.getenv("FORGE_SURGEON_DEFAULT_METHOD", "advanced")
+SURGEON_DEFAULT_DEVICE = os.getenv("FORGE_SURGEON_DEFAULT_DEVICE", "auto")
+SURGEON_DEFAULT_DTYPE = os.getenv("FORGE_SURGEON_DEFAULT_DTYPE", "float16")
+
 # ── Arena ──────────────────────────────────────────────────────────────────
 ARENA_MASTER_MODEL = PLANNER_MODEL       # 16-agent Pantheon for commentary/judging
 ARENA_DEFAULT_FIGHTER_MODEL = "grok-4.20-beta-0309-reasoning"
@@ -196,6 +215,9 @@ ARENA_FIGHTER_AGENT_COUNT = 4
 ARENA_RECON_ITERATIONS = 3               # tool iterations for recon round
 ARENA_FORGE_ITERATIONS = 5               # tool iterations for weapon forge round
 ARENA_COMBAT_TURNS = 6                   # total turns in combat (3 per team)
+
+# ── Arena: CASS (Colloidal Algorithmic Strife Simulator) ──────────────────
+ARENA_SWARM_ENABLED = os.getenv("FORGE_ARENA_SWARM_ENABLED", "true").lower() == "true"
 
 # ── OpenClaw-RL (arXiv:2603.10165) ───────────────────────────────────────
 SIGNALS_ENABLED = os.getenv("FORGE_SIGNALS_ENABLED", "true").lower() == "true"

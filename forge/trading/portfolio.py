@@ -309,6 +309,114 @@ class PortfolioManager:
                 ).fetchall()
             return [dict(r) for r in rows]
 
+    # ── Daily Recap ──────────────────────────────────────────────────
+
+    def get_daily_recap(self, date_str: str | None = None) -> dict:
+        """Build a trading recap for a single calendar day.
+
+        Parameters
+        ----------
+        date_str : str, optional
+            ISO date like ``"2026-03-14"``.  Defaults to today (UTC).
+
+        Returns
+        -------
+        dict with keys: date, orders, realized_trades, decisions, stats
+        """
+        import datetime as _dt
+
+        if date_str:
+            day = _dt.date.fromisoformat(date_str)
+        else:
+            day = _dt.datetime.utcnow().date()
+
+        day_start = _dt.datetime.combine(day, _dt.time.min).timestamp()
+        day_end = _dt.datetime.combine(day + _dt.timedelta(days=1), _dt.time.min).timestamp()
+
+        with self._lock:
+            # Orders placed during the day
+            orders = [
+                dict(r) for r in self._conn.execute(
+                    "SELECT * FROM orders WHERE created_at >= ? AND created_at < ? ORDER BY created_at",
+                    (day_start, day_end),
+                ).fetchall()
+            ]
+
+            # Realized P&L entries closed during the day
+            realized = [
+                dict(r) for r in self._conn.execute(
+                    "SELECT * FROM realized_pnl WHERE closed_at >= ? AND closed_at < ? ORDER BY closed_at",
+                    (day_start, day_end),
+                ).fetchall()
+            ]
+
+            # Agent decisions during the day
+            decisions = [
+                dict(r) for r in self._conn.execute(
+                    "SELECT * FROM decisions WHERE timestamp >= ? AND timestamp < ? ORDER BY timestamp",
+                    (day_start, day_end),
+                ).fetchall()
+            ]
+
+        # ── Compute stats ──
+        buy_orders = [o for o in orders if o.get("side") == "buy"]
+        sell_orders = [o for o in orders if o.get("side") == "sell"]
+
+        buy_volume = sum(
+            (o.get("fill_price") or o.get("price") or 0) * o.get("quantity", 0)
+            for o in buy_orders
+        )
+        sell_volume = sum(
+            (o.get("fill_price") or o.get("price") or 0) * o.get("quantity", 0)
+            for o in sell_orders
+        )
+
+        wins = [r for r in realized if r.get("pnl", 0) > 0]
+        losses = [r for r in realized if r.get("pnl", 0) < 0]
+        flat = [r for r in realized if r.get("pnl", 0) == 0]
+        total_realized = sum(r.get("pnl", 0) for r in realized)
+
+        best_trade = max(realized, key=lambda r: r.get("pnl", 0)) if realized else None
+        worst_trade = min(realized, key=lambda r: r.get("pnl", 0)) if realized else None
+
+        # Tickers the agents looked at
+        decision_actions = {}
+        for d in decisions:
+            action = d.get("decision", "HOLD").upper().split()[0]
+            decision_actions[action] = decision_actions.get(action, 0) + 1
+
+        stats = {
+            "total_orders": len(orders),
+            "buy_orders": len(buy_orders),
+            "sell_orders": len(sell_orders),
+            "buy_volume_usd": round(buy_volume, 2),
+            "sell_volume_usd": round(sell_volume, 2),
+            "trades_closed": len(realized),
+            "wins": len(wins),
+            "losses": len(losses),
+            "flat": len(flat),
+            "win_rate": round(len(wins) / len(realized) * 100, 1) if realized else None,
+            "realized_pnl": round(total_realized, 2),
+            "best_trade": {
+                "ticker": best_trade["ticker"],
+                "pnl": round(best_trade["pnl"], 2),
+            } if best_trade else None,
+            "worst_trade": {
+                "ticker": worst_trade["ticker"],
+                "pnl": round(worst_trade["pnl"], 2),
+            } if worst_trade else None,
+            "agent_decisions": len(decisions),
+            "agent_actions": decision_actions,
+        }
+
+        return {
+            "date": day.isoformat(),
+            "orders": orders,
+            "realized_trades": realized,
+            "decisions": decisions,
+            "stats": stats,
+        }
+
     def reset(self):
         with self._lock:
             self._conn.executescript("""

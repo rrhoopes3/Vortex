@@ -40,6 +40,7 @@ from forge.config import (
     ARCRELAY_API_URL, EMAIL_AGENT_MODEL, EXECUTOR_MODEL, PLANNER_MODEL,
     PLANNER_AGENT_COUNT, EXECUTOR_MAX_ITERATIONS,
     USER_CORRECTION_ENABLED, GENERATIVE_UI_ENABLED, TRADING_ENABLED,
+    PROPHECY_ENABLED, SURGEON_ENABLED, ARENA_SWARM_ENABLED,
 )
 from forge.toll.endpoints import toll_bp
 from forge.toll.public_api import public_bp
@@ -67,6 +68,18 @@ if TRADING_ENABLED:
     )
     for issue in trading_readiness["issues"]:
         log.warning("Trading readiness: %s", issue)
+
+# ── Prophecy Engine ────────────────────────────────────────────────────
+if PROPHECY_ENABLED:
+    from forge.prophecy.endpoints import prophecy_bp
+    app.register_blueprint(prophecy_bp)
+    log.info("Prophecy Engine enabled")
+
+# ── Surgeon (OBLITERATUS) ─────────────────────────────────────────────
+if SURGEON_ENABLED:
+    from forge.surgeon.endpoints import surgeon_bp
+    app.register_blueprint(surgeon_bp)
+    log.info("Surgeon module enabled")
 
 # ── Email Agent + Webhook ────────────────────────────────────────────────
 _email_agent = None
@@ -313,6 +326,22 @@ def run_arena(task_id: str, q: Queue, cancel_event: threading.Event,
         q.put(None)
 
 
+@app.route("/api/arena/scenarios")
+def get_arena_scenarios():
+    """Return all arena scenarios for frontend dropdown."""
+    from forge.arena.runner import SCENARIOS
+    result = {}
+    for key, sc in SCENARIOS.items():
+        mode = sc.get("mode", "combat")
+        result[key] = {
+            "name": sc["name"],
+            "tagline": sc.get("tagline", ""),
+            "description": sc.get("description", ""),
+            "mode": mode,
+        }
+    return jsonify(result)
+
+
 @app.route("/api/history")
 def history():
     return jsonify(get_recent_tasks())
@@ -444,6 +473,9 @@ def get_config():
             "solana_watcher": SOLANA_WATCHER_ENABLED,
             "generative_ui": GENERATIVE_UI_ENABLED,
             "trading": TRADING_ENABLED,
+            "prophecy": PROPHECY_ENABLED,
+            "surgeon": SURGEON_ENABLED,
+            "arena_swarm": ARENA_SWARM_ENABLED,
         },
         "runtime": {
             "working_dir": str(SHELL_WORKING_DIR),
