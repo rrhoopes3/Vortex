@@ -5,21 +5,21 @@ import time
 
 import pytest
 
-from forge.vortexchain.manifold import (
+from vortexchain.manifold import (
     MANIFOLD_DIM,
     NUM_EMBEDDED_SPHERES,
     TopologicalManifold,
     WrappingNumber,
 )
-from forge.vortexchain.toac import TOACKeypair, TopologicalHash, TopologicalSignature
-from forge.vortexchain.chain import Block, Transaction, VortexChain
-from forge.vortexchain.consensus import (
+from vortexchain.toac import TOACKeypair, TopologicalHash, TopologicalSignature
+from vortexchain.chain import Block, Transaction, VortexChain
+from vortexchain.consensus import (
     HybridConsensus,
     ProofOfTopology,
     TopologyChallenge,
     TopologyResponse,
 )
-from forge.vortexchain.tokenomics import (
+from vortexchain.tokenomics import (
     TOTAL_SUPPLY,
     AllocationCategory,
     TokenDistribution,
@@ -374,7 +374,7 @@ class TestTokenDistribution:
         assert TOTAL_SUPPLY == 48_000_000
 
     def test_allocations_sum_to_100(self):
-        from forge.vortexchain.tokenomics import ALLOCATIONS
+        from vortexchain.tokenomics import ALLOCATIONS
         assert abs(sum(ALLOCATIONS.values()) - 1.0) < 1e-10
 
     def test_allocation_amounts(self):

@@ -5,20 +5,20 @@ import time
 
 import pytest
 
-from forge.vortexchain.manifold import (
+from vortexchain.manifold import (
     MANIFOLD_DIM,
     NUM_EMBEDDED_SPHERES,
     TopologicalManifold,
     WrappingNumber,
 )
-from forge.vortexchain.toac import TOACKeypair, TopologicalHash
+from vortexchain.toac import TOACKeypair, TopologicalHash
 
 
 # ===========================================================================
 # Qudit Smart Contract Runtime tests
 # ===========================================================================
 
-from forge.vortexchain.contracts import (
+from vortexchain.contracts import (
     ContractEvent,
     ContractRuntimeError,
     ExecutionContext,
@@ -354,7 +354,7 @@ class TestQuditContract:
 # TopoQKD tests
 # ===========================================================================
 
-from forge.vortexchain.qkd import (
+from vortexchain.qkd import (
     ALL_BASES,
     ChannelParameters,
     EntangledOAMPair,
@@ -492,7 +492,7 @@ class TestTopoQKDNode:
 # Quantum Entropy Oracle tests
 # ===========================================================================
 
-from forge.vortexchain.oracle import (
+from vortexchain.oracle import (
     EntropyAggregator,
     EntropyCommitment,
     EntropyRequest,
@@ -605,7 +605,7 @@ class TestEntropyAggregator:
 # P2P Network tests
 # ===========================================================================
 
-from forge.vortexchain.network import (
+from vortexchain.network import (
     MessageType,
     NetworkMessage,
     PeerInfo,
@@ -796,7 +796,7 @@ class TestVortexNetwork:
 # Topological NFT tests
 # ===========================================================================
 
-from forge.vortexchain.nft import (
+from vortexchain.nft import (
     TopoNFT,
     TopoNFTCollection,
     TopoNFTState,
