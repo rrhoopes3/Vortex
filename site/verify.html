@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Verify Media Authenticity — VortexChain VRC-48M</title>
+<meta name="description" content="Drop a video and its VRC-48M anchor to check for tampering. No install, no account, no data stored.">
+<meta property="og:title" content="Verify Media Authenticity — VortexChain VRC-48M">
+<meta property="og:description" content="Zero-install media verification. Drop a file and its topological anchor to detect deepfakes and tampering.">
+<meta property="og:image" content="https://vortexchain.arc-relay.com/og-image.png">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://vortexchain.arc-relay.com/verify">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Verify Media Authenticity — VortexChain VRC-48M">
+<meta name="twitter:description" content="Zero-install deepfake detection. Drop a file and its topological anchor.">
+<meta name="twitter:image" content="https://vortexchain.arc-relay.com/og-image.png">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌀</text></svg>">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+:root{--bg:#050507;--surface:#0c0c12;--border:#1a1a2e;--accent:#00f0ff;--green:#22ff88;--red:#ff4466;--orange:#ff8844;--yellow:#ffcc22;--purple:#c026d3;--text:#e0e0ff;--muted:#8899aa}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);overflow-x:hidden;line-height:1.6;min-height:100vh}
+
+/* ===== Animated background ===== */
+.hero-bg{position:absolute;top:0;left:0;width:100%;height:100%;overflow:hidden;z-index:0;pointer-events:none}
+.hero-bg::before,.hero-bg::after{content:'';position:absolute;border-radius:50%;filter:blur(120px);opacity:.12;animation:drift 20s ease-in-out infinite alternate}
+.hero-bg::before{width:600px;height:600px;background:var(--accent);top:-200px;left:-100px;animation-delay:0s}
+.hero-bg::after{width:500px;height:500px;background:var(--purple);bottom:-150px;right:-100px;animation-delay:-10s}
+@keyframes drift{0%{transform:translate(0,0) scale(1)}25%{transform:translate(60px,40px) scale(1.1)}50%{transform:translate(-40px,80px) scale(.95)}75%{transform:translate(80px,-30px) scale(1.05)}100%{transform:translate(-20px,60px) scale(1)}}
+.hero-bg .grid-line{position:absolute;background:var(--border);opacity:.3}
+.hero-bg .grid-line.h{width:100%;height:1px;animation:scanH 12s linear infinite}
+.hero-bg .grid-line.v{height:100%;width:1px;animation:scanV 15s linear infinite}
+@keyframes scanH{0%{transform:translateY(-100vh)}100%{transform:translateY(100vh)}}
+@keyframes scanV{0%{transform:translateX(-100vw)}100%{transform:translateX(100vw)}}
+
+/* ===== Hero ===== */
+.hero{position:relative;padding:8rem 2rem 5rem;text-align:center;overflow:hidden}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;padding:8px 20px;border:1px solid var(--accent);border-radius:9999px;font-size:.75rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);background:rgba(0,240,255,.06);backdrop-filter:blur(12px);margin-bottom:1.8rem}
+.hero h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(2.4rem,6vw,4rem);font-weight:700;line-height:1.1;margin-bottom:1.2rem;position:relative;z-index:1}
+.gradient{background:linear-gradient(90deg,#00f0ff,#c026d3,#22ff88);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{font-size:clamp(1rem,2vw,1.15rem);color:var(--muted);max-width:580px;margin:0 auto;line-height:1.7;position:relative;z-index:1}
+
+/* ===== Container ===== */
+.container{max-width:960px;margin:0 auto;padding:0 2rem}
+
+/* ===== Drop zones ===== */
+.drop-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:2rem}
+.drop-zone{border:2px dashed var(--border);border-radius:16px;padding:2.5rem 1.5rem;text-align:center;cursor:pointer;transition:all .3s;background:var(--surface);position:relative;min-height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.drop-zone:hover,.drop-zone.dragover{border-color:var(--accent);background:rgba(0,240,255,.03);transform:translateY(-2px)}
+.drop-zone.has-file{border-color:var(--green);border-style:solid;background:rgba(34,255,136,.03)}
+.drop-zone .icon{font-size:2.5rem;margin-bottom:.75rem;line-height:1}
+.drop-zone h3{font-size:1rem;font-weight:600;margin-bottom:.4rem}
+.drop-zone p{color:var(--muted);font-size:.8rem;line-height:1.5}
+.drop-zone input[type=file]{display:none}
+.file-info{margin-top:.75rem;padding:10px 14px;background:rgba(0,240,255,.05);border-radius:8px;display:none;align-items:center;gap:8px;font-size:.85rem}
+.file-info.visible{display:flex}
+.file-info .fname{font-weight:600;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+.file-info .fsize{color:var(--muted);font-size:.75rem;white-space:nowrap}
+.file-info .remove{color:var(--red);cursor:pointer;margin-left:auto;font-size:1.1rem;line-height:1}
+
+/* Anchor textarea */
+.anchor-paste{margin-top:.75rem;width:100%;min-height:80px;max-height:200px;background:#08080e;border:1px solid var(--border);border-radius:8px;padding:.75rem;font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--accent);resize:vertical;line-height:1.5}
+.anchor-paste:focus{outline:none;border-color:var(--accent)}
+.anchor-paste::placeholder{color:var(--muted);font-family:'Inter',sans-serif;font-size:.8rem}
+.or-label{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;font-weight:600;margin:.6rem 0}
+
+/* ===== Verify button ===== */
+.verify-row{text-align:center;margin-bottom:2.5rem}
+.btn{padding:16px 36px;border:none;border-radius:14px;font-weight:600;font-size:1.05rem;cursor:pointer;transition:all .3s cubic-bezier(.23,1,.32,1);display:inline-flex;align-items:center;gap:10px;font-family:inherit}
+.btn-verify{background:linear-gradient(135deg,var(--accent),var(--purple));color:#000;box-shadow:0 10px 40px rgba(0,240,255,.25);font-size:1.1rem;padding:18px 48px}
+.btn-verify:hover:not(:disabled){transform:translateY(-3px) scale(1.02);box-shadow:0 16px 50px rgba(0,240,255,.4)}
+.btn-verify:disabled{opacity:.35;cursor:not-allowed;transform:none;box-shadow:none}
+
+/* ===== Progress ===== */
+.progress-section{display:none;text-align:center;margin-bottom:2rem}
+.progress-section.visible{display:block}
+.progress-bar{height:6px;background:var(--surface);border-radius:3px;overflow:hidden;max-width:500px;margin:0 auto 1rem}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--purple));border-radius:3px;transition:width .4s;width:0}
+.progress-text{font-size:.85rem;color:var(--muted)}
+.spinner{display:inline-block;width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin-right:8px;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ===== Results panel ===== */
+.results{display:none;margin-bottom:4rem}
+.results.visible{display:block}
+.verdict-banner{padding:2rem;border-radius:16px;display:flex;align-items:center;gap:1.5rem;margin-bottom:2rem}
+.verdict-banner.authentic{background:rgba(34,255,136,.06);border:1px solid rgba(34,255,136,.25)}
+.verdict-banner.tampered{background:rgba(255,68,102,.06);border:1px solid rgba(255,68,102,.25)}
+.verdict-icon{font-size:3rem;line-height:1}
+.verdict-label{font-family:'Space Grotesk',sans-serif;font-size:1.6rem;font-weight:700}
+.verdict-sub{color:var(--muted);font-size:.9rem;margin-top:.25rem}
+
+/* Confidence ring */
+.stats-row{display:grid;grid-template-columns:160px 1fr;gap:2rem;margin-bottom:2rem;align-items:start}
+.confidence-ring{position:relative;width:140px;height:140px;margin:0 auto}
+.confidence-ring svg{transform:rotate(-90deg)}
+.confidence-ring .track{fill:none;stroke:var(--border);stroke-width:8}
+.confidence-ring .fill{fill:none;stroke-width:8;stroke-linecap:round;transition:stroke-dashoffset 1.5s cubic-bezier(.23,1,.32,1)}
+.confidence-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center}
+.confidence-pct{font-family:'Space Grotesk',sans-serif;font-size:1.8rem;font-weight:700}
+.confidence-label{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
+
+/* Stat cards */
+.stat-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1rem}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.2rem;text-align:center}
+.stat-card .value{font-family:'JetBrains Mono',monospace;font-size:1.3rem;font-weight:700;color:var(--accent)}
+.stat-card .label{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:4px}
+
+/* Timeline */
+.timeline-section{margin-bottom:2rem}
+.timeline-title{font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.75rem}
+.timeline{display:flex;gap:2px;height:44px;border-radius:10px;overflow:hidden}
+.chunk{flex:1;min-width:3px;transition:all .25s;cursor:pointer;position:relative;border-radius:2px}
+.chunk.ok{background:var(--green)}
+.chunk.minor{background:var(--yellow)}
+.chunk.significant{background:var(--orange)}
+.chunk.major{background:var(--red);animation:pulse-red 1.8s infinite}
+@keyframes pulse-red{0%,100%{opacity:1}50%{opacity:.6}}
+.chunk:hover{transform:scaleY(1.2);opacity:.85;z-index:2}
+.chunk-tip{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:.72rem;white-space:nowrap;z-index:20;pointer-events:none;box-shadow:0 6px 24px rgba(0,0,0,.6)}
+.chunk:hover .chunk-tip{display:block}
+.timeline-legend{display:flex;gap:14px;margin-top:.6rem;font-size:.72rem;color:var(--muted);flex-wrap:wrap}
+.legend-dot{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:4px;vertical-align:middle}
+
+/* Tampered regions */
+.tampered-regions{margin-bottom:2rem}
+.tampered-regions h4{font-size:.85rem;color:var(--red);font-weight:600;margin-bottom:.75rem}
+.tampered-item{display:flex;align-items:center;gap:12px;padding:10px 14px;background:rgba(255,68,102,.04);border:1px solid rgba(255,68,102,.15);border-radius:8px;margin-bottom:.5rem;font-size:.85rem;flex-wrap:wrap}
+.tampered-badge{background:var(--red);color:#fff;padding:2px 10px;border-radius:4px;font-size:.7rem;font-weight:700;text-transform:uppercase;white-space:nowrap}
+.tampered-badge.minor{background:var(--yellow);color:#000}
+.tampered-badge.significant{background:var(--orange);color:#000}
+.tampered-dist{color:var(--muted);font-size:.78rem;margin-left:auto}
+
+/* Merkle indicator */
+.merkle-row{display:flex;align-items:center;gap:10px;padding:14px 18px;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:2rem;font-size:.9rem}
+.merkle-row .icon{font-size:1.3rem}
+.merkle-row .match{color:var(--green);font-weight:600}
+.merkle-row .mismatch{color:var(--red);font-weight:600}
+
+/* ===== How It Works ===== */
+.how-section{padding:4rem 0;border-top:1px solid var(--border)}
+.how-section h2{font-family:'Space Grotesk',sans-serif;font-size:clamp(1.6rem,4vw,2.2rem);font-weight:700;text-align:center;margin-bottom:.6rem}
+.how-sub{text-align:center;color:var(--muted);font-size:.95rem;margin-bottom:3rem}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:2rem}
+.step{text-align:center;padding:2rem 1.5rem;background:var(--surface);border:1px solid var(--border);border-radius:16px;transition:all .4s cubic-bezier(.23,1,.32,1)}
+.step:hover{border-color:var(--accent);transform:translateY(-6px)}
+.step-icon{font-size:2.5rem;margin-bottom:1rem}
+.step-num{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:.85rem;font-weight:700;color:var(--accent);background:rgba(0,240,255,.08);border:1px solid rgba(0,240,255,.2);margin-bottom:.75rem}
+.step h3{font-size:1rem;font-weight:700;margin-bottom:.5rem}
+.step p{color:var(--muted);font-size:.82rem;line-height:1.6}
+.step-arrows{display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:1.5rem;opacity:.4}
+.how-note{text-align:center;margin-top:2rem;padding:1.2rem;background:rgba(192,38,211,.05);border:1px solid rgba(192,38,211,.15);border-radius:10px;font-size:.85rem;color:var(--muted);line-height:1.6;max-width:680px;margin-left:auto;margin-right:auto}
+.how-note strong{color:var(--purple)}
+.how-cta{text-align:center;margin-top:2rem}
+.how-cta a{color:var(--accent);text-decoration:none;font-weight:600;font-size:.95rem;transition:color .3s}
+.how-cta a:hover{color:var(--purple)}
+
+/* ===== Footer ===== */
+footer{border-top:1px solid var(--border);padding:2.5rem 2rem;text-align:center;color:var(--muted);font-size:.82rem}
+footer a{color:var(--accent);text-decoration:none;transition:color .3s}
+footer a:hover{color:var(--purple)}
+footer .sep{margin:0 .75rem;opacity:.4}
+
+/* ===== Responsive ===== */
+@media(max-width:700px){
+  .hero{padding:6rem 1.5rem 3rem}
+  .drop-grid{grid-template-columns:1fr}
+  .steps{grid-template-columns:1fr}
+  .step-arrows{transform:rotate(90deg);padding:.5rem 0}
+  .stats-row{grid-template-columns:1fr}
+  .confidence-ring{margin-bottom:1rem}
+  .stat-cards{grid-template-columns:repeat(2,1fr)}
+  .verdict-banner{flex-direction:column;text-align:center;gap:1rem}
+  .tampered-dist{margin-left:0;width:100%;text-align:right}
+}
+@media(max-width:480px){
+  .hero h1{font-size:2rem}
+  .btn-verify{padding:14px 32px;font-size:1rem}
+  .stat-cards{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== HERO ===== -->
+<section class="hero">
+  <div class="hero-bg">
+    <div class="grid-line h" style="top:20%"></div>
+    <div class="grid-line h" style="top:60%;animation-delay:-4s"></div>
+    <div class="grid-line v" style="left:30%;animation-delay:-2s"></div>
+    <div class="grid-line v" style="left:70%;animation-delay:-8s"></div>
+  </div>
+  <div class="hero-badge">VRC-48M Public Verifier</div>
+  <h1>Verify <span class="gradient">Media Authenticity</span></h1>
+  <p class="hero-sub">Drop a video and its VRC-48M anchor to check for tampering. No install, no account, no data stored.</p>
+</section>
+
+<!-- ===== VERIFICATION TOOL ===== -->
+<div class="container">
+
+  <div class="drop-grid">
+    <!-- Media drop zone -->
+    <div class="drop-zone" id="media-zone">
+      <div class="icon">&#x1f3ac;</div>
+      <h3>Drop video or image</h3>
+      <p>MP4, AVI, MOV, JPG, PNG, WebP &mdash; up to 100 MB</p>
+      <input type="file" id="media-input" accept="video/mp4,video/avi,video/quicktime,video/x-msvideo,video/webm,image/jpeg,image/png,image/webp">
+      <div class="file-info" id="media-info">
+        <span class="fname" id="media-fname"></span>
+        <span class="fsize" id="media-fsize"></span>
+        <span class="remove" id="media-remove" title="Remove">&times;</span>
+      </div>
+    </div>
+
+    <!-- Anchor drop zone -->
+    <div class="drop-zone" id="anchor-zone">
+      <div class="icon">&#x1f512;</div>
+      <h3>Drop anchor JSON</h3>
+      <p>The .json anchor file from VRC-48M anchoring</p>
+      <input type="file" id="anchor-input" accept=".json,application/json">
+      <div class="file-info" id="anchor-info">
+        <span class="fname" id="anchor-fname"></span>
+        <span class="remove" id="anchor-remove" title="Remove">&times;</span>
+      </div>
+      <div class="or-label">or paste anchor JSON</div>
+      <textarea class="anchor-paste" id="anchor-paste" placeholder='{"anchor_id":"vrc48m_...","merkle_root":"...","chunks":...}' spellcheck="false"></textarea>
+    </div>
+  </div>
+
+  <div class="verify-row">
+    <button class="btn btn-verify" id="verify-btn" disabled>
+      &#x1f50d; Verify Authenticity
+    </button>
+  </div>
+
+  <!-- Progress -->
+  <div class="progress-section" id="progress">
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    <div class="progress-text"><span class="spinner"></span><span id="progress-text">Uploading media...</span></div>
+  </div>
+
+  <!-- Results -->
+  <div class="results" id="results">
+    <div class="verdict-banner" id="verdict-banner">
+      <div class="verdict-icon" id="verdict-icon"></div>
+      <div>
+        <div class="verdict-label" id="verdict-label"></div>
+        <div class="verdict-sub" id="verdict-sub"></div>
+      </div>
+    </div>
+
+    <div class="merkle-row" id="merkle-row">
+      <span class="icon" id="merkle-icon"></span>
+      <span id="merkle-text"></span>
+    </div>
+
+    <div class="stats-row">
+      <div class="confidence-ring" id="confidence-ring">
+        <svg viewBox="0 0 140 140" width="140" height="140">
+          <circle class="track" cx="70" cy="70" r="60"/>
+          <circle class="fill" id="conf-arc" cx="70" cy="70" r="60" stroke-dasharray="377" stroke-dashoffset="377"/>
+        </svg>
+        <div class="confidence-center">
+          <div class="confidence-pct" id="conf-pct">0%</div>
+          <div class="confidence-label">Confidence</div>
+        </div>
+      </div>
+      <div class="stat-cards" id="stat-cards"></div>
+    </div>
+
+    <div class="timeline-section" id="timeline-section" style="display:none">
+      <div class="timeline-title">Chunk Integrity Timeline</div>
+      <div class="timeline" id="timeline"></div>
+      <div class="timeline-legend">
+        <span><span class="legend-dot" style="background:var(--green)"></span>Authentic</span>
+        <span><span class="legend-dot" style="background:var(--yellow)"></span>Minor</span>
+        <span><span class="legend-dot" style="background:var(--orange)"></span>Significant</span>
+        <span><span class="legend-dot" style="background:var(--red)"></span>Major</span>
+      </div>
+    </div>
+
+    <div class="tampered-regions" id="tampered-regions" style="display:none">
+      <h4>Tampered Regions</h4>
+      <div id="tampered-list"></div>
+    </div>
+  </div>
+
+  <!-- ===== HOW IT WORKS ===== -->
+  <div class="how-section">
+    <h2>How It Works</h2>
+    <p class="how-sub">Three steps from capture to tamper-proof verification.</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-icon">&#x1f3a5;</div>
+        <h3>Record</h3>
+        <p>Capture video or image. VRC-48M extracts 48-dimensional topological invariants from perceptual features at the frame level.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-icon">&#x26d3;</div>
+        <h3>Anchor</h3>
+        <p>A Merkle tree of wrapping-number spectra creates a compact, tamper-evident proof tied to the content itself.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-icon">&#x2705;</div>
+        <h3>Verify Anywhere</h3>
+        <p>Anyone with the anchor can verify any copy. Re-encoding is tolerated. Manipulation is not. No account needed.</p>
+      </div>
+    </div>
+
+    <div class="how-note">
+      <strong>Why it works:</strong> Wrapping numbers are non-differentiable topological invariants. Neural networks cannot gradient-descend through them, so AI-based forgery tools literally cannot optimize to defeat the anchor.
+    </div>
+
+    <div class="how-cta">
+      <a href="/">&#x2190; Back to VortexChain main site</a>
+    </div>
+  </div>
+</div>
+
+<!-- ===== FOOTER ===== -->
+<footer>
+  Powered by <strong>VortexChain VRC-48M</strong>
+  <span class="sep">|</span>
+  <a href="/">Main Site</a>
+  <span class="sep">|</span>
+  <a href="https://github.com/arc-relay/vortex" target="_blank" rel="noopener">GitHub</a>
+</footer>
+
+<script>
+(function() {
+  'use strict';
+
+  // ========== CONFIG ==========
+  const API_BASE = window.location.origin;
+
+  // ========== State ==========
+  let mediaFile = null;
+  let anchorId = null;
+  let anchorJson = null;
+
+  const $ = id => document.getElementById(id);
+  const verifyBtn = $('verify-btn');
+
+  // ========== Drop zone helpers ==========
+  function setupDrop(zoneId, inputId, onFile) {
+    const zone = $(zoneId);
+    const input = $(inputId);
+    zone.addEventListener('click', e => {
+      if (e.target.closest('.remove') || e.target.closest('.anchor-paste')) return;
+      input.click();
+    });
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault(); zone.classList.remove('dragover');
+      if (e.dataTransfer.files.length) {
+        input.files = e.dataTransfer.files;
+        onFile(e.dataTransfer.files[0]);
+      }
+    });
+    input.addEventListener('change', () => { if (input.files[0]) onFile(input.files[0]); });
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+  }
+
+  // ========== Media zone ==========
+  setupDrop('media-zone', 'media-input', f => {
+    mediaFile = f;
+    $('media-fname').textContent = f.name;
+    $('media-fsize').textContent = formatSize(f.size);
+    $('media-info').classList.add('visible');
+    $('media-zone').classList.add('has-file');
+    checkReady();
+  });
+  $('media-remove').addEventListener('click', e => {
+    e.stopPropagation();
+    mediaFile = null;
+    $('media-input').value = '';
+    $('media-info').classList.remove('visible');
+    $('media-zone').classList.remove('has-file');
+    checkReady();
+  });
+
+  // ========== Anchor zone ==========
+  setupDrop('anchor-zone', 'anchor-input', f => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const json = JSON.parse(reader.result);
+        anchorJson = json;
+        anchorId = json.anchor_id || null;
+        $('anchor-fname').textContent = f.name;
+        $('anchor-info').classList.add('visible');
+        $('anchor-zone').classList.add('has-file');
+        $('anchor-paste').value = reader.result;
+        checkReady();
+      } catch (err) {
+        alert('Invalid JSON file: ' + err.message);
+      }
+    };
+    reader.readAsText(f);
+  });
+  $('anchor-remove').addEventListener('click', e => {
+    e.stopPropagation();
+    anchorId = null;
+    anchorJson = null;
+    $('anchor-input').value = '';
+    $('anchor-info').classList.remove('visible');
+    $('anchor-zone').classList.remove('has-file');
+    $('anchor-paste').value = '';
+    checkReady();
+  });
+
+  // Parse pasted anchor JSON
+  $('anchor-paste').addEventListener('input', () => {
+    const val = $('anchor-paste').value.trim();
+    if (!val) { anchorId = null; anchorJson = null; checkReady(); return; }
+    try {
+      const json = JSON.parse(val);
+      anchorJson = json;
+      anchorId = json.anchor_id || null;
+      $('anchor-zone').classList.add('has-file');
+    } catch {
+      anchorId = null;
+      anchorJson = null;
+      $('anchor-zone').classList.remove('has-file');
+    }
+    checkReady();
+  });
+
+  function checkReady() {
+    verifyBtn.disabled = !(mediaFile && anchorId);
+  }
+
+  // ========== Verify ==========
+  verifyBtn.addEventListener('click', async () => {
+    if (!mediaFile || !anchorId) return;
+    verifyBtn.disabled = true;
+    $('results').classList.remove('visible');
+
+    // Show progress
+    const prog = $('progress');
+    prog.classList.add('visible');
+    const fill = $('progress-fill');
+    const text = $('progress-text');
+    fill.style.width = '0%';
+
+    const messages = [
+      'Uploading media...',
+      'Re-extracting topological features...',
+      'Computing wrapping-number spectra...',
+      'Comparing against anchor...',
+      'Checking Merkle proof...',
+      'Classifying divergences...',
+      'Building tamper report...',
+    ];
+    let step = 0;
+    const interval = setInterval(() => {
+      step++;
+      fill.style.width = Math.min(step * 12, 90) + '%';
+      text.textContent = messages[Math.min(step, messages.length - 1)];
+    }, 500);
+
+    const form = new FormData();
+    form.append('file', mediaFile);
+    form.append('anchor_id', anchorId);
+
+    try {
+      const res = await fetch(API_BASE + '/api/vrc48m/verify', { method: 'POST', body: form });
+      const data = await res.json();
+      clearInterval(interval);
+      fill.style.width = '100%';
+      text.textContent = 'Complete.';
+
+      if (data.ok) {
+        setTimeout(() => {
+          prog.classList.remove('visible');
+          renderResults(data.data);
+        }, 400);
+      } else {
+        prog.classList.remove('visible');
+        alert('Verification error: ' + (data.error || 'Unknown error'));
+      }
+    } catch (e) {
+      clearInterval(interval);
+      prog.classList.remove('visible');
+      alert('Network error: ' + e.message);
+    }
+
+    verifyBtn.disabled = false;
+  });
+
+  // ========== Render results ==========
+  function renderResults(d) {
+    const isOk = d.status === 'authentic' || d.status === 'likely_authentic';
+    const statusLabel = isOk ? 'AUTHENTIC' : 'TAMPERED';
+
+    // Verdict banner
+    const banner = $('verdict-banner');
+    banner.className = 'verdict-banner ' + (isOk ? 'authentic' : 'tampered');
+    $('verdict-icon').textContent = isOk ? '\u2705' : '\uD83D\uDEA8';
+    $('verdict-label').textContent = statusLabel;
+    $('verdict-label').style.color = isOk ? 'var(--green)' : 'var(--red)';
+    $('verdict-sub').textContent = d.matching_chunks + '/' + d.total_chunks + ' chunks match \u2014 ' +
+      (d.confidence * 100).toFixed(1) + '% confidence \u2014 ' + d.processing_time_ms.toFixed(0) + 'ms';
+
+    // Merkle
+    const merkle = $('merkle-row');
+    $('merkle-icon').textContent = d.merkle_match ? '\uD83D\uDD17' : '\u26A0\uFE0F';
+    const mt = $('merkle-text');
+    mt.innerHTML = d.merkle_match
+      ? '<span class="match">Merkle root matches</span> \u2014 content tree is intact'
+      : '<span class="mismatch">Merkle root mismatch</span> \u2014 content tree has been modified';
+
+    // Confidence ring animation
+    const pct = d.confidence * 100;
+    const circumference = 2 * Math.PI * 60; // r=60
+    const offset = circumference - (pct / 100) * circumference;
+    const arc = $('conf-arc');
+    arc.style.stroke = isOk ? 'var(--green)' : 'var(--red)';
+    // Trigger animation
+    requestAnimationFrame(() => {
+      arc.style.strokeDashoffset = offset;
+    });
+    $('conf-pct').textContent = pct.toFixed(1) + '%';
+    $('conf-pct').style.color = isOk ? 'var(--green)' : 'var(--red)';
+
+    // Stat cards
+    $('stat-cards').innerHTML = [
+      { v: d.status.replace(/_/g, ' '), l: 'Verdict', c: isOk ? 'var(--green)' : 'var(--red)' },
+      { v: d.matching_chunks + '/' + d.total_chunks, l: 'Chunks OK', c: 'var(--accent)' },
+      { v: d.merkle_match ? 'Yes' : 'No', l: 'Merkle Match', c: d.merkle_match ? 'var(--green)' : 'var(--red)' },
+      { v: d.processing_time_ms.toFixed(0) + 'ms', l: 'Processing', c: 'var(--accent)' },
+    ].map(s => `<div class="stat-card"><div class="value" style="color:${s.c}">${s.v}</div><div class="label">${s.l}</div></div>`).join('');
+
+    // Timeline
+    const tamperedMap = {};
+    (d.tampered_chunks || []).forEach(tc => { tamperedMap[tc.chunk_index] = tc; });
+
+    if (d.total_chunks > 1) {
+      $('timeline-section').style.display = '';
+      const tl = $('timeline');
+      tl.innerHTML = '';
+      for (let i = 0; i < d.total_chunks; i++) {
+        const tc = tamperedMap[i];
+        const div = document.createElement('div');
+        if (tc) {
+          const cls = tc.classification === 'major' ? 'major'
+            : tc.classification === 'significant' ? 'significant'
+            : tc.classification === 'minor' ? 'minor' : 'major';
+          div.className = 'chunk ' + cls;
+          div.innerHTML = '<div class="chunk-tip">Chunk ' + i + ': ' + tc.classification +
+            '<br>' + tc.time_start_s + 's \u2014 ' + tc.time_end_s + 's' +
+            '<br>Distance: ' + tc.spectral_distance.toFixed(4) + '</div>';
+        } else {
+          div.className = 'chunk ok';
+          div.innerHTML = '<div class="chunk-tip">Chunk ' + i + ': Authentic</div>';
+        }
+        tl.appendChild(div);
+      }
+    } else {
+      $('timeline-section').style.display = 'none';
+    }
+
+    // Tampered regions
+    if (d.tampered_chunks && d.tampered_chunks.length > 0) {
+      $('tampered-regions').style.display = '';
+      $('tampered-list').innerHTML = d.tampered_chunks.map(tc => {
+        const badgeCls = tc.classification === 'minor' ? ' minor'
+          : tc.classification === 'significant' ? ' significant' : '';
+        return '<div class="tampered-item">' +
+          '<span class="tampered-badge' + badgeCls + '">' + tc.classification + '</span>' +
+          '<span>Chunk ' + tc.chunk_index + ' \u2014 ' + tc.time_start_s + 's to ' + tc.time_end_s + 's</span>' +
+          '<span class="tampered-dist">distance: ' + tc.spectral_distance.toFixed(4) + '</span>' +
+          '</div>';
+      }).join('');
+    } else {
+      $('tampered-regions').style.display = 'none';
+    }
+
+    $('results').classList.add('visible');
+    $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+})();
+</script>
+</body>
+</html>
