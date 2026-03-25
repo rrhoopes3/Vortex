@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VRC-48M | Topological Media Provenance</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0a0f;--surface:#12121a;--border:#1e1e2e;--text:#e0e0e0;--dim:#888;
+--accent:#00f0ff;--green:#22ff88;--red:#ff4466;--purple:#c026d3;--orange:#ff8800;
+--font:'Segoe UI',system-ui,-apple-system,sans-serif}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh}
+.container{max-width:1200px;margin:0 auto;padding:20px}
+
+/* Header */
+header{text-align:center;padding:30px 0 20px;border-bottom:1px solid var(--border);margin-bottom:30px}
+header h1{font-size:2rem;color:var(--accent);letter-spacing:2px}
+header h1 span{color:var(--purple)}
+header p{color:var(--dim);margin-top:8px;font-size:.9rem}
+
+/* Tabs */
+.tabs{display:flex;gap:4px;margin-bottom:24px;border-bottom:2px solid var(--border);padding-bottom:0}
+.tab{padding:10px 20px;background:transparent;border:none;color:var(--dim);cursor:pointer;
+font-size:.95rem;border-bottom:2px solid transparent;margin-bottom:-2px;transition:.2s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+.panel{display:none}
+.panel.active{display:block}
+
+/* Upload zones */
+.upload-zone{border:2px dashed var(--border);border-radius:12px;padding:40px;text-align:center;
+cursor:pointer;transition:.3s;background:var(--surface)}
+.upload-zone:hover,.upload-zone.dragover{border-color:var(--accent);background:#12121a80}
+.upload-zone h3{color:var(--text);margin-bottom:8px}
+.upload-zone p{color:var(--dim);font-size:.85rem}
+.upload-zone input{display:none}
+.file-info{margin-top:12px;color:var(--green);font-size:.9rem}
+
+/* Buttons */
+.btn{padding:10px 24px;border:none;border-radius:8px;cursor:pointer;font-size:.9rem;
+font-weight:600;transition:.2s;display:inline-flex;align-items:center;gap:8px}
+.btn-primary{background:var(--accent);color:#000}
+.btn-primary:hover{background:#33f5ff;transform:translateY(-1px)}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{border-color:var(--accent)}
+.btn-danger{background:var(--red);color:#fff}
+
+/* Results */
+.result-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+padding:20px;margin-top:20px}
+.result-card h3{margin-bottom:12px;font-size:1.1rem}
+.result-card.authentic{border-color:var(--green)}
+.result-card.tampered{border-color:var(--red)}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:16px 0}
+.stat{background:var(--bg);border-radius:8px;padding:12px;text-align:center}
+.stat .value{font-size:1.4rem;font-weight:700;color:var(--accent)}
+.stat .label{font-size:.75rem;color:var(--dim);margin-top:4px;text-transform:uppercase}
+
+.status-badge{display:inline-block;padding:4px 12px;border-radius:20px;font-weight:700;
+font-size:.85rem;text-transform:uppercase;letter-spacing:1px}
+.status-AUTHENTIC{background:#22ff8822;color:var(--green);border:1px solid var(--green)}
+.status-TAMPERED,.status-REGENERATED{background:#ff446622;color:var(--red);border:1px solid var(--red)}
+.status-MINOR_EDIT{background:#ff880022;color:var(--orange);border:1px solid var(--orange)}
+.status-SIGNIFICANT_EDIT{background:#ff880033;color:var(--orange);border:1px solid var(--orange)}
+.status-MAJOR_EDIT{background:#ff446633;color:var(--red);border:1px solid var(--red)}
+
+/* Tamper map */
+.tamper-map{margin-top:16px}
+.tamper-timeline{display:flex;gap:1px;height:40px;border-radius:6px;overflow:hidden;margin:8px 0}
+.chunk-bar{flex:1;min-width:2px;transition:.2s;cursor:pointer;position:relative}
+.chunk-bar.ok{background:var(--green)}
+.chunk-bar.minor{background:var(--orange)}
+.chunk-bar.significant{background:#ff6600}
+.chunk-bar.major{background:#ff4444}
+.chunk-bar.regenerated{background:var(--red)}
+.chunk-bar:hover{opacity:.7;transform:scaleY(1.1)}
+.chunk-bar .tooltip{display:none;position:absolute;bottom:45px;left:50%;transform:translateX(-50%);
+background:#000;color:#fff;padding:4px 8px;border-radius:4px;font-size:.7rem;white-space:nowrap;z-index:10}
+.chunk-bar:hover .tooltip{display:block}
+.timeline-legend{display:flex;gap:16px;font-size:.75rem;color:var(--dim);margin-top:8px}
+.legend-item{display:flex;align-items:center;gap:4px}
+.legend-dot{width:10px;height:10px;border-radius:2px}
+
+/* Spectrum viz */
+.spectrum-viz{display:flex;gap:1px;align-items:end;height:80px;margin:12px 0;
+background:var(--bg);border-radius:6px;padding:4px}
+.spectrum-bar{flex:1;background:var(--accent);border-radius:2px 2px 0 0;min-width:3px;
+transition:.3s;opacity:.8}
+.spectrum-bar:hover{opacity:1}
+
+/* Progress */
+.progress-bar{width:100%;height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin:12px 0}
+.progress-fill{height:100%;background:var(--accent);border-radius:2px;transition:.3s;width:0}
+
+/* Anchor list */
+.anchor-list{margin-top:16px}
+.anchor-item{background:var(--surface);border:1px solid var(--border);border-radius:8px;
+padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;
+cursor:pointer;transition:.2s}
+.anchor-item:hover{border-color:var(--accent)}
+.anchor-item .name{font-weight:600}
+.anchor-item .meta{color:var(--dim);font-size:.8rem}
+.anchor-item .root{font-family:monospace;font-size:.75rem;color:var(--purple)}
+
+/* Actions row */
+.actions{display:flex;gap:12px;margin-top:16px;flex-wrap:wrap;align-items:center}
+
+/* Two-column for compare */
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:768px){.compare-grid{grid-template-columns:1fr}}
+
+/* Loading spinner */
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);
+border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{color:var(--dim);font-size:.9rem;display:flex;align-items:center;gap:8px}
+</style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>VRC-<span>48M</span></h1>
+        <p>Topological Media Provenance &mdash; Deepfake-Resistant Content Authentication</p>
+    </header>
+
+    <div class="tabs">
+        <button class="tab active" onclick="switchTab('anchor')">Anchor</button>
+        <button class="tab" onclick="switchTab('verify')">Verify</button>
+        <button class="tab" onclick="switchTab('compare')">Compare</button>
+        <button class="tab" onclick="switchTab('anchors')">My Anchors</button>
+    </div>
+
+    <!-- ANCHOR PANEL -->
+    <div id="panel-anchor" class="panel active">
+        <div class="upload-zone" id="anchor-drop" onclick="document.getElementById('anchor-file').click()">
+            <h3>Drop media file here</h3>
+            <p>Video (MP4, AVI, MOV, WebM) or Image (JPG, PNG, BMP)</p>
+            <input type="file" id="anchor-file" accept="video/*,image/*">
+            <div class="file-info" id="anchor-file-info"></div>
+        </div>
+        <div class="actions">
+            <button class="btn btn-primary" id="anchor-btn" disabled onclick="createAnchor()">
+                Create Topological Anchor
+            </button>
+            <div id="anchor-loading"></div>
+        </div>
+        <div id="anchor-result"></div>
+    </div>
+
+    <!-- VERIFY PANEL -->
+    <div id="panel-verify" class="panel">
+        <div style="margin-bottom:16px">
+            <label style="color:var(--dim);font-size:.85rem">Select anchor to verify against:</label>
+            <select id="verify-anchor-select" style="margin-top:4px;padding:8px 12px;background:var(--surface);
+                color:var(--text);border:1px solid var(--border);border-radius:6px;width:100%;font-size:.9rem">
+                <option value="">-- No anchors yet --</option>
+            </select>
+        </div>
+        <div class="upload-zone" id="verify-drop" onclick="document.getElementById('verify-file').click()">
+            <h3>Drop suspect media file</h3>
+            <p>Upload the file you want to verify against the selected anchor</p>
+            <input type="file" id="verify-file" accept="video/*,image/*">
+            <div class="file-info" id="verify-file-info"></div>
+        </div>
+        <div class="actions">
+            <button class="btn btn-primary" id="verify-btn" disabled onclick="verifyMedia(false)">
+                Full Verify
+            </button>
+            <button class="btn btn-secondary" id="quick-verify-btn" disabled onclick="verifyMedia(true)">
+                Quick Verify (4 samples)
+            </button>
+            <div id="verify-loading"></div>
+        </div>
+        <div id="verify-result"></div>
+    </div>
+
+    <!-- COMPARE PANEL -->
+    <div id="panel-compare" class="panel">
+        <div class="compare-grid">
+            <div>
+                <div class="upload-zone" id="compare-orig-drop" onclick="document.getElementById('compare-orig').click()">
+                    <h3>Original</h3>
+                    <p>Drop the known-authentic file</p>
+                    <input type="file" id="compare-orig" accept="video/*,image/*">
+                    <div class="file-info" id="compare-orig-info"></div>
+                </div>
+            </div>
+            <div>
+                <div class="upload-zone" id="compare-susp-drop" onclick="document.getElementById('compare-susp').click()">
+                    <h3>Suspect</h3>
+                    <p>Drop the file to check</p>
+                    <input type="file" id="compare-susp" accept="video/*,image/*">
+                    <div class="file-info" id="compare-susp-info"></div>
+                </div>
+            </div>
+        </div>
+        <div class="actions">
+            <button class="btn btn-primary" id="compare-btn" disabled onclick="compareMedia()">
+                Compare Files
+            </button>
+            <div id="compare-loading"></div>
+        </div>
+        <div id="compare-result"></div>
+    </div>
+
+    <!-- ANCHORS LIST PANEL -->
+    <div id="panel-anchors" class="panel">
+        <h3 style="margin-bottom:12px">Stored Anchors</h3>
+        <div id="anchors-list"><p style="color:var(--dim)">No anchors yet. Create one in the Anchor tab.</p></div>
+    </div>
+</div>
+
+<script>
+// Tab switching
+function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    event.target.classList.add('active');
+    document.getElementById('panel-' + name).classList.add('active');
+    if (name === 'anchors') refreshAnchorsList();
+    if (name === 'verify') refreshAnchorSelect();
+}
+
+// File upload handling
+function setupUpload(dropId, inputId, infoId, onFile) {
+    const drop = document.getElementById(dropId);
+    const input = document.getElementById(inputId);
+    const info = document.getElementById(infoId);
+
+    input.addEventListener('change', () => {
+        if (input.files[0]) {
+            info.textContent = `${input.files[0].name} (${formatSize(input.files[0].size)})`;
+            if (onFile) onFile(input.files[0]);
+        }
+    });
+
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragover'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+    drop.addEventListener('drop', e => {
+        e.preventDefault();
+        drop.classList.remove('dragover');
+        if (e.dataTransfer.files[0]) {
+            input.files = e.dataTransfer.files;
+            info.textContent = `${e.dataTransfer.files[0].name} (${formatSize(e.dataTransfer.files[0].size)})`;
+            if (onFile) onFile(e.dataTransfer.files[0]);
+        }
+    });
+}
+
+function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+// Setup all upload zones
+setupUpload('anchor-drop', 'anchor-file', 'anchor-file-info', () => {
+    document.getElementById('anchor-btn').disabled = false;
+});
+setupUpload('verify-drop', 'verify-file', 'verify-file-info', () => {
+    const sel = document.getElementById('verify-anchor-select').value;
+    document.getElementById('verify-btn').disabled = !sel;
+    document.getElementById('quick-verify-btn').disabled = !sel;
+});
+setupUpload('compare-orig-drop', 'compare-orig', 'compare-orig-info', checkCompareReady);
+setupUpload('compare-susp-drop', 'compare-susp', 'compare-susp-info', checkCompareReady);
+
+document.getElementById('verify-anchor-select').addEventListener('change', () => {
+    const hasFile = document.getElementById('verify-file').files[0];
+    const hasAnchor = document.getElementById('verify-anchor-select').value;
+    document.getElementById('verify-btn').disabled = !(hasFile && hasAnchor);
+    document.getElementById('quick-verify-btn').disabled = !(hasFile && hasAnchor);
+});
+
+function checkCompareReady() {
+    const a = document.getElementById('compare-orig').files[0];
+    const b = document.getElementById('compare-susp').files[0];
+    document.getElementById('compare-btn').disabled = !(a && b);
+}
+
+// Spectrum visualization
+function renderSpectrum(spectrum, container) {
+    if (!spectrum || !spectrum.length) return '';
+    const max = Math.max(...spectrum, 1);
+    let html = '<div class="spectrum-viz">';
+    spectrum.forEach((v, i) => {
+        const h = Math.max(4, (v / max) * 72);
+        const hue = (v / 997) * 280;
+        html += `<div class="spectrum-bar" style="height:${h}px;background:hsl(${hue},80%,60%)" title="S${i}: ${v}"></div>`;
+    });
+    html += '</div>';
+    return html;
+}
+
+// Tamper timeline visualization
+function renderTamperMap(totalChunks, tamperedChunks) {
+    if (totalChunks === 0) return '';
+
+    // Build chunk status map
+    const status = new Array(totalChunks).fill('ok');
+    (tamperedChunks || []).forEach(tc => {
+        if (tc.chunk_index < totalChunks) {
+            const cls = tc.classification.toLowerCase().replace('_', '-');
+            status[tc.chunk_index] = cls === 'minor-edit' ? 'minor' :
+                cls === 'significant-edit' ? 'significant' :
+                cls === 'major-edit' ? 'major' : 'regenerated';
+        }
+    });
+
+    let html = '<div class="tamper-map">';
+    html += '<div style="font-size:.85rem;color:var(--dim);margin-bottom:4px">Tamper Timeline (each bar = 1 chunk)</div>';
+    html += '<div class="tamper-timeline">';
+    status.forEach((s, i) => {
+        const tc = (tamperedChunks || []).find(t => t.chunk_index === i);
+        const tooltip = tc ?
+            `Chunk ${i}: ${tc.classification} (${tc.spectral_distance}/24 changed) ${tc.time_start_s}s-${tc.time_end_s}s` :
+            `Chunk ${i}: OK`;
+        html += `<div class="chunk-bar ${s}"><span class="tooltip">${tooltip}</span></div>`;
+    });
+    html += '</div>';
+    html += '<div class="timeline-legend">';
+    html += '<div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> Authentic</div>';
+    html += '<div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div> Minor Edit</div>';
+    html += '<div class="legend-item"><div class="legend-dot" style="background:#ff6600"></div> Significant</div>';
+    html += '<div class="legend-item"><div class="legend-dot" style="background:#ff4444"></div> Major</div>';
+    html += '<div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> Regenerated</div>';
+    html += '</div></div>';
+    return html;
+}
+
+// API calls
+async function createAnchor() {
+    const file = document.getElementById('anchor-file').files[0];
+    if (!file) return;
+
+    const btn = document.getElementById('anchor-btn');
+    btn.disabled = true;
+    document.getElementById('anchor-loading').innerHTML =
+        '<span class="loading-text"><span class="spinner"></span> Analyzing media &amp; computing topological hashes...</span>';
+
+    const form = new FormData();
+    form.append('file', file);
+
+    try {
+        const res = await fetch('/api/vrc48m/anchor', { method: 'POST', body: form });
+        const json = await res.json();
+
+        if (json.ok) {
+            const d = json.data;
+            document.getElementById('anchor-result').innerHTML = `
+                <div class="result-card authentic">
+                    <h3>Anchor Created <span class="status-badge status-AUTHENTIC">ANCHORED</span></h3>
+                    <div class="stat-grid">
+                        <div class="stat"><div class="value">${d.frame_count}</div><div class="label">Frames</div></div>
+                        <div class="stat"><div class="value">${d.chunks}</div><div class="label">Chunks</div></div>
+                        <div class="stat"><div class="value">${(d.duration_ms/1000).toFixed(1)}s</div><div class="label">Duration</div></div>
+                        <div class="stat"><div class="value">${d.resolution}</div><div class="label">Resolution</div></div>
+                        <div class="stat"><div class="value">${d.processing_time_ms.toFixed(0)}ms</div><div class="label">Processing</div></div>
+                    </div>
+                    <div style="margin-top:12px">
+                        <div style="font-size:.85rem;color:var(--dim)">Merkle Root</div>
+                        <code style="color:var(--purple);font-size:.8rem;word-break:break-all">${d.merkle_root}</code>
+                    </div>
+                    <div style="margin-top:12px">
+                        <div style="font-size:.85rem;color:var(--dim)">Anchor ID</div>
+                        <code style="color:var(--accent);font-size:.8rem">${d.anchor_id}</code>
+                    </div>
+                    ${d.sample_spectra && d.sample_spectra[0] ? `
+                        <div style="margin-top:16px">
+                            <div style="font-size:.85rem;color:var(--dim)">Sample Wrapping-Number Spectrum (24 spheres)</div>
+                            ${renderSpectrum(d.sample_spectra[0], 'anchor-spectrum')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+            refreshAnchorSelect();
+        } else {
+            document.getElementById('anchor-result').innerHTML =
+                `<div class="result-card tampered"><h3>Error</h3><p>${json.error}</p></div>`;
+        }
+    } catch (e) {
+        document.getElementById('anchor-result').innerHTML =
+            `<div class="result-card tampered"><h3>Error</h3><p>${e.message}</p></div>`;
+    }
+
+    btn.disabled = false;
+    document.getElementById('anchor-loading').innerHTML = '';
+}
+
+async function verifyMedia(quick) {
+    const file = document.getElementById('verify-file').files[0];
+    const anchorId = document.getElementById('verify-anchor-select').value;
+    if (!file || !anchorId) return;
+
+    document.getElementById('verify-btn').disabled = true;
+    document.getElementById('quick-verify-btn').disabled = true;
+    document.getElementById('verify-loading').innerHTML =
+        `<span class="loading-text"><span class="spinner"></span> ${quick ? 'Quick' : 'Full'} verification in progress...</span>`;
+
+    const form = new FormData();
+    form.append('file', file);
+    form.append('anchor_id', anchorId);
+    form.append('quick', quick ? 'true' : 'false');
+
+    try {
+        const res = await fetch('/api/vrc48m/verify', { method: 'POST', body: form });
+        const json = await res.json();
+
+        if (json.ok) {
+            const d = json.data;
+            const isAuth = d.status === 'AUTHENTIC';
+            document.getElementById('verify-result').innerHTML = `
+                <div class="result-card ${isAuth ? 'authentic' : 'tampered'}">
+                    <h3>Verification Result <span class="status-badge status-${d.status}">${d.status}</span></h3>
+                    <div class="stat-grid">
+                        <div class="stat"><div class="value">${(d.confidence * 100).toFixed(1)}%</div><div class="label">Confidence</div></div>
+                        <div class="stat"><div class="value">${d.matching_chunks}/${d.total_chunks}</div><div class="label">Matching Chunks</div></div>
+                        <div class="stat"><div class="value">${d.merkle_match ? 'YES' : 'NO'}</div><div class="label">Merkle Match</div></div>
+                        <div class="stat"><div class="value">${d.processing_time_ms.toFixed(0)}ms</div><div class="label">Processing</div></div>
+                    </div>
+                    ${d.tampered_chunks && d.tampered_chunks.length ?
+                        renderTamperMap(d.total_chunks, d.tampered_chunks) : ''}
+                </div>
+            `;
+        } else {
+            document.getElementById('verify-result').innerHTML =
+                `<div class="result-card tampered"><h3>Error</h3><p>${json.error}</p></div>`;
+        }
+    } catch (e) {
+        document.getElementById('verify-result').innerHTML =
+            `<div class="result-card tampered"><h3>Error</h3><p>${e.message}</p></div>`;
+    }
+
+    document.getElementById('verify-btn').disabled = false;
+    document.getElementById('quick-verify-btn').disabled = false;
+    document.getElementById('verify-loading').innerHTML = '';
+}
+
+async function compareMedia() {
+    const orig = document.getElementById('compare-orig').files[0];
+    const susp = document.getElementById('compare-susp').files[0];
+    if (!orig || !susp) return;
+
+    document.getElementById('compare-btn').disabled = true;
+    document.getElementById('compare-loading').innerHTML =
+        '<span class="loading-text"><span class="spinner"></span> Comparing files...</span>';
+
+    const form = new FormData();
+    form.append('original', orig);
+    form.append('suspect', susp);
+
+    try {
+        const res = await fetch('/api/vrc48m/compare', { method: 'POST', body: form });
+        const json = await res.json();
+
+        if (json.ok) {
+            const d = json.data;
+            const isAuth = d.status === 'AUTHENTIC';
+            document.getElementById('compare-result').innerHTML = `
+                <div class="result-card ${isAuth ? 'authentic' : 'tampered'}">
+                    <h3>Comparison Result <span class="status-badge status-${d.status}">${d.status}</span></h3>
+                    <div class="stat-grid">
+                        <div class="stat"><div class="value">${(d.confidence * 100).toFixed(1)}%</div><div class="label">Match</div></div>
+                        <div class="stat"><div class="value">${d.matching_chunks}/${d.total_chunks}</div><div class="label">Matching Chunks</div></div>
+                        <div class="stat"><div class="value">${d.processing_time_ms.toFixed(0)}ms</div><div class="label">Processing</div></div>
+                    </div>
+                    ${d.tampered_chunks && d.tampered_chunks.length ?
+                        renderTamperMap(d.total_chunks, d.tampered_chunks) : ''}
+                </div>
+            `;
+        } else {
+            document.getElementById('compare-result').innerHTML =
+                `<div class="result-card tampered"><h3>Error</h3><p>${json.error}</p></div>`;
+        }
+    } catch (e) {
+        document.getElementById('compare-result').innerHTML =
+            `<div class="result-card tampered"><h3>Error</h3><p>${e.message}</p></div>`;
+    }
+
+    document.getElementById('compare-btn').disabled = false;
+    document.getElementById('compare-loading').innerHTML = '';
+}
+
+async function refreshAnchorSelect() {
+    try {
+        const res = await fetch('/api/vrc48m/anchors');
+        const json = await res.json();
+        const sel = document.getElementById('verify-anchor-select');
+        sel.innerHTML = '<option value="">-- Select anchor --</option>';
+        if (json.ok) {
+            json.data.forEach(a => {
+                sel.innerHTML += `<option value="${a.anchor_id}">${a.filename} (${a.chunks} chunks, ${a.merkle_root})</option>`;
+            });
+        }
+    } catch (e) {}
+}
+
+async function refreshAnchorsList() {
+    try {
+        const res = await fetch('/api/vrc48m/anchors');
+        const json = await res.json();
+        const list = document.getElementById('anchors-list');
+        if (json.ok && json.data.length) {
+            list.innerHTML = json.data.map(a => `
+                <div class="anchor-item">
+                    <div>
+                        <div class="name">${a.filename}</div>
+                        <div class="meta">${a.chunks} chunks &middot; ${a.frame_count} frames &middot; ${(a.duration_ms/1000).toFixed(1)}s</div>
+                        <div class="root">${a.merkle_root}</div>
+                    </div>
+                    <div class="status-badge status-AUTHENTIC">ANCHORED</div>
+                </div>
+            `).join('');
+        } else {
+            list.innerHTML = '<p style="color:var(--dim)">No anchors yet.</p>';
+        }
+    } catch (e) {
+        document.getElementById('anchors-list').innerHTML = '<p style="color:var(--red)">Failed to load anchors.</p>';
+    }
+}
+</script>
+</body>
+</html>
