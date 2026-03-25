@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 import cv2
 import numpy as np
 
-from forge.vortexchain.vrc48m import (
+from vortexchain.vrc48m import (
     ChunkResult,
     MediaAnchor,
     MediaAnalysis,

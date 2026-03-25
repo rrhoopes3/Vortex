@@ -45,16 +45,16 @@ Media provenance that survives re-encoding but breaks under manipulation. Anchor
 
 ```bash
 # Anchor a video
-python -m forge.vortexchain.vrc48m anchor video.mp4 -o anchor.json
+python -m vortexchain.vrc48m anchor video.mp4 -o anchor.json
 
 # Verify a copy
-python -m forge.vortexchain.vrc48m verify video.mp4 anchor.json
+python -m vortexchain.vrc48m verify video.mp4 anchor.json
 
 # Compare two files
-python -m forge.vortexchain.vrc48m compare original.mp4 suspect.mp4
+python -m vortexchain.vrc48m compare original.mp4 suspect.mp4
 
 # Web demo
-python -m forge.vortexchain.server    # → http://localhost:5000/demo
+python -m vortexchain.server    # → http://localhost:5000/demo
 ```
 
 ### Mobile Camera SDK

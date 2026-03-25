@@ -11,7 +11,7 @@ import cv2
 import numpy as np
 import pytest
 
-from forge.vortexchain.vrc48m import (
+from vortexchain.vrc48m import (
     # Constants
     SFP_DIM,
     SPATIAL_FEATURES,
@@ -50,7 +50,7 @@ from forge.vortexchain.vrc48m import (
     # Streaming
     StreamingVRC48M,
 )
-from forge.vortexchain.manifold import MANIFOLD_DIM, NUM_EMBEDDED_SPHERES
+from vortexchain.manifold import MANIFOLD_DIM, NUM_EMBEDDED_SPHERES
 
 
 # ---------------------------------------------------------------------------
@@ -530,7 +530,7 @@ class TestAnalyzeImage:
 class TestImageVerifyRoundTrip:
     def test_self_verify_authentic(self, tmp_path):
         """An image verified against its own anchor should be AUTHENTIC."""
-        from forge.vortexchain.vrc48m import verify_media
+        from vortexchain.vrc48m import verify_media
 
         img_path = make_test_image(tmp_path / "original.png")
         analysis = analyze_image(img_path)
@@ -543,7 +543,7 @@ class TestImageVerifyRoundTrip:
 
     def test_modified_image_not_authentic(self, tmp_path):
         """A modified image should NOT match the original anchor."""
-        from forge.vortexchain.vrc48m import verify_media
+        from vortexchain.vrc48m import verify_media
 
         img_path = make_test_image(tmp_path / "original.png")
         analysis = analyze_image(img_path)
@@ -560,7 +560,7 @@ class TestImageVerifyRoundTrip:
 
     def test_quick_verify_self(self, tmp_path):
         """Quick verify of an image against its own anchor."""
-        from forge.vortexchain.vrc48m import quick_verify
+        from vortexchain.vrc48m import quick_verify
 
         img_path = make_test_image(tmp_path / "original.png")
         analysis = analyze_image(img_path)
@@ -577,14 +577,14 @@ class TestImageVerifyRoundTrip:
 
 class TestCompareMedia:
     def test_identical_images(self, tmp_path):
-        from forge.vortexchain.vrc48m import compare_media
+        from vortexchain.vrc48m import compare_media
 
         img_path = make_test_image(tmp_path / "same.png")
         result = compare_media(img_path, img_path)
         assert result.status == VerificationStatus.AUTHENTIC
 
     def test_different_images(self, tmp_path):
-        from forge.vortexchain.vrc48m import compare_media
+        from vortexchain.vrc48m import compare_media
 
         img1 = make_test_image(tmp_path / "a.png")
         frame2 = make_frame(color=(0, 0, 255), noise=60)

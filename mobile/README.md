@@ -25,7 +25,7 @@ iPhone (React Native)                    Server (Flask + SocketIO)
 ```bash
 cd ..
 pip install -e ".[dev]"
-python -m forge.vortexchain.server
+python -m vortexchain.server
 ```
 
 Server starts at `http://localhost:5000` with WebSocket support.

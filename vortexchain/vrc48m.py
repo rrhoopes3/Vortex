@@ -7,9 +7,9 @@ are invariant under continuous signal transformations (compression, rescaling)
 but change under discrete structural modifications (face swaps, AI regeneration).
 
 Usage (CLI):
-    python -m forge.vortexchain.vrc48m anchor  video.mp4 -o anchor.json
-    python -m forge.vortexchain.vrc48m verify  video.mp4 anchor.json
-    python -m forge.vortexchain.vrc48m compare original.mp4 suspect.mp4
+    python -m vortexchain.vrc48m anchor  video.mp4 -o anchor.json
+    python -m vortexchain.vrc48m verify  video.mp4 anchor.json
+    python -m vortexchain.vrc48m compare original.mp4 suspect.mp4
 """
 
 from __future__ import annotations
@@ -28,14 +28,14 @@ from typing import Dict, List, Optional, Tuple
 import cv2
 import numpy as np
 
-from forge.vortexchain.manifold import (
+from vortexchain.manifold import (
     MANIFOLD_DIM,
     NUM_EMBEDDED_SPHERES,
     TopologicalManifold,
     WrappingNumber,
     _expand_seed,
 )
-from forge.vortexchain.toac import TopologicalHash
+from vortexchain.toac import TopologicalHash
 
 
 # ---------------------------------------------------------------------------
@@ -1010,22 +1010,22 @@ def main():
         print("=" * 40)
         print()
         print("Usage:")
-        print("  python -m forge.vortexchain.vrc48m anchor  <media> [output.json]")
-        print("  python -m forge.vortexchain.vrc48m verify  <media> <anchor.json> [--quick]")
-        print("  python -m forge.vortexchain.vrc48m compare <original> <suspect>")
+        print("  python -m vortexchain.vrc48m anchor  <media> [output.json]")
+        print("  python -m vortexchain.vrc48m verify  <media> <anchor.json> [--quick]")
+        print("  python -m vortexchain.vrc48m compare <original> <suspect>")
         print()
         print("Examples:")
         print("  # Create anchor for a video")
-        print("  python -m forge.vortexchain.vrc48m anchor video.mp4")
+        print("  python -m vortexchain.vrc48m anchor video.mp4")
         print()
         print("  # Verify a re-encoded copy")
-        print("  python -m forge.vortexchain.vrc48m verify video_720p.mp4 video.mp4.anchor.json")
+        print("  python -m vortexchain.vrc48m verify video_720p.mp4 video.mp4.anchor.json")
         print()
         print("  # Quick verify (4 sample points, fast)")
-        print("  python -m forge.vortexchain.vrc48m verify video.mp4 anchor.json --quick")
+        print("  python -m vortexchain.vrc48m verify video.mp4 anchor.json --quick")
         print()
         print("  # Compare two files directly")
-        print("  python -m forge.vortexchain.vrc48m compare original.mp4 suspect.mp4")
+        print("  python -m vortexchain.vrc48m compare original.mp4 suspect.mp4")
         sys.exit(1)
 
     command = sys.argv[1]

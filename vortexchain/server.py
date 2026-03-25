@@ -1,7 +1,7 @@
 """VortexChain Dev Server.
 
 Flask API + dashboard for interacting with VortexChain.
-Run with: python -m forge.vortexchain.server
+Run with: python -m vortexchain.server
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from flask import Flask, jsonify, request, send_file, Response
 from flask_socketio import SocketIO, emit
 from werkzeug.utils import secure_filename
 
-from forge.vortexchain.streaming_sessions import (
+from vortexchain.streaming_sessions import (
     SessionConfig,
     SessionManager,
     SessionState,
@@ -25,7 +25,7 @@ from forge.vortexchain.streaming_sessions import (
 
 logger = logging.getLogger(__name__)
 
-from forge.vortexchain import (
+from vortexchain import (
     VortexChain,
     Transaction,
     TOACKeypair,
@@ -418,7 +418,7 @@ def vrc48m_demo():
 @app.route("/api/vrc48m/anchor", methods=["POST"])
 def vrc48m_anchor():
     """Upload media and create a topological anchor."""
-    from forge.vortexchain.vrc48m import (
+    from vortexchain.vrc48m import (
         analyze_video, analyze_image, MediaAnchor,
     )
 
@@ -472,7 +472,7 @@ def vrc48m_anchor():
 @app.route("/api/vrc48m/verify", methods=["POST"])
 def vrc48m_verify():
     """Verify uploaded media against an anchor."""
-    from forge.vortexchain.vrc48m import (
+    from vortexchain.vrc48m import (
         verify_media, quick_verify, MediaAnchor,
     )
 
@@ -525,7 +525,7 @@ def vrc48m_verify():
 @app.route("/api/vrc48m/compare", methods=["POST"])
 def vrc48m_compare():
     """Compare two uploaded media files."""
-    from forge.vortexchain.vrc48m import compare_media
+    from vortexchain.vrc48m import compare_media
 
     if "original" not in request.files or "suspect" not in request.files:
         return err("Need both 'original' and 'suspect' files")

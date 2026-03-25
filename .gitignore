@@ -11,8 +11,8 @@ build/
 .pytest_cache/
 
 # Runtime data (keep dir structure via .gitkeep)
-forge/data/*
-!forge/data/**/.gitkeep
+data/*
+!data/**/.gitkeep
 
 # IDE / editor
 .vscode/
