@@ -371,6 +371,163 @@ class MediaAnalysis:
     sample_spectra: List[List[int]]  # spectra at 0%, 25%, 50%, 75%
 
 
+class StreamingVRC48M:
+    """Streaming VRC-48M engine for live capture.
+
+    Feed frames one at a time via ``process_frame``; each call returns a
+    ``ChunkResult`` when a chunk boundary is reached (every *chunk_size*
+    frames) and ``None`` otherwise.  When the stream ends, call ``finalize``
+    to flush any partial trailing chunk and build the Merkle tree.
+
+    Usage::
+
+        stream = StreamingVRC48M(chunk_size=30, fps=30.0, width=1920, height=1080)
+        for frame in camera_feed:
+            result = stream.process_frame(frame)
+            if result is not None:
+                publish_chunk(result)          # optional per-chunk hook
+        analysis = stream.finalize()
+        anchor = MediaAnchor.from_analysis(analysis)
+    """
+
+    def __init__(
+        self,
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        fps: float = 30.0,
+        width: int = 0,
+        height: int = 0,
+        file_path: str = "<live>",
+    ):
+        self._chunk_size = chunk_size
+        self._fps = fps
+        self._width = width
+        self._height = height
+        self._file_path = file_path
+
+        self._prev_gray: Optional[np.ndarray] = None
+        self._frame_buffer: List[np.ndarray] = []
+        self._frame_idx: int = 0
+        self._chunk_idx: int = 0
+        self._chunks: List[ChunkResult] = []
+        self._chunk_digests: List[bytes] = []
+        self._start_time: float = time.time()
+        self._finalized: bool = False
+
+    # -- public API ----------------------------------------------------------
+
+    def process_frame(self, frame_bgr: np.ndarray) -> Optional[ChunkResult]:
+        """Ingest a single BGR frame.
+
+        Returns a ``ChunkResult`` when a chunk boundary is reached,
+        ``None`` otherwise.
+        """
+        if self._finalized:
+            raise RuntimeError("Cannot process frames after finalize()")
+
+        # Detect dimensions from the first frame if not provided
+        if self._frame_idx == 0:
+            h, w = frame_bgr.shape[:2]
+            if self._width == 0:
+                self._width = w
+            if self._height == 0:
+                self._height = h
+
+        gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+        sfp = extract_sfp(frame_bgr, self._prev_gray)
+        sfp_norm = normalize_sfp(sfp)
+        self._frame_buffer.append(sfp_norm)
+        self._prev_gray = gray
+        self._frame_idx += 1
+
+        if len(self._frame_buffer) == self._chunk_size:
+            return self._emit_chunk()
+
+        return None
+
+    def flush(self) -> Optional[ChunkResult]:
+        """Flush any remaining frames as a partial trailing chunk.
+
+        Returns the ``ChunkResult`` if there were buffered frames, else ``None``.
+        Safe to call multiple times (second call is a no-op).
+        """
+        if self._finalized:
+            raise RuntimeError("Cannot flush after finalize()")
+        if not self._frame_buffer:
+            return None
+        return self._emit_chunk()
+
+    def finalize(self, file_path: Optional[str] = None) -> MediaAnalysis:
+        """Finish the stream and return the complete ``MediaAnalysis``.
+
+        Flushes any partial chunk, builds the Merkle tree, and assembles the
+        final result.  After this call the instance is spent — further calls
+        to ``process_frame`` or ``flush`` will raise ``RuntimeError``.
+        """
+        if self._finalized:
+            raise RuntimeError("finalize() already called")
+
+        # Flush trailing frames
+        if self._frame_buffer:
+            self._emit_chunk()
+
+        self._finalized = True
+
+        merkle_root, merkle_levels = build_merkle_tree(self._chunk_digests)
+
+        # Sample spectra at 0%, 25%, 50%, 75%
+        sample_spectra: List[List[int]] = []
+        for pct in [0.0, 0.25, 0.50, 0.75]:
+            idx = (
+                min(int(pct * len(self._chunks)), len(self._chunks) - 1)
+                if self._chunks
+                else 0
+            )
+            sample_spectra.append(
+                self._chunks[idx].spectrum if self._chunks else []
+            )
+
+        duration_ms = int((self._frame_idx / self._fps) * 1000) if self._fps else 0
+        processing_time = (time.time() - self._start_time) * 1000
+
+        return MediaAnalysis(
+            file_path=file_path or self._file_path,
+            frame_count=self._frame_idx,
+            fps=self._fps,
+            width=self._width,
+            height=self._height,
+            duration_ms=duration_ms,
+            chunk_size=self._chunk_size,
+            chunks=list(self._chunks),
+            merkle_root=merkle_root,
+            merkle_levels=merkle_levels,
+            processing_time_ms=processing_time,
+            sample_spectra=sample_spectra,
+        )
+
+    # -- internals -----------------------------------------------------------
+
+    def _emit_chunk(self) -> ChunkResult:
+        """Compute TMH for the current buffer and store the chunk."""
+        median_sfp = np.median(np.array(self._frame_buffer), axis=0)
+        spectrum, digest = compute_tmh(median_sfp)
+
+        buf_len = len(self._frame_buffer)
+        chunk = ChunkResult(
+            chunk_index=self._chunk_idx,
+            frame_start=self._frame_idx - buf_len,
+            frame_end=self._frame_idx - 1,
+            spectrum=spectrum,
+            digest=digest,
+            sfp_median=median_sfp,
+        )
+
+        self._chunks.append(chunk)
+        self._chunk_digests.append(digest)
+        self._frame_buffer = []
+        self._chunk_idx += 1
+        return chunk
+
+
 def analyze_video(
     video_path: str,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
@@ -386,8 +543,6 @@ def analyze_video(
     Returns:
         MediaAnalysis with all chunk hashes and Merkle root
     """
-    start_time = time.time()
-
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise ValueError(f"Cannot open video: {video_path}")
@@ -396,88 +551,24 @@ def analyze_video(
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    duration_ms = int((total_frames / fps) * 1000)
 
-    chunks: List[ChunkResult] = []
-    chunk_digests: List[bytes] = []
-    frame_buffer: List[np.ndarray] = []
-    prev_gray: Optional[np.ndarray] = None
+    stream = StreamingVRC48M(
+        chunk_size=chunk_size, fps=fps, width=width, height=height,
+        file_path=video_path,
+    )
+
     frame_idx = 0
-    chunk_idx = 0
-
     while True:
         ret, frame = cap.read()
         if not ret:
             break
-
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        sfp = extract_sfp(frame, prev_gray)
-        sfp_norm = normalize_sfp(sfp)
-        frame_buffer.append(sfp_norm)
-        prev_gray = gray
-
-        if len(frame_buffer) == chunk_size:
-            # Compute median SFP across chunk
-            median_sfp = np.median(np.array(frame_buffer), axis=0)
-            spectrum, digest = compute_tmh(median_sfp)
-
-            chunks.append(ChunkResult(
-                chunk_index=chunk_idx,
-                frame_start=frame_idx - chunk_size + 1,
-                frame_end=frame_idx,
-                spectrum=spectrum,
-                digest=digest,
-                sfp_median=median_sfp,
-            ))
-            chunk_digests.append(digest)
-            frame_buffer = []
-            chunk_idx += 1
-
+        stream.process_frame(frame)
         frame_idx += 1
         if progress_callback and frame_idx % 30 == 0:
             progress_callback(frame_idx, total_frames)
 
-    # Flush remaining frames
-    if frame_buffer:
-        median_sfp = np.median(np.array(frame_buffer), axis=0)
-        spectrum, digest = compute_tmh(median_sfp)
-        chunks.append(ChunkResult(
-            chunk_index=chunk_idx,
-            frame_start=frame_idx - len(frame_buffer),
-            frame_end=frame_idx - 1,
-            spectrum=spectrum,
-            digest=digest,
-            sfp_median=median_sfp,
-        ))
-        chunk_digests.append(digest)
-
     cap.release()
-
-    # Build Merkle tree
-    merkle_root, merkle_levels = build_merkle_tree(chunk_digests)
-
-    # Sample spectra at 0%, 25%, 50%, 75%
-    sample_spectra = []
-    for pct in [0.0, 0.25, 0.50, 0.75]:
-        idx = min(int(pct * len(chunks)), len(chunks) - 1) if chunks else 0
-        sample_spectra.append(chunks[idx].spectrum if chunks else [])
-
-    processing_time = (time.time() - start_time) * 1000
-
-    return MediaAnalysis(
-        file_path=video_path,
-        frame_count=frame_idx,
-        fps=fps,
-        width=width,
-        height=height,
-        duration_ms=duration_ms,
-        chunk_size=chunk_size,
-        chunks=chunks,
-        merkle_root=merkle_root,
-        merkle_levels=merkle_levels,
-        processing_time_ms=processing_time,
-        sample_spectra=sample_spectra,
-    )
+    return stream.finalize(file_path=video_path)
 
 
 def analyze_image(image_path: str) -> MediaAnalysis:
