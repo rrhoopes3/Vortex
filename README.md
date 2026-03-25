@@ -39,10 +39,37 @@ Current post-quantum crypto (Kyber/Dilithium) relies on mathematical assumptions
 - **Topological hashing** = embedded spheres in 48D space
 - **Noise resilience** = topology survives decoherence by definition
 
+## VRC-48M — Kill Deepfakes With Topology
+
+Media provenance that survives re-encoding but breaks under manipulation. Anchors video at the moment of capture with topological invariants that generative AI literally cannot optimize against (wrapping numbers are non-differentiable).
+
+```bash
+# Anchor a video
+python -m forge.vortexchain.vrc48m anchor video.mp4 -o anchor.json
+
+# Verify a copy
+python -m forge.vortexchain.vrc48m verify video.mp4 anchor.json
+
+# Compare two files
+python -m forge.vortexchain.vrc48m compare original.mp4 suspect.mp4
+
+# Web demo
+python -m forge.vortexchain.server    # → http://localhost:5000/demo
+```
+
+### Mobile Camera SDK
+
+iOS camera app that anchors media in real-time during recording. See [`mobile/README.md`](mobile/README.md).
+
+```bash
+cd mobile && npm install && npx expo run:ios
+```
+
 ## Modules
 
 | Module | What it does |
 |--------|-------------|
+| `vrc48m.py` | VRC-48M deepfake shield: perceptual features, topological hashing, streaming engine, tamper detection |
 | `manifold.py` | 48D topological manifold simulation, OAM qudits (d=7), wrapping numbers |
 | `toac.py` | Topological OAM Crypto: key generation, ZK signatures, topological hashing |
 | `chain.py` | Blockchain core: blocks with topological hashes, transaction signing |
@@ -53,6 +80,7 @@ Current post-quantum crypto (Kyber/Dilithium) relies on mathematical assumptions
 | `oracle.py` | Quantum entropy oracle: commit-reveal randomness, reputation/slashing |
 | `network.py` | P2P gossip network: TTL propagation, peer discovery, simulation mode |
 | `nft.py` | VRC-48 Topological NFTs: 48D fingerprints, rarity scoring, NFT fusion |
+| `server.py` | Flask API + WebSocket streaming + demo UI |
 
 ## Architecture
 
