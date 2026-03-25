@@ -39,6 +39,7 @@ _SOLANA_AVAILABLE = False
 _SOLANA_IMPORT_ERROR: Optional[str] = None
 
 try:
+    import base58  # type: ignore[import-untyped]
     from solders.keypair import Keypair  # type: ignore[import-untyped]
     from solders.pubkey import Pubkey  # type: ignore[import-untyped]
     from solders.transaction import Transaction as SolanaTransaction  # type: ignore[import-untyped]
@@ -53,7 +54,7 @@ try:
 except ImportError as exc:
     _SOLANA_IMPORT_ERROR = (
         f"Solana SDK packages not installed: {exc}. "
-        "Install them with: pip install solders solana"
+        "Install them with: pip install solders solana base58"
     )
 
 
@@ -186,7 +187,7 @@ class SolanaAnchorPublisher:
 
     def __init__(
         self,
-        rpc_url: str = "https://api.devnet.solana.com",
+        rpc_url: str = "https://api.mainnet-beta.solana.com",
         keypair_path: Optional[str] = None,
     ) -> None:
         _require_solana()
@@ -234,14 +235,30 @@ class SolanaAnchorPublisher:
         if not key_path.exists():
             raise FileNotFoundError(f"Keypair file not found: {key_path}")
 
+        raw = key_path.read_text().strip()
         try:
-            secret = json.loads(key_path.read_text())
+            # Try JSON array format first (solana-keygen output)
+            secret = json.loads(raw)
             if isinstance(secret, list) and len(secret) == 64:
                 return Keypair.from_bytes(bytes(secret))
             raise ValueError("Expected a JSON array of 64 integers")
-        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        # Try base58-encoded secret key
+        try:
+            decoded = base58.b58decode(raw)
+            if len(decoded) == 64:
+                return Keypair.from_bytes(decoded)
+            elif len(decoded) == 32:
+                # 32-byte seed — derive full keypair
+                return Keypair.from_seed(decoded)
             raise ValueError(
-                f"Invalid keypair file {key_path}: {exc}"
+                f"Base58 key decoded to {len(decoded)} bytes, expected 64 or 32"
+            )
+        except Exception as exc:
+            raise ValueError(
+                f"Invalid keypair file {key_path}: not valid JSON array or base58: {exc}"
             ) from exc
 
     # -- RPC client ---------------------------------------------------------
@@ -622,7 +639,7 @@ def cli_publish(args: List[str]) -> int:
         return 1
 
     anchor_path = args[0]
-    rpc_url = "https://api.devnet.solana.com"
+    rpc_url = "https://api.mainnet-beta.solana.com"
     keypair_path: Optional[str] = None
     memo = ""
 

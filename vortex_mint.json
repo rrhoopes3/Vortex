@@ -1,0 +1,14 @@
+{
+  "mint": "5joN44mSAdo7DbGgsKnXWagLKc8kEkFfKiTW2szTFASA",
+  "name": "Vortex",
+  "symbol": "VORTEX",
+  "supply": 48000000,
+  "decimals": 9,
+  "holder": "2RzBNDG52n7EhqSeUYksa5eyTb7YJ8b3xvyJLESzY6zf",
+  "ata": "EEkwVL77uJcojrfc71z73p6CHfD8AcnC1zJvxYDZxRuy",
+  "metadata_pda": "9mJ8qQ4m32TM9K4XwDA8Cq2fNLH29C7Bxo8pDQyR4hZL",
+  "signature": "3Ycp4AecGaRUDSwA5gzKyiTwes33PNgXkpRzjCmCdaPdAikzJ4aDT5Ms2GS3vNPs1HomvLMDoJU2DNgX3ccJneR",
+  "explorer_tx": "https://solscan.io/tx/3Ycp4AecGaRUDSwA5gzKyiTwes33PNgXkpRzjCmCdaPdAikzJ4aDT5Ms2GS3vNPs1HomvLMDoJU2DNgX3ccJneR",
+  "token_page": "https://solscan.io/token/5joN44mSAdo7DbGgsKnXWagLKc8kEkFfKiTW2szTFASA",
+  "metadata_uri": "https://vortex.arc-relay.com/token-metadata.json"
+}

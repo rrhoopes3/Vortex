@@ -16,8 +16,9 @@ reviewed and filed with the United States Patent and Trademark Office (USPTO).**
 | Item | Detail |
 |---|---|
 | Public Disclosure Date | March 24, 2026 (GitHub repository, briefly public) |
+| Token Minted On-Chain | March 25, 2026 (Solana mainnet, mint `5joN44mSAdo7DbGgsKnXWagLKc8kEkFfKiTW2szTFASA`) |
 | US Grace Period Deadline | March 24, 2027 (35 U.S.C. 102(b)(1)(A)) |
-| Recommended Filing Date | No later than **June 2026** to preserve international rights |
+| Recommended Filing Date | **IMMEDIATELY** -- international rights at risk from public disclosure |
 | Inventor(s) | [TO BE FILLED BY ATTORNEY] |
 | Assignee | VortexChain [ENTITY DETAILS TO BE FILLED BY ATTORNEY] |
 | Attorney Docket No. | [TO BE ASSIGNED] |
@@ -27,9 +28,10 @@ reviewed and filed with the United States Patent and Trademark Office (USPTO).**
 ## TITLE OF THE INVENTION
 
 **Systems and Methods for Topological Cryptographic Hashing, Consensus,
-Non-Fungible Token Composition, Dimensional Gas Pricing, and
-Deepfake-Resistant Media Provenance on a Blockchain Network Using
-Higher-Dimensional Manifold Invariants**
+Non-Fungible Token Composition, Dimensional Gas Pricing,
+Deepfake-Resistant Media Provenance, and Real-Time Streaming Media
+Authentication on a Blockchain Network Using Higher-Dimensional Manifold
+Invariants**
 
 ---
 
@@ -107,7 +109,7 @@ blockchain applications.
 
 ## III. SUMMARY OF THE INVENTION
 
-The present invention provides five interrelated systems and methods:
+The present invention provides six interrelated systems and methods:
 
 1. **Topological Hashing Using Wrapping-Number Spectra** -- A novel
    cryptographic hash function that maps arbitrary input data to points on a
@@ -139,6 +141,16 @@ The present invention provides five interrelated systems and methods:
    under discrete structural modifications (face swaps, scene regeneration),
    and anchoring the topological fingerprint on-chain as a non-fungible
    provenance token.
+
+6. **Real-Time Streaming Capture with Progressive Anchoring** -- A method
+   for generating media provenance during live capture by streaming
+   individual video frames from a capture device (mobile phone, security
+   camera, body camera) to a processing engine over a persistent
+   bidirectional channel, incrementally computing topological fingerprints
+   as frame chunks complete, providing real-time provenance feedback to the
+   operator during recording, and anchoring the final Merkle root on a
+   distributed ledger at the moment capture concludes, establishing an
+   unbroken chain of custody from image sensor to blockchain.
 
 ---
 
@@ -401,6 +413,109 @@ spectra because the loss landscape provides no useful gradient signal.
 This provides a mathematical (not heuristic) defense against AI-generated
 content, immune to the adversarial arms race affecting AI-based detection.
 
+#### 5.10 Real-Time Streaming Capture and Progressive Anchoring
+
+The VRC-48M system supports real-time media provenance generation during
+live capture on mobile and embedded devices, comprising:
+
+**5.10.1 Frame-by-Frame Streaming Pipeline**
+
+A streaming engine receives individual video frames as they are captured
+by a camera device and processes them incrementally without requiring the
+complete media file. The streaming pipeline comprises:
+
+1. A capture device (mobile phone camera, security camera, body camera,
+   or other image sensor) transmits individual frames as compressed image
+   data (e.g., JPEG) over a persistent bidirectional communication channel
+   (e.g., WebSocket connection) to a processing server or on-device
+   processing engine.
+
+2. Each transmitted frame includes a session identifier and a monotonically
+   increasing sequence number enabling the receiver to reconstruct temporal
+   ordering and detect dropped frames.
+
+3. The receiver decodes each compressed frame to pixel data and extracts
+   the 48-element Structural Feature Pyramid (SFP) as described in
+   Section 5.2.
+
+4. Frames are accumulated into chunks of N consecutive frames. When a
+   chunk boundary is reached (N frames accumulated), the element-wise
+   median SFP is computed, the topological manifold mapping and
+   wrapping-number spectrum are computed, and a chunk result is emitted.
+
+**5.10.2 Progressive Chunk Emission**
+
+As each chunk completes during live capture, the chunk's wrapping-number
+spectrum and topological digest are transmitted back to the capture device
+or observer in real time. This provides progressive provenance feedback:
+the operator can confirm that topological anchoring is occurring during
+recording, not only after recording ends.
+
+**5.10.3 Adaptive Frame Subsampling**
+
+To accommodate devices with limited computational resources or network
+bandwidth, the streaming pipeline supports configurable frame subsampling
+(frame skip). The capture device transmits every K-th frame (e.g., K=3),
+and the processing engine adjusts the effective analysis frame rate
+accordingly:
+
+    analysis_fps = source_fps / frame_skip
+
+The chunk size (number of analyzed frames per chunk) is configured
+independently of the subsampling rate, enabling tunable trade-offs between
+latency, bandwidth, and fingerprint granularity.
+
+**5.10.4 Session State Management**
+
+The streaming system maintains session state through a lifecycle:
+
+- **IDLE**: Session created, awaiting first frame.
+- **RECORDING**: Actively receiving and processing frames.
+- **FINALIZING**: No more frames expected; assembling the complete
+  temporal Merkle tree from all accumulated chunk digests.
+- **DONE**: Merkle root computed; provenance anchor available.
+- **ERROR/ABORTED**: Session terminated due to error, timeout, or client
+  disconnection; partial data discarded.
+
+Concurrent sessions are supported, enabling multiple capture devices to
+anchor media simultaneously through a shared processing server.
+
+**5.10.5 Finalization and On-Chain Anchoring**
+
+Upon session finalization:
+
+1. All accumulated chunk wrapping-number spectra and topological digests
+   are assembled into a temporal Merkle tree.
+2. The Merkle root is computed as the Media Provenance Anchor (MPA).
+3. The MPA, along with capture metadata (frame count, resolution, frame
+   rate, chunk size, subsampling parameters, capture mode indicator, and
+   capture timestamp), is recorded on a distributed ledger (e.g., Solana
+   blockchain via the Memo Program) as an immutable provenance record.
+
+The on-chain record is compact (typically under 500 bytes) and contains
+sufficient information for any third party to independently verify media
+authenticity by re-extracting features from any copy of the media and
+comparing the recomputed Merkle root against the on-chain anchor.
+
+**5.10.6 Mobile Device Integration**
+
+The streaming pipeline is designed for integration with mobile camera
+applications. A mobile SDK provides:
+
+- Camera capture session management with configurable resolution, frame
+  rate, and subsampling parameters.
+- On-device JPEG compression of captured frames.
+- Binary frame packaging with session identifier and sequence number.
+- WebSocket transport with automatic reconnection.
+- Real-time display of chunk completion status and progressive
+  topological fingerprint.
+- One-touch finalization that triggers Merkle tree assembly and on-chain
+  anchoring.
+
+This enables provenance anchoring at the moment of capture, before the
+media leaves the capture device, establishing a chain of custody from
+sensor to blockchain.
+
 ---
 
 ## V. CLAIMS
@@ -534,15 +649,69 @@ content, immune to the adversarial arms race affecting AI-based detection.
     generative models from optimizing content to preserve wrapping-number
     spectra via gradient descent.
 
-22. A blockchain network comprising:
+22. A computer-implemented method for real-time media provenance generation
+    during live capture, the method comprising:
+    (a) establishing a persistent bidirectional communication channel
+        between a capture device and a processing engine;
+    (b) receiving, from the capture device, individual video frames as
+        compressed image data, each frame accompanied by a session
+        identifier and a monotonically increasing sequence number;
+    (c) for each received frame, decoding the compressed image data and
+        extracting the 48-element perceptual feature vector of claim 15(b);
+    (d) accumulating frames into chunks of N consecutive frames and, upon
+        reaching each chunk boundary, computing the element-wise median
+        feature vector, mapping the median to a 48-dimensional topological
+        manifold, and computing the wrapping-number spectrum for the chunk;
+    (e) progressively emitting each completed chunk's wrapping-number
+        spectrum and topological digest back to the capture device or an
+        observer in real time during ongoing capture;
+    (f) upon receiving a finalization signal, assembling all accumulated
+        chunk digests into a temporal Merkle tree and computing a Merkle
+        root as a Media Provenance Anchor; and
+    (g) recording the Media Provenance Anchor on a distributed ledger as
+        an immutable provenance record associated with the captured media.
+
+23. The method of claim 22, further comprising adaptive frame subsampling
+    wherein the capture device transmits every K-th frame to reduce
+    bandwidth and computational load, and the processing engine adjusts
+    the effective analysis frame rate as:
+        analysis_fps = source_fps / K
+    while maintaining configurable chunk size independent of the
+    subsampling rate.
+
+24. The method of claim 22, wherein the persistent bidirectional
+    communication channel is a WebSocket connection, the compressed image
+    data is JPEG-encoded, and the binary frame message comprises a
+    fixed-length session identifier, a 4-byte big-endian sequence number,
+    and variable-length JPEG payload.
+
+25. The method of claim 22, further comprising maintaining session state
+    through a lifecycle including idle, recording, finalizing, done, and
+    error states, and supporting concurrent sessions from multiple capture
+    devices through a shared processing server.
+
+26. The method of claim 22, wherein the capture device is a mobile phone
+    camera, and the method further comprises:
+    (a) integrating with a mobile camera application to capture frames
+        at configurable resolution, frame rate, and subsampling parameters;
+    (b) performing on-device compression of captured frames;
+    (c) displaying real-time chunk completion status and progressive
+        topological fingerprint feedback to the operator during recording;
+        and
+    (d) anchoring provenance at the moment of capture before the media
+        leaves the capture device, thereby establishing a chain of custody
+        from image sensor to distributed ledger.
+
+27. A blockchain network comprising:
     (a) nodes computing topological hash digests per claim 1;
     (b) consensus per claim 6;
     (c) NFT standard per claim 9;
-    (d) virtual machine per claim 12; and
-    (e) media provenance per claim 15.
+    (d) virtual machine per claim 12;
+    (e) media provenance per claim 15; and
+    (f) real-time streaming media provenance per claim 22.
 
-23. A non-transitory computer-readable medium storing instructions that,
-    when executed, perform the method of any one of claims 1 through 21.
+28. A non-transitory computer-readable medium storing instructions that,
+    when executed, perform the method of any one of claims 1 through 26.
 
 ---
 
@@ -550,22 +719,30 @@ content, immune to the adversarial arms race affecting AI-based detection.
 
 A system and method for cryptographic hashing, blockchain consensus,
 non-fungible token composition, smart contract execution resource metering,
-and deepfake-resistant media content authentication based on topological
-invariants of a 48-dimensional manifold. Input data is mapped to a point on
-the manifold and a wrapping-number spectrum of 24 independent integers is
-computed from embedded 2-spheres, yielding a 48-byte digest with collision
-resistance of approximately 2^{239}. A hybrid Proof-of-Topology consensus
-mechanism combines token staking with topological challenge-solving, with
-optional quantum capability weighting. Non-fungible tokens are fused by
-geometric interpolation of manifold coordinates and modular addition of
-wrapping numbers, producing provably unique child tokens. A virtual machine
-prices smart contract operations based on the dimensionality and topological
-complexity of manifold operands. A media provenance system extracts perceptual
-features from video, audio, and image content, maps them to the 48-dimensional
-manifold, and computes wrapping-number spectra that are invariant under
-continuous signal transformations (compression, rescaling) but change under
-discrete structural modifications (face swaps, scene regeneration), enabling
-tamper-evident content authentication anchored on-chain.
+deepfake-resistant media content authentication, and real-time streaming
+media provenance based on topological invariants of a 48-dimensional
+manifold. Input data is mapped to a point on the manifold and a
+wrapping-number spectrum of 24 independent integers is computed from
+embedded 2-spheres, yielding a 48-byte digest with collision resistance of
+approximately 2^{239}. A hybrid Proof-of-Topology consensus mechanism
+combines token staking with topological challenge-solving, with optional
+quantum capability weighting. Non-fungible tokens are fused by geometric
+interpolation of manifold coordinates and modular addition of wrapping
+numbers, producing provably unique child tokens. A virtual machine prices
+smart contract operations based on the dimensionality and topological
+complexity of manifold operands. A media provenance system extracts
+perceptual features from video, audio, and image content, maps them to the
+48-dimensional manifold, and computes wrapping-number spectra that are
+invariant under continuous signal transformations (compression, rescaling)
+but change under discrete structural modifications (face swaps, scene
+regeneration), enabling tamper-evident content authentication anchored
+on-chain. A real-time streaming variant processes individual video frames
+from capture devices (mobile cameras, security cameras, body cameras) over
+persistent bidirectional channels, incrementally computing topological
+fingerprints as frame chunks complete, providing progressive provenance
+feedback during recording, and anchoring the Merkle root on a distributed
+ledger at capture conclusion, establishing chain of custody from image
+sensor to blockchain.
 
 ---
 
@@ -587,14 +764,31 @@ tamper-evident content authentication anchored on-chain.
 4. **Drawings Needed**: Topological hashing pipeline, PoT consensus flowchart,
    VRC-48 fusion diagram, QVM architecture, 48D manifold conceptual schematic,
    VRC-48M media provenance pipeline, perceptual feature pyramid diagram,
-   temporal Merkle tree structure, provenance chain/DAG illustration.
+   temporal Merkle tree structure, provenance chain/DAG illustration,
+   real-time streaming capture architecture (capture device -> WebSocket ->
+   processing engine -> progressive chunk emission -> finalization -> on-chain
+   anchor), mobile SDK integration diagram.
 
 5. **Inventor Declaration**: Inventor(s) must be identified and sign declarations.
 
 6. **Filing Strategy**: This is structured for provisional filing. Non-provisional
    must follow within 12 months. Given the disclosure date, file ASAP.
 
+7. **On-Chain Evidence**: $VORTEX token minted on Solana mainnet March 25, 2026
+   (mint address `5joN44mSAdo7DbGgsKnXWagLKc8kEkFfKiTW2szTFASA`, tx
+   `3Ycp4AecGaRUDSwA5gzKyiTwes33PNgXkpRzjCmCdaPdAikzJ4aDT5Ms2GS3vNPs1HomvLMDoJU2DNgX3ccJneR`).
+   The on-chain anchoring via Solana Memo Program is operational. Note: claims
+   intentionally reference "distributed ledger" generically, not Solana
+   specifically, to preserve breadth.
+
+8. **Streaming Claims (22-26)**: These are new claims covering the real-time
+   capture pipeline. They depend on claim 15 for the underlying perceptual
+   feature extraction and topological mapping. Consider whether independent
+   streaming claims (not depending on claim 15) would provide stronger
+   protection if the VRC-48M file-based claims face prior art challenges.
+
 ---
 
 **DRAFT PREPARED: March 24, 2026**
+**UPDATED: March 25, 2026 -- Added streaming/real-time capture claims (22-26), Solana mainnet anchoring evidence, updated claim count to 28**
 **STATUS: AWAITING ATTORNEY REVIEW -- DO NOT FILE AS-IS**

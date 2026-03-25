@@ -629,8 +629,12 @@ def vrc48m_publish_anchor(anchor_id: str):
         return err(f"Unknown anchor: {anchor_id}", 404)
 
     body = request.get_json(silent=True) or {}
-    rpc_url = body.get("rpc_url", "https://api.devnet.solana.com")
-    keypair_path = body.get("keypair_path")
+    rpc_url = body.get("rpc_url", os.environ.get(
+        "SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com"
+    ))
+    keypair_path = body.get("keypair_path", os.environ.get(
+        "SOLANA_KEYPAIR_PATH", os.path.expanduser("~/.config/solana/id.json")
+    ))
     memo = body.get("memo", "")
 
     anchor = media_anchors[anchor_id]["anchor"]
@@ -692,7 +696,9 @@ def vrc48m_chain_status(anchor_id: str):
             from vortexchain.solana_anchor import SolanaAnchorPublisher
 
             rpc_url = request.args.get(
-                "rpc_url", "https://api.devnet.solana.com"
+                "rpc_url", os.environ.get(
+                    "SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com"
+                )
             )
             publisher = SolanaAnchorPublisher(rpc_url=rpc_url)
 
