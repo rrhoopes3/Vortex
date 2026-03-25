@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VortexChain — Security From Twisted Light</title>
+  <meta name="description" content="The first blockchain whose cryptographic security comes from the topological properties of 48-dimensional entangled quantum states of light.">
+  <meta property="og:title" content="VortexChain — Security From Twisted Light">
+  <meta property="og:description" content="A blockchain protocol built on 48D topological OAM cryptography. Post-quantum secure by physics, not assumptions.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://vortex.arc-relay.com">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌀</text></svg>">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    :root{--bg:#050507;--card:#0c0c12;--accent:#00f0ff;--purple:#c026d3;--green:#22ff88;--text:#e0e0ff;--muted:#8899aa;--border:#1a1a2e}
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);overflow-x:hidden;line-height:1.6}
+    #hero{position:relative;height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;overflow:hidden}
+    #hero-canvas{position:absolute;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;filter:contrast(1.1) brightness(1.05)}
+    .hero-content{position:relative;z-index:2;max-width:820px;padding:0 2rem}
+    .hero-badge{display:inline-flex;align-items:center;gap:8px;padding:8px 20px;border:1px solid var(--accent);border-radius:9999px;font-size:.78rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);background:rgba(0,240,255,.06);backdrop-filter:blur(12px);margin-bottom:1.8rem}
+    h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(3rem,8vw,5.2rem);font-weight:700;line-height:1.05;margin-bottom:1.2rem}
+    h1:hover{animation:glitch .4s linear infinite alternate}
+    @keyframes glitch{0%{transform:translate(0)}20%{transform:translate(-3px,3px)}40%{transform:translate(-3px,-3px)}60%{transform:translate(3px,3px)}80%{transform:translate(3px,-3px)}100%{transform:translate(0)}}
+    .gradient{background:linear-gradient(90deg,#00f0ff,#c026d3,#22ff88);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .hero-sub{font-size:clamp(1.1rem,2.5vw,1.35rem);color:var(--muted);max-width:620px;margin:0 auto 2.5rem;line-height:1.65}
+    .hero-buttons{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}
+    .btn{padding:16px 32px;border-radius:14px;font-weight:600;font-size:1.02rem;text-decoration:none;transition:all .3s cubic-bezier(.23,1,.32,1);display:inline-flex;align-items:center;gap:10px;border:none;cursor:pointer;font-family:inherit}
+    .btn-primary{background:linear-gradient(135deg,var(--accent),var(--purple));color:#000;box-shadow:0 10px 40px rgba(0,240,255,.25)}
+    .btn-primary:hover{transform:translateY(-4px) scale(1.03);box-shadow:0 20px 60px rgba(0,240,255,.4)}
+    .btn-secondary{background:transparent;border:1.5px solid var(--border);color:var(--text)}
+    .btn-secondary:hover{border-color:var(--accent);color:var(--accent);background:rgba(0,240,255,.05)}
+    .scroll-hint{position:absolute;bottom:2rem;left:50%;transform:translateX(-50%);z-index:1;color:var(--muted);font-size:.8rem;animation:bounce 2s infinite}
+    @keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(8px)}}
+    nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:1.2rem 3rem;display:flex;justify-content:space-between;align-items:center;background:rgba(5,5,7,.85);backdrop-filter:blur(20px);border-bottom:1px solid var(--border)}
+    .nav-logo{font-family:'Space Grotesk',sans-serif;font-size:1.55rem;font-weight:700;color:white;text-decoration:none}
+    .nav-logo span{color:var(--accent)}
+    .nav-links{display:flex;gap:2.2rem;list-style:none}
+    .nav-links a{color:var(--muted);text-decoration:none;font-weight:500;transition:color .3s}
+    .nav-links a:hover{color:var(--accent)}
+    section{padding:7rem 2rem;max-width:1240px;margin:0 auto}
+    .section-label{font-size:.78rem;font-weight:600;letter-spacing:.18em;color:var(--accent);text-transform:uppercase;margin-bottom:.8rem}
+    h2{font-family:'Space Grotesk',sans-serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:700;line-height:1.15;margin-bottom:1.2rem}
+    .section-desc{color:var(--muted);font-size:1.05rem;max-width:650px;margin-bottom:3rem;line-height:1.7}
+    .stats-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1px;background:var(--border);border-radius:20px;overflow:hidden;margin:4rem auto 6rem}
+    .stat{background:var(--card);padding:2.4rem 1.5rem;text-align:center}
+    .stat-value{font-family:'Space Grotesk',monospace;font-size:2.6rem;font-weight:700}
+    .stat-value.cyan{color:var(--accent)}.stat-value.purple{color:var(--purple)}.stat-value.green{color:var(--green)}
+    .stat-label{font-size:.8rem;color:var(--muted);margin-top:.25rem;text-transform:uppercase;letter-spacing:.05em}
+    .features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.5rem}
+    .feature-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:2.2rem;transition:all .4s cubic-bezier(.23,1,.32,1)}
+    .feature-card:hover{border-color:var(--accent);transform:translateY(-12px);box-shadow:0 25px 60px rgba(0,240,255,.12)}
+    .feature-icon{font-size:2rem;margin-bottom:1rem}
+    .feature-card h3{font-size:1.2rem;font-weight:700;margin-bottom:.75rem}
+    .feature-card p{color:var(--muted);font-size:.9rem;line-height:1.7}
+    .feature-tag{display:inline-block;padding:3px 10px;border-radius:6px;font-size:.7rem;font-weight:600;margin-top:1rem;text-transform:uppercase;letter-spacing:.05em}
+    .tag-live{background:rgba(34,255,136,.1);color:var(--green)}
+    .tag-novel{background:rgba(192,38,211,.1);color:var(--purple)}
+    .tag-quantum{background:rgba(0,240,255,.1);color:var(--accent)}
+    .how-steps{display:grid;gap:2rem}
+    .how-step{display:grid;grid-template-columns:60px 1fr;gap:1.5rem;align-items:start}
+    .step-num{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.2rem;font-family:'JetBrains Mono',monospace;border:1px solid var(--border);color:var(--accent);background:rgba(0,240,255,.05)}
+    .how-step h3{font-size:1.1rem;font-weight:700;margin-bottom:.5rem}
+    .how-step p{color:var(--muted);font-size:.9rem;line-height:1.7}
+    .code-block{background:#08080e;border:1px solid var(--border);border-radius:10px;padding:1.25rem;margin-top:1rem;font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--accent);overflow-x:auto;line-height:1.6}
+    .nft-showcase{display:grid;grid-template-columns:1fr 1fr;gap:3rem;align-items:center}
+    .nft-visual{background:#0a0a12;border:1px solid var(--border);border-radius:20px;padding:2rem;text-align:center}
+    .nft-dna{font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--purple);word-break:break-all;margin-top:1rem;padding:1rem;background:rgba(192,38,211,.05);border-radius:8px;border:1px solid rgba(192,38,211,.15)}
+    .nft-info h3{font-size:1.5rem;font-weight:700;margin-bottom:1rem}
+    .nft-info ul{list-style:none;display:grid;gap:.75rem}
+    .nft-info li{color:var(--muted);font-size:.9rem;padding-left:1.5rem;position:relative}
+    .nft-info li::before{content:'';position:absolute;left:0;top:8px;width:8px;height:8px;border-radius:50%;background:var(--purple)}
+    .token-grid{display:grid;grid-template-columns:1fr 1fr;gap:3rem;align-items:start}
+    .token-info h3{font-size:1.3rem;font-weight:700;margin-bottom:1rem}
+    .token-specs{list-style:none;display:grid;gap:.5rem}
+    .token-specs li{display:flex;justify-content:space-between;padding:.75rem 1rem;background:var(--card);border-radius:8px;font-size:.9rem}
+    .token-specs .label{color:var(--muted)}.token-specs .value{font-weight:600;font-family:'JetBrains Mono',monospace}
+    .token-address{margin-top:2rem;padding:1.25rem;background:var(--card);border:1px solid var(--border);border-radius:12px}
+    .token-address .label{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.5rem}
+    .token-address .addr{font-family:'JetBrains Mono',monospace;font-size:.85rem;color:var(--accent);word-break:break-all}
+    .roadmap{display:grid;gap:1.5rem}
+    .phase{display:grid;grid-template-columns:120px 1fr;gap:1.5rem;padding:1.5rem;background:var(--card);border:1px solid var(--border);border-radius:12px;align-items:start}
+    .phase-label{font-weight:700;font-size:.85rem;color:var(--accent)}
+    .phase-status{font-size:.7rem;padding:2px 8px;border-radius:4px;display:inline-block;margin-top:.25rem}
+    .status-done{background:rgba(34,255,136,.1);color:var(--green)}
+    .status-next{background:rgba(0,240,255,.1);color:var(--accent)}
+    .status-future{background:rgba(192,38,211,.1);color:var(--purple)}
+    .phase h3{font-size:1rem;font-weight:700;margin-bottom:.5rem}
+    .phase p{color:var(--muted);font-size:.85rem;line-height:1.6}
+    .cta{text-align:center;padding:6rem 2rem}
+    .cta h2{margin-bottom:1rem}
+    .cta p{color:var(--muted);font-size:1.05rem;margin-bottom:2rem}
+    footer{border-top:1px solid var(--border);padding:3rem 2rem;text-align:center;color:var(--muted);font-size:.85rem}
+    footer a{color:var(--accent);text-decoration:none}
+    .vrc48m-hero{display:grid;grid-template-columns:1fr 1fr;gap:3rem;align-items:center}
+    .vrc48m-demo{background:#08080e;border:1px solid var(--border);border-radius:20px;padding:2rem;position:relative;overflow:hidden}
+    .vrc48m-pipeline{display:grid;gap:1rem}
+    .pipe-step{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--card);border:1px solid var(--border);border-radius:10px;transition:all .4s cubic-bezier(.23,1,.32,1)}
+    .pipe-step:hover{border-color:var(--accent);transform:translateX(8px)}
+    .pipe-icon{font-size:1.3rem;min-width:32px;text-align:center}
+    .pipe-label{font-size:.85rem;font-weight:600}
+    .pipe-detail{font-size:.72rem;color:var(--muted)}
+    .pipe-arrow{text-align:center;color:var(--accent);font-size:1.2rem;opacity:.5}
+    .vrc48m-comparison{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-top:2rem}
+    .compare-col{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.2rem;text-align:center}
+    .compare-col h4{font-size:.8rem;font-weight:700;margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.05em}
+    .compare-col .verdict{font-size:1.8rem;font-weight:800;margin:.5rem 0}
+    .compare-col .verdict.pass{color:var(--green)}.compare-col .verdict.fail{color:var(--red)}
+    .compare-col .note{font-size:.7rem;color:var(--muted)}
+    .vrc48m-usecases{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-top:2rem}
+    .usecase{padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:10px;font-size:.85rem;transition:all .3s cubic-bezier(.23,1,.32,1)}
+    .usecase:hover{border-color:var(--purple);transform:translateY(-4px)}
+    .usecase-icon{font-size:1.1rem;margin-bottom:6px}
+    .usecase-name{font-weight:700;font-size:.8rem;margin-bottom:4px}
+    .usecase p{color:var(--muted);font-size:.72rem;line-height:1.5}
+    .tag-shield{background:rgba(255,68,102,.1);color:#ff4466}
+    .vrc48m-timeline{display:flex;gap:1px;height:32px;border-radius:6px;overflow:hidden;margin:1.5rem 0 .5rem}
+    .tl-chunk{flex:1;min-width:3px;transition:.2s}
+    .tl-chunk.ok{background:var(--green)}.tl-chunk.tampered{background:#ff4466}
+    .tl-legend{display:flex;gap:12px;font-size:.65rem;color:var(--muted)}
+    .tl-legend span{display:flex;align-items:center;gap:4px}
+    .tl-dot{width:8px;height:8px;border-radius:2px;display:inline-block}
+    @media(max-width:768px){nav{padding:1rem 1.5rem}.nav-links{display:none}.nft-showcase,.token-grid,.vrc48m-hero{grid-template-columns:1fr}.how-step{grid-template-columns:48px 1fr;gap:1rem}.phase{grid-template-columns:1fr}.vrc48m-comparison{grid-template-columns:1fr}section{padding:5rem 1.5rem}}
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="#" class="nav-logo"><span>Vortex</span>Chain</a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#how">How It Works</a></li>
+      <li><a href="#nfts">NFTs</a></li>
+      <li><a href="#deepfake">Deepfake Shield</a></li>
+      <li><a href="#token">Token</a></li>
+      <li><a href="#roadmap">Roadmap</a></li>
+      <li><a href="https://github.com/rrhoopes3/coin" target="_blank">GitHub</a></li>
+    </ul>
+  </nav>
+  <section id="hero">
+    <canvas id="hero-canvas"></canvas>
+    <div class="hero-content">
+      <div class="hero-badge">Built on Forbes et al. 2025 &mdash; Nature Communications</div>
+      <h1>Security from<br><span class="gradient">twisted light.</span></h1>
+      <p class="hero-sub">The first blockchain whose cryptography is derived from the topological properties of 48-dimensional entangled quantum states of light. Post-quantum secure by physics, not assumptions.</p>
+      <div class="hero-buttons">
+        <a href="#token" class="btn btn-primary">Get $VORTEX</a>
+        <a href="https://github.com/rrhoopes3/coin" class="btn btn-secondary" target="_blank">View Source</a>
+      </div>
+    </div>
+    <div class="scroll-hint">Scroll to explore &#8595;</div>
+  </section>
+  <div style="max-width:1240px;margin:0 auto;padding:0 2rem;">
+    <div class="stats-bar">
+      <div class="stat"><div class="stat-value cyan">48D</div><div class="stat-label">Manifold Dimensions</div></div>
+      <div class="stat"><div class="stat-value purple">17,000+</div><div class="stat-label">Topological Invariants</div></div>
+      <div class="stat"><div class="stat-value green">2<sup>239</sup></div><div class="stat-label">Collision Resistance</div></div>
+      <div class="stat"><div class="stat-value cyan">157</div><div class="stat-label">Tests Passing</div></div>
+    </div>
+  </div>
+  <section id="features">
+    <div class="section-label">Protocol Features</div>
+    <h2>Not another fork.<br>A new foundation.</h2>
+    <p class="section-desc">Every cryptographic primitive in VortexChain is derived from the topology of orbital angular momentum states. No recycled algorithms. No security-by-assumption.</p>
+    <div class="features-grid">
+      <div class="feature-card"><div class="feature-icon">&#x1f300;</div><h3>Topological Hashing</h3><p>Maps data to 48D manifold points and computes wrapping-number spectra. 24 independent invariants yield 2^239 collision resistance &mdash; protected by physical law, not mathematical conjecture.</p><span class="feature-tag tag-live">Working</span></div>
+      <div class="feature-card"><div class="feature-icon">&#x1f511;</div><h3>OAM Signatures</h3><p>Fiat-Shamir zero-knowledge proofs operating in 48 dimensions. Private keys are full manifold points; public keys are 6D projections. 42-dimensional inversion problem defeats Shor and Grover.</p><span class="feature-tag tag-live">Working</span></div>
+      <div class="feature-card"><div class="feature-icon">&#x26d3;</div><h3>PoS + Proof-of-Topology</h3><p>Hybrid consensus combining economic stake with topological challenge-response. Quantum-equipped validators get 1.5x weight. Attacks require both capital and 48D manifold knowledge.</p><span class="feature-tag tag-live">Working</span></div>
+      <div class="feature-card"><div class="feature-icon">&#x1f4dc;</div><h3>Qudit Virtual Machine</h3><p>Smart contracts that operate on manifold points instead of 256-bit words. 18 opcodes, topological guards, dimensional gas model. The EVM, reimagined for topology.</p><span class="feature-tag tag-novel">Novel</span></div>
+      <div class="feature-card"><div class="feature-icon">&#x1f48e;</div><h3>VRC-48 NFTs</h3><p>NFTs with real 48D topological fingerprints. Provable rarity from spectral entropy. Fusion/breeding creates new tokens from parent topology. The NFT <em>is</em> the art.</p><span class="feature-tag tag-novel">Novel</span></div>
+      <div class="feature-card"><div class="feature-icon">&#x1f52e;</div><h3>Quantum Key Distribution</h3><p>High-dimensional BB84 adapted for OAM qudits. 5 measurement bases, 2.81 bits per photon. Classical simulation today, photonic hardware tomorrow &mdash; zero code changes.</p><span class="feature-tag tag-quantum">Quantum-Ready</span></div>
+      <div class="feature-card" style="border-color:rgba(255,68,102,.3)"><div class="feature-icon">&#x1f6e1;</div><h3>VRC-48M Deepfake Shield</h3><p>Media provenance that survives re-encoding but detects face swaps. Topological perceptual binding makes provenance non-strippable and non-adversarial. Frame-level tamper detection.</p><span class="feature-tag tag-shield">Anti-Deepfake</span></div>
+    </div>
+  </section>
+  <section id="how">
+    <div class="section-label">Under the Hood</div>
+    <h2>How VortexChain works</h2>
+    <p class="section-desc">In 2025, physicists discovered that entangled photons carrying orbital angular momentum contain hidden 48-dimensional topological structures. We turned those structures into a blockchain.</p>
+    <div class="how-steps">
+      <div class="how-step"><div class="step-num">1</div><div><h3>Start with physics</h3><p>Forbes et al. showed that entangled OAM photon pairs harbor 48D topological manifolds with wrapping numbers on 24 embedded spheres. These invariants are protected by the continuity of physical space &mdash; no algorithm can fake them.</p></div></div>
+      <div class="how-step"><div class="step-num">2</div><div><h3>Build cryptographic primitives</h3><p>We map data to manifold points, compute wrapping-number spectra for hashing, use 6D projections as public keys with 48D points as private keys, and derive signatures from zero-knowledge topology proofs.</p><div class="code-block">keypair = TOACKeypair.generate(seed=b"alice")<br>sig = keypair.sign(b"transfer 42 $VORTEX to bob")<br>assert keypair.verify(b"transfer 42 $VORTEX to bob", sig)  # True</div></div></div>
+      <div class="how-step"><div class="step-num">3</div><div><h3>Run the chain</h3><p>Blocks contain topologically-signed transactions. Validators stake $VORTEX and solve topology challenges. Smart contracts execute on the Qudit VM. Entropy comes from quantum oracle consensus.</p></div></div>
+      <div class="how-step"><div class="step-num">4</div><div><h3>Upgrade to quantum hardware</h3><p>The protocol is designed to transition seamlessly. When photonic OAM hardware matures, nodes swap in real entangled photons &mdash; the same API, now backed by actual quantum states. Security gets stronger, not weaker.</p></div></div>
+    </div>
+  </section>
+  <section id="nfts">
+    <div class="section-label">VRC-48 Standard</div>
+    <h2>NFTs that are the art.</h2>
+    <p class="section-desc">Every other NFT is a receipt stapled to a JPEG. A VRC-48 is a unique point in 48-dimensional topological space. It can evolve, breed, and be physically verified.</p>
+    <div class="nft-showcase">
+      <div class="nft-visual">
+        <canvas id="nft-canvas" width="300" height="300" style="width:100%;max-width:300px;border-radius:12px;"></canvas>
+        <div class="nft-dna">wrapping: [142, 7, 883, 451, 92, 16, 770, 338, 5, 901, 223, 667, 44, 812, 159, 503, 71, 946, 288, 630, 15, 777, 412, 89]</div>
+      </div>
+      <div class="nft-info">
+        <h3>Every token is unique by physics</h3>
+        <ul>
+          <li><strong>24 wrapping numbers</strong> &mdash; a topological DNA sequence that cannot be duplicated by any continuous deformation</li>
+          <li><strong>Computed rarity</strong> &mdash; spectral entropy of the wrapping distribution, not arbitrary trait rolls</li>
+          <li><strong>Fusion / breeding</strong> &mdash; combine two VRC-48s to create a child with inherited topology. Parents are locked. The child is guaranteed unique.</li>
+          <li><strong>Physical verification</strong> &mdash; with OAM hardware, shine a laser and prove authenticity. Digital ownership meets physical reality.</li>
+          <li><strong>6D searchable projection</strong> &mdash; efficient similarity queries across entire collections</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+  <section id="deepfake">
+    <div class="section-label">VRC-48M Standard</div>
+    <h2>Kill deepfakes<br>with <span style="color:var(--accent)">topology</span>.</h2>
+    <p class="section-desc">Metadata can be stripped. AI detection is an arms race. VRC-48M binds provenance to the content itself through topological invariants that survive compression but break under manipulation.</p>
+    <div class="vrc48m-hero">
+      <div>
+        <h3 style="font-size:1.3rem;font-weight:700;margin-bottom:1.2rem">Topological Perceptual Binding</h3>
+        <p style="color:var(--muted);font-size:.9rem;line-height:1.7;margin-bottom:1.5rem">Every frame gets a 48-element perceptual fingerprint &mdash; spatial gradients, DCT frequencies, optical flow, chromatic signatures. These map directly to points on the 48D manifold. The wrapping-number spectrum becomes a tamper-evident seal.</p>
+        <p style="color:var(--muted);font-size:.9rem;line-height:1.7;margin-bottom:1.5rem"><strong style="color:var(--green)">Re-encode, resize, recolor?</strong> Wrapping numbers don't change &mdash; topological invariance. <strong style="color:#ff4466">Swap a face, splice frames, regenerate a scene?</strong> The spectrum breaks &mdash; frame-level detection.</p>
+        <p style="color:var(--muted);font-size:.9rem;line-height:1.7"><strong style="color:var(--accent)">Not an arms race.</strong> Wrapping numbers are non-differentiable &mdash; zero gradient almost everywhere. Generative AI literally cannot optimize to preserve them.</p>
+        <div class="vrc48m-timeline" id="demo-timeline"></div>
+        <div class="tl-legend"><span><div class="tl-dot" style="background:var(--green)"></div> Authentic</span><span><div class="tl-dot" style="background:#ff4466"></div> Tampered</span></div>
+      </div>
+      <div class="vrc48m-demo">
+        <div style="font-size:.75rem;color:var(--accent);font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin-bottom:1rem">How VRC-48M Works</div>
+        <div class="vrc48m-pipeline">
+          <div class="pipe-step"><div class="pipe-icon">&#x1f3a5;</div><div><div class="pipe-label">Capture</div><div class="pipe-detail">Device records video + extracts 48 perceptual features per frame</div></div></div>
+          <div class="pipe-arrow">&#8595;</div>
+          <div class="pipe-step"><div class="pipe-icon">&#x1f300;</div><div><div class="pipe-label">Topological Hash</div><div class="pipe-detail">Features map to 48D manifold &rarr; 24 wrapping numbers per chunk</div></div></div>
+          <div class="pipe-arrow">&#8595;</div>
+          <div class="pipe-step"><div class="pipe-icon">&#x1f333;</div><div><div class="pipe-label">Merkle Tree</div><div class="pipe-detail">Chunk hashes assembled into temporal Merkle tree</div></div></div>
+          <div class="pipe-arrow">&#8595;</div>
+          <div class="pipe-step"><div class="pipe-icon">&#x26d3;</div><div><div class="pipe-label">On-Chain Anchor</div><div class="pipe-detail">Merkle root stored as VRC-48M NFT with device attestation</div></div></div>
+          <div class="pipe-arrow">&#8595;</div>
+          <div class="pipe-step"><div class="pipe-icon">&#x2705;</div><div><div class="pipe-label">Verify Anywhere</div><div class="pipe-detail">Any copy, any encoding &mdash; re-extract features, compare spectra</div></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="vrc48m-comparison">
+      <div class="compare-col"><h4>C2PA / Content Credentials</h4><div class="verdict fail">Stripped</div><div class="note">Metadata removed by re-encoding.<br>One ffmpeg command = gone.</div></div>
+      <div class="compare-col"><h4>AI Deepfake Detection</h4><div class="verdict fail">Arms Race</div><div class="note">900% annual deepfake growth.<br>Detection improving only 28-42%.</div></div>
+      <div class="compare-col" style="border-color:var(--accent)"><h4>VRC-48M</h4><div class="verdict pass">Topology</div><div class="note">2<sup>239</sup> collision resistance.<br>Non-differentiable. Non-strippable.</div></div>
+    </div>
+    <div class="vrc48m-usecases">
+      <div class="usecase"><div class="usecase-icon">&#x1f4f0;</div><div class="usecase-name">Journalism</div><p>Anchor footage at capture. Verify any re-shared copy against on-chain proof.</p></div>
+      <div class="usecase"><div class="usecase-icon">&#x2696;</div><div class="usecase-name">Legal Evidence</div><p>Cryptographic chain of custody for bodycams, dashcams, security footage.</p></div>
+      <div class="usecase"><div class="usecase-icon">&#x1f464;</div><div class="usecase-name">KYC / Identity</div><p>Detect face-swapped ID verification videos even after compression.</p></div>
+      <div class="usecase"><div class="usecase-icon">&#x1f4f1;</div><div class="usecase-name">Social Media</div><p>Platform-agnostic verification badges. Survives re-encoding on upload.</p></div>
+      <div class="usecase"><div class="usecase-icon">&#x1f3a8;</div><div class="usecase-name">Creative Rights</div><p>Provenance chain from original capture through every edit. Proves origin.</p></div>
+      <div class="usecase"><div class="usecase-icon">&#x1f3e5;</div><div class="usecase-name">Medical Imaging</div><p>Tamper-evident X-rays, MRIs, CT scans anchored at the scanner.</p></div>
+    </div>
+  </section>
+  <section id="token">
+    <div class="section-label">$VORTEX Token</div>
+    <h2>The fuel of the protocol.</h2>
+    <p class="section-desc">$VORTEX is the native token of VortexChain. It powers staking, gas, governance, and the agent economy on ARC-Relay.</p>
+    <div class="token-grid">
+      <div class="token-info">
+        <h3>Tokenomics</h3>
+        <ul class="token-specs">
+          <li><span class="label">Symbol</span><span class="value">$VORTEX</span></li>
+          <li><span class="label">Network</span><span class="value">Solana (SPL)</span></li>
+          <li><span class="label">Total Supply</span><span class="value">48,000,000</span></li>
+          <li><span class="label">Decimals</span><span class="value">9</span></li>
+          <li><span class="label">Consensus</span><span class="value">PoS + PoT</span></li>
+        </ul>
+      </div>
+      <div>
+        <div class="token-address">
+          <div class="label">Solana Mint Address</div>
+          <div class="addr" id="mint-address">Deploying Thursday &mdash; check back soon</div>
+        </div>
+        <div style="margin-top:1.5rem;">
+          <h3 style="font-size:1.1rem;font-weight:700;margin-bottom:.75rem;">Utility</h3>
+          <ul style="list-style:none;display:grid;gap:.5rem;">
+            <li style="color:var(--muted);font-size:.9rem;"><span style="color:var(--accent);">&#9656;</span> Validator staking &amp; topology challenges</li>
+            <li style="color:var(--muted);font-size:.9rem;"><span style="color:var(--accent);">&#9656;</span> QVM smart contract gas (dimensional pricing)</li>
+            <li style="color:var(--muted);font-size:.9rem;"><span style="color:var(--accent);">&#9656;</span> VRC-48 NFT minting &amp; fusion fees</li>
+            <li style="color:var(--muted);font-size:.9rem;"><span style="color:var(--accent);">&#9656;</span> Entropy oracle rewards</li>
+            <li style="color:var(--muted);font-size:.9rem;"><span style="color:var(--accent);">&#9656;</span> ARC-Relay AI agent economy</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section id="roadmap">
+    <div class="section-label">Roadmap</div>
+    <h2>Where we're going.</h2>
+    <p class="section-desc">From classical simulation to quantum hardware.</p>
+    <div class="roadmap">
+      <div class="phase"><div><div class="phase-label">Phase 1</div><div class="phase-status status-done">Complete</div></div><div><h3>Classical Simulation</h3><p>Full protocol in pure Python. TOAC crypto, blockchain, QVM smart contracts, TopoQKD, entropy oracle, P2P network, VRC-48 NFTs. 10 modules, 157 tests, zero heavy dependencies.</p></div></div>
+      <div class="phase"><div><div class="phase-label">Phase 2</div><div class="phase-status status-next">Next</div></div><div><h3>$VORTEX Token + Testnet</h3><p>SPL token on Solana. Public testnet, block explorer, wallet SDK, developer docs. Smart contract examples. Community governance framework.</p></div></div>
+      <div class="phase"><div><div class="phase-label">Phase 3</div><div class="phase-status status-future">Planned</div></div><div><h3>Mainnet</h3><p>Production deployment with GPU-accelerated manifold operations. Formal security audit. Exchange listings. Developer ecosystem and grants program.</p></div></div>
+      <div class="phase"><div><div class="phase-label">Phase 4</div><div class="phase-status status-future">2027+</div></div><div><h3>Quantum Hardware</h3><p>Photonic OAM hardware partnerships. Native TopoQKD on validator nodes. Real quantum entropy. Physical NFT verification. Quantum internet backbone pilot.</p></div></div>
+    </div>
+  </section>
+  <div class="cta">
+    <h2>The blockchain whose security<br>comes from <span style="color:var(--accent)">literal twisted light</span>.</h2>
+    <p>Post-quantum cryptography. Deepfake-proof media. NFTs grounded in physics. Read the whitepapers and join the vortex.</p>
+    <div class="hero-buttons" style="justify-content:center;">
+      <a href="https://github.com/rrhoopes3/coin" class="btn btn-primary" target="_blank">View on GitHub</a>
+      <a href="https://github.com/rrhoopes3/coin/blob/main/docs/whitepaper.md" class="btn btn-secondary" target="_blank">Protocol Whitepaper</a>
+      <a href="https://github.com/rrhoopes3/coin/blob/main/docs/vrc48m_media_provenance.md" class="btn btn-secondary" target="_blank">VRC-48M Whitepaper</a>
+    </div>
+  </div>
+  <footer><p>VortexChain &copy; 2026. Built on <a href="https://www.nature.com/articles/s41467-025-56563-0" target="_blank">Forbes et al. 2025</a>. Powered by <a href="https://arc-relay.com" target="_blank">ARC-Relay</a>.</p></footer>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+    (function(){const canvas=document.getElementById('hero-canvas');const scene=new THREE.Scene();const hero=document.getElementById('hero');const camera=new THREE.PerspectiveCamera(60,hero.offsetWidth/hero.offsetHeight,.1,100);camera.position.set(0,0,8);const renderer=new THREE.WebGLRenderer({canvas,alpha:true,antialias:true});renderer.setSize(hero.offsetWidth,hero.offsetHeight);renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));canvas.style.width='100%';canvas.style.height='100%';const count=4000;const positions=new Float32Array(count*3);const colors=new Float32Array(count*3);const cyan=new THREE.Color(0x00f0ff);const purple=new THREE.Color(0xc026d3);const green=new THREE.Color(0x22ff88);for(let i=0;i<count;i++){const t=(i/count)*Math.PI*8;const strand=i%2;const radius=1.5+Math.sin(t*.3)*.5;const offset=strand*Math.PI;positions[i*3]=Math.cos(t+offset)*radius+(Math.random()-.5)*.3;positions[i*3+1]=(i/count-.5)*10+(Math.random()-.5)*.2;positions[i*3+2]=Math.sin(t+offset)*radius+(Math.random()-.5)*.3;const mix=Math.random();const color=mix<.5?cyan.clone().lerp(purple,mix*2):purple.clone().lerp(green,(mix-.5)*2);colors[i*3]=color.r;colors[i*3+1]=color.g;colors[i*3+2]=color.b}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(positions,3));geo.setAttribute('color',new THREE.BufferAttribute(colors,3));const mat=new THREE.PointsMaterial({size:.06,vertexColors:true,transparent:true,opacity:.8,blending:THREE.AdditiveBlending,depthWrite:false});const points=new THREE.Points(geo,mat);scene.add(points);const coreMat=new THREE.MeshBasicMaterial({color:0x00f0ff,transparent:true,opacity:.3});const core=new THREE.Mesh(new THREE.SphereGeometry(.3,16,16),coreMat);scene.add(core);const haloMat=new THREE.MeshBasicMaterial({color:0xc026d3,transparent:true,opacity:.15});const halo=new THREE.Mesh(new THREE.SphereGeometry(.8,16,16),haloMat);scene.add(halo);const ringCount=600;const ringPos=new Float32Array(ringCount*3);const ringCol=new Float32Array(ringCount*3);for(let i=0;i<ringCount;i++){const angle=(i/ringCount)*Math.PI*2;const r=3+Math.sin(angle*6)*.3;ringPos[i*3]=Math.cos(angle)*r;ringPos[i*3+1]=Math.sin(angle*3)*.2;ringPos[i*3+2]=Math.sin(angle)*r;const c=cyan.clone().lerp(green,i/ringCount);ringCol[i*3]=c.r;ringCol[i*3+1]=c.g;ringCol[i*3+2]=c.b}const ringGeo=new THREE.BufferGeometry();ringGeo.setAttribute('position',new THREE.BufferAttribute(ringPos,3));ringGeo.setAttribute('color',new THREE.BufferAttribute(ringCol,3));const ringMat=new THREE.PointsMaterial({size:.04,vertexColors:true,transparent:true,opacity:.6,blending:THREE.AdditiveBlending,depthWrite:false});const ring=new THREE.Points(ringGeo,ringMat);scene.add(ring);let time=0;function animate(){requestAnimationFrame(animate);time+=.003;points.rotation.y=time;ring.rotation.y=-time*.5;core.scale.setScalar(1+Math.sin(time*3)*.15);halo.scale.setScalar(1+Math.sin(time*2)*.1);renderer.render(scene,camera)}animate();window.addEventListener('resize',()=>{camera.aspect=hero.offsetWidth/hero.offsetHeight;camera.updateProjectionMatrix();renderer.setSize(hero.offsetWidth,hero.offsetHeight)})})();
+    (function(){const tl=document.getElementById('demo-timeline');if(!tl)return;const total=60;const tampered=[22,23,24,25,26,27,28,29,30,31,32,33,34,35];for(let i=0;i<total;i++){const bar=document.createElement('div');bar.className='tl-chunk '+(tampered.includes(i)?'tampered':'ok');bar.title=tampered.includes(i)?'Chunk '+i+': TAMPERED (face swap detected)':'Chunk '+i+': Authentic';bar.style.opacity='0';bar.style.transition='opacity .3s '+(i*0.03)+'s';tl.appendChild(bar);setTimeout(()=>{bar.style.opacity='1'},50)}})();
+    (function(){const c=document.getElementById('nft-canvas');if(!c)return;const ctx=c.getContext('2d');const w=c.width,h=c.height;const wrapping=[142,7,883,451,92,16,770,338,5,901,223,667,44,812,159,503,71,946,288,630,15,777,412,89];function draw(t){ctx.fillStyle='rgba(10,10,18,0.08)';ctx.fillRect(0,0,w,h);for(let i=0;i<24;i++){const wn=wrapping[i];const angle=(i/24)*Math.PI*2+t*(.2+wn*.001);const radius=40+(wn/997)*80;const x=w/2+Math.cos(angle)*radius;const y=h/2+Math.sin(angle)*radius;const size=2+(wn%10);const hue=(wn/997)*200+160;ctx.beginPath();ctx.arc(x,y,size,0,Math.PI*2);ctx.fillStyle='hsla('+hue+',90%,65%,0.8)';ctx.fill();const ni=(i+1)%24;const nwn=wrapping[ni];const na=(ni/24)*Math.PI*2+t*(.2+nwn*.001);const nr=40+(nwn/997)*80;const nx=w/2+Math.cos(na)*nr;const ny=h/2+Math.sin(na)*nr;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(nx,ny);ctx.strokeStyle='hsla('+hue+',80%,55%,0.15)';ctx.lineWidth=.5;ctx.stroke()}requestAnimationFrame(()=>draw(t+.01))}ctx.fillStyle='#0a0a12';ctx.fillRect(0,0,w,h);draw(0)})();
+  </script>
+</body>
+</html>
