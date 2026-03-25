@@ -11,7 +11,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, jsonify, request, send_file, Response
 from werkzeug.utils import secure_filename
 
 from forge.vortexchain import (
@@ -38,6 +38,16 @@ from forge.vortexchain import (
 )
 
 app = Flask(__name__)
+
+
+@app.after_request
+def add_cors(response):
+    """Allow cross-origin requests for the public API."""
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
+
 
 # ---------------------------------------------------------------------------
 # State — all in-memory for the dev server
@@ -378,6 +388,12 @@ def vrc48m_ui():
     return send_file(Path(__file__).parent / "vrc48m_ui.html")
 
 
+@app.route("/demo")
+def vrc48m_demo():
+    """Public-facing VRC-48M demo page."""
+    return send_file(Path(__file__).parent / "demo.html")
+
+
 @app.route("/api/vrc48m/anchor", methods=["POST"])
 def vrc48m_anchor():
     """Upload media and create a topological anchor."""
@@ -546,16 +562,55 @@ def vrc48m_list_anchors():
     return ok(anchors)
 
 
+@app.route("/api/vrc48m/anchor/<anchor_id>")
+def vrc48m_get_anchor(anchor_id: str):
+    """Get a specific anchor by ID."""
+    if anchor_id not in media_anchors:
+        return err(f"Unknown anchor: {anchor_id}", 404)
+    a = media_anchors[anchor_id]["anchor"]
+    return ok({
+        "anchor_id": anchor_id,
+        "filename": Path(a.file_path).name,
+        "frame_count": a.frame_count,
+        "duration_ms": a.duration_ms,
+        "resolution": f"{a.width}x{a.height}",
+        "chunks": len(a.chunk_spectra),
+        "merkle_root": a.video_merkle_root,
+        "chunk_spectra": a.chunk_spectra,
+        "sample_spectra": a.sample_spectra,
+        "processing_time_ms": round(a.processing_time_ms, 1),
+        "created": media_anchors[anchor_id]["created"],
+    })
+
+
+@app.route("/api/vrc48m/anchor/<anchor_id>/download")
+def vrc48m_download_anchor(anchor_id: str):
+    """Download anchor as JSON file."""
+    if anchor_id not in media_anchors:
+        return err(f"Unknown anchor: {anchor_id}", 404)
+    anchor_path = ANCHOR_DIR / f"{anchor_id}.json"
+    if anchor_path.exists():
+        return send_file(
+            str(anchor_path),
+            mimetype="application/json",
+            as_attachment=True,
+            download_name=f"{anchor_id}.json",
+        )
+    return err("Anchor file not found on disk", 404)
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    print("\n  +----------------------------------------------+")
-    print("  |       VortexChain Dev Server v0.1.0          |")
-    print("  |   Topological OAM Cryptography Protocol      |")
-    print("  +----------------------------------------------+")
-    print("  |  Dashboard:  http://localhost:5000            |")
-    print("  |  API:        http://localhost:5000/api/chain  |")
-    print("  +----------------------------------------------+\n")
+    print("\n  +--------------------------------------------------+")
+    print("  |         VortexChain Dev Server v0.2.0            |")
+    print("  |     Topological OAM Cryptography Protocol        |")
+    print("  +--------------------------------------------------+")
+    print("  |  Dashboard:     http://localhost:5000             |")
+    print("  |  VRC-48M Demo:  http://localhost:5000/demo       |")
+    print("  |  VRC-48M Dev:   http://localhost:5000/vrc48m     |")
+    print("  |  API:           http://localhost:5000/api/chain  |")
+    print("  +--------------------------------------------------+\n")
     app.run(host="0.0.0.0", port=5000, debug=True)

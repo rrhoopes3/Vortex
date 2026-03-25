@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VRC-48M Demo — Kill Deepfakes With Topology</title>
+<meta name="description" content="Upload a video or image. Get a tamper-proof topological anchor. Verify any copy, anywhere.">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+:root{--bg:#050507;--surface:#0c0c12;--border:#1a1a2e;--accent:#00f0ff;--green:#22ff88;--red:#ff4466;--purple:#c026d3;--text:#e0e0ff;--muted:#8899aa}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.6}
+
+/* Header */
+.header{text-align:center;padding:3rem 2rem 2rem;border-bottom:1px solid var(--border)}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(1.8rem,4vw,2.8rem);font-weight:700;margin-bottom:.5rem}
+.header h1 span{background:linear-gradient(90deg,var(--accent),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.header p{color:var(--muted);font-size:1rem;max-width:600px;margin:0 auto}
+.header-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border:1px solid var(--accent);border-radius:9999px;font-size:.7rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);background:rgba(0,240,255,.06);margin-bottom:1rem}
+.back-link{position:absolute;top:1.2rem;left:2rem;color:var(--muted);text-decoration:none;font-size:.85rem;font-weight:500;transition:.2s}
+.back-link:hover{color:var(--accent)}
+
+/* Layout */
+.container{max-width:960px;margin:0 auto;padding:2rem}
+.mode-tabs{display:flex;gap:0;margin-bottom:2rem;background:var(--surface);border-radius:12px;padding:4px;border:1px solid var(--border)}
+.mode-tab{flex:1;padding:12px 16px;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:.9rem;font-weight:600;border-radius:10px;transition:.2s;font-family:inherit}
+.mode-tab:hover{color:var(--text)}
+.mode-tab.active{background:rgba(0,240,255,.1);color:var(--accent)}
+
+.panel{display:none}
+.panel.active{display:block}
+
+/* Upload */
+.upload-zone{border:2px dashed var(--border);border-radius:16px;padding:3rem 2rem;text-align:center;cursor:pointer;transition:.3s;background:var(--surface);position:relative}
+.upload-zone:hover,.upload-zone.dragover{border-color:var(--accent);background:rgba(0,240,255,.03)}
+.upload-zone h3{font-size:1.1rem;margin-bottom:.5rem}
+.upload-zone p{color:var(--muted);font-size:.85rem}
+.upload-zone input[type=file]{display:none}
+.upload-icon{font-size:2.5rem;margin-bottom:1rem}
+.file-preview{margin-top:1rem;display:none;align-items:center;gap:12px;justify-content:center;padding:12px;background:rgba(0,240,255,.05);border-radius:8px}
+.file-preview.visible{display:flex}
+.file-preview .name{font-weight:600;font-size:.9rem;color:var(--accent)}
+.file-preview .size{color:var(--muted);font-size:.8rem}
+
+/* Buttons */
+.btn{padding:14px 28px;border:none;border-radius:12px;cursor:pointer;font-size:.95rem;font-weight:600;transition:.2s;display:inline-flex;align-items:center;gap:8px;font-family:inherit}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--purple));color:#000;box-shadow:0 8px 30px rgba(0,240,255,.2)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 40px rgba(0,240,255,.35)}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+.btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm{padding:8px 16px;font-size:.8rem;border-radius:8px}
+.action-row{display:flex;gap:1rem;margin-top:1.5rem;flex-wrap:wrap}
+
+/* Progress */
+.progress-wrap{display:none;margin-top:1.5rem}
+.progress-wrap.visible{display:block}
+.progress-bar{height:6px;background:var(--surface);border-radius:3px;overflow:hidden;margin-bottom:.5rem}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--purple));border-radius:3px;transition:width .3s;width:0}
+.progress-status{font-size:.8rem;color:var(--muted)}
+
+/* Results */
+.result{display:none;margin-top:2rem}
+.result.visible{display:block}
+.result-banner{padding:1.5rem 2rem;border-radius:14px;display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem}
+.result-banner.authentic{background:rgba(34,255,136,.08);border:1px solid rgba(34,255,136,.3)}
+.result-banner.tampered{background:rgba(255,68,102,.08);border:1px solid rgba(255,68,102,.3)}
+.result-banner.anchored{background:rgba(0,240,255,.08);border:1px solid rgba(0,240,255,.3)}
+.result-icon{font-size:2rem}
+.result-title{font-size:1.2rem;font-weight:700}
+.result-subtitle{font-size:.85rem;color:var(--muted)}
+
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-bottom:1.5rem}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem;text-align:center}
+.stat-card .value{font-family:'JetBrains Mono',monospace;font-size:1.4rem;font-weight:700;color:var(--accent)}
+.stat-card .label{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:4px}
+
+/* Timeline */
+.timeline-section{margin-top:1.5rem}
+.timeline-section h4{font-size:.85rem;font-weight:600;margin-bottom:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.timeline{display:flex;gap:2px;height:40px;border-radius:8px;overflow:hidden}
+.chunk{flex:1;min-width:4px;transition:.2s;cursor:pointer;position:relative}
+.chunk.ok{background:var(--green)}
+.chunk.tampered{background:var(--red);animation:pulse-red 1.5s infinite}
+.chunk:hover{opacity:.8;transform:scaleY(1.15)}
+@keyframes pulse-red{0%,100%{opacity:1}50%{opacity:.7}}
+.chunk-tooltip{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:.72rem;white-space:nowrap;z-index:10;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,.5)}
+.chunk:hover .chunk-tooltip{display:block}
+.timeline-legend{display:flex;gap:16px;margin-top:.5rem;font-size:.75rem;color:var(--muted)}
+.legend-dot{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:4px;vertical-align:middle}
+
+/* Tampered chunks detail */
+.tampered-list{margin-top:1rem}
+.tampered-item{display:flex;align-items:center;gap:12px;padding:10px 14px;background:rgba(255,68,102,.05);border:1px solid rgba(255,68,102,.15);border-radius:8px;margin-bottom:.5rem;font-size:.85rem}
+.tampered-item .badge{background:var(--red);color:#fff;padding:2px 8px;border-radius:4px;font-size:.7rem;font-weight:700}
+
+/* Anchor JSON */
+.anchor-json{background:#08080e;border:1px solid var(--border);border-radius:10px;padding:1rem;margin-top:1rem;font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--accent);overflow-x:auto;max-height:300px;overflow-y:auto;line-height:1.5;white-space:pre}
+
+/* Verify section extras */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+.anchor-select{width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.9rem;font-family:inherit}
+.anchor-select option{background:var(--bg)}
+.or-divider{text-align:center;padding:1rem;color:var(--muted);font-size:.85rem;font-weight:600}
+
+/* Compare section */
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:2rem}
+
+/* Responsive */
+@media(max-width:700px){
+  .two-col,.compare-grid{grid-template-columns:1fr}
+  .stats-grid{grid-template-columns:repeat(2,1fr)}
+  .header{padding:2rem 1rem 1.5rem}
+  .container{padding:1.5rem 1rem}
+}
+</style>
+</head>
+<body>
+<div style="position:relative">
+  <a href="/" class="back-link">&larr; Dashboard</a>
+  <div class="header">
+    <div class="header-badge">VRC-48M Standard &mdash; Live Demo</div>
+    <h1>Kill deepfakes with <span>topology</span>.</h1>
+    <p>Upload media. Get a tamper-proof topological anchor. Verify any copy, anywhere, forever.</p>
+  </div>
+</div>
+
+<div class="container">
+  <div class="mode-tabs">
+    <button class="mode-tab active" data-tab="anchor">Anchor Media</button>
+    <button class="mode-tab" data-tab="verify">Verify Copy</button>
+    <button class="mode-tab" data-tab="compare">Compare Files</button>
+  </div>
+
+  <!-- ANCHOR PANEL -->
+  <div class="panel active" id="panel-anchor">
+    <div class="upload-zone" id="anchor-drop">
+      <div class="upload-icon">&#x1f3a5;</div>
+      <h3>Drop media here or click to upload</h3>
+      <p>Video (MP4, AVI, MOV) or Image (JPG, PNG, WebP) &mdash; up to 100 MB</p>
+      <input type="file" id="anchor-file" accept="video/*,image/*">
+      <div class="file-preview" id="anchor-preview">
+        <span class="name" id="anchor-fname"></span>
+        <span class="size" id="anchor-fsize"></span>
+      </div>
+    </div>
+    <div class="action-row">
+      <button class="btn btn-primary" id="anchor-btn" disabled>Create Topological Anchor</button>
+    </div>
+    <div class="progress-wrap" id="anchor-progress">
+      <div class="progress-bar"><div class="progress-fill" id="anchor-fill"></div></div>
+      <div class="progress-status" id="anchor-status">Extracting perceptual features...</div>
+    </div>
+    <div class="result" id="anchor-result">
+      <div class="result-banner anchored">
+        <div class="result-icon">&#x26d3;</div>
+        <div>
+          <div class="result-title">Media Anchored</div>
+          <div class="result-subtitle" id="anchor-result-sub">Your topological proof is ready.</div>
+        </div>
+      </div>
+      <div class="stats-grid" id="anchor-stats"></div>
+      <div style="display:flex;gap:1rem;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" id="anchor-download">Download Anchor JSON</button>
+        <button class="btn btn-secondary btn-sm" id="anchor-copy">Copy Anchor ID</button>
+      </div>
+      <div class="timeline-section" id="anchor-timeline-section" style="display:none">
+        <h4>Chunk Timeline</h4>
+        <div class="timeline" id="anchor-timeline"></div>
+        <div class="timeline-legend">
+          <span><div class="legend-dot" style="background:var(--green)"></div> Authenticated chunk</span>
+        </div>
+      </div>
+      <details style="margin-top:1rem">
+        <summary style="cursor:pointer;color:var(--muted);font-size:.85rem;font-weight:600">View raw anchor data</summary>
+        <div class="anchor-json" id="anchor-raw"></div>
+      </details>
+    </div>
+  </div>
+
+  <!-- VERIFY PANEL -->
+  <div class="panel" id="panel-verify">
+    <div class="two-col">
+      <div>
+        <h3 style="font-size:1rem;margin-bottom:1rem">1. Select or upload anchor</h3>
+        <select class="anchor-select" id="verify-anchor-select">
+          <option value="">-- Select a recent anchor --</option>
+        </select>
+        <div class="or-divider">or upload anchor JSON</div>
+        <div class="upload-zone" id="verify-anchor-drop" style="padding:1.5rem">
+          <h3 style="font-size:.9rem">Drop anchor JSON file</h3>
+          <input type="file" id="verify-anchor-file" accept=".json">
+          <div class="file-preview" id="verify-anchor-preview">
+            <span class="name" id="verify-anchor-fname"></span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <h3 style="font-size:1rem;margin-bottom:1rem">2. Upload media to verify</h3>
+        <div class="upload-zone" id="verify-drop" style="padding:2rem">
+          <div class="upload-icon">&#x1f50d;</div>
+          <h3>Drop suspect media here</h3>
+          <p>The copy you want to check against the anchor</p>
+          <input type="file" id="verify-file" accept="video/*,image/*">
+          <div class="file-preview" id="verify-preview">
+            <span class="name" id="verify-fname"></span>
+            <span class="size" id="verify-fsize"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="action-row">
+      <button class="btn btn-primary" id="verify-btn" disabled>Verify Against Anchor</button>
+      <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--muted);cursor:pointer">
+        <input type="checkbox" id="verify-quick"> Quick mode (sample frames)
+      </label>
+    </div>
+    <div class="progress-wrap" id="verify-progress">
+      <div class="progress-bar"><div class="progress-fill" id="verify-fill"></div></div>
+      <div class="progress-status" id="verify-status">Re-extracting topological features...</div>
+    </div>
+    <div class="result" id="verify-result"></div>
+  </div>
+
+  <!-- COMPARE PANEL -->
+  <div class="panel" id="panel-compare">
+    <div class="compare-grid">
+      <div>
+        <h3 style="font-size:1rem;margin-bottom:1rem">Original</h3>
+        <div class="upload-zone" id="compare-orig-drop" style="padding:2rem">
+          <div class="upload-icon">&#x1f4c4;</div>
+          <h3>Drop original media</h3>
+          <p>The known-good source file</p>
+          <input type="file" id="compare-orig-file" accept="video/*,image/*">
+          <div class="file-preview" id="compare-orig-preview">
+            <span class="name" id="compare-orig-fname"></span>
+            <span class="size" id="compare-orig-fsize"></span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <h3 style="font-size:1rem;margin-bottom:1rem">Suspect</h3>
+        <div class="upload-zone" id="compare-susp-drop" style="padding:2rem">
+          <div class="upload-icon">&#x1f50d;</div>
+          <h3>Drop suspect media</h3>
+          <p>The file you want to check</p>
+          <input type="file" id="compare-susp-file" accept="video/*,image/*">
+          <div class="file-preview" id="compare-susp-preview">
+            <span class="name" id="compare-susp-fname"></span>
+            <span class="size" id="compare-susp-fsize"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="action-row">
+      <button class="btn btn-primary" id="compare-btn" disabled>Compare Files</button>
+    </div>
+    <div class="progress-wrap" id="compare-progress">
+      <div class="progress-bar"><div class="progress-fill" id="compare-fill"></div></div>
+      <div class="progress-status" id="compare-status">Analyzing both files...</div>
+    </div>
+    <div class="result" id="compare-result"></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  const API = '';  // same-origin
+
+  // --- Tab switching ---
+  document.querySelectorAll('.mode-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+    });
+  });
+
+  // --- Upload helpers ---
+  function setupDrop(zoneId, inputId, onFile) {
+    const zone = document.getElementById(zoneId);
+    const input = document.getElementById(inputId);
+    zone.addEventListener('click', () => input.click());
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault(); zone.classList.remove('dragover');
+      if (e.dataTransfer.files.length) { input.files = e.dataTransfer.files; onFile(e.dataTransfer.files[0]); }
+    });
+    input.addEventListener('change', () => { if (input.files[0]) onFile(input.files[0]); });
+  }
+
+  function showPreview(prefix, file) {
+    const el = document.getElementById(prefix + '-preview');
+    document.getElementById(prefix + '-fname').textContent = file.name;
+    const sizeEl = document.getElementById(prefix + '-fsize');
+    if (sizeEl) sizeEl.textContent = formatSize(file.size);
+    el.classList.add('visible');
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB';
+    return (bytes/1048576).toFixed(1) + ' MB';
+  }
+
+  function simulateProgress(fillId, statusId, messages) {
+    const fill = document.getElementById(fillId);
+    const status = document.getElementById(statusId);
+    let step = 0;
+    const interval = setInterval(() => {
+      step++;
+      const pct = Math.min(step * 8, 90);
+      fill.style.width = pct + '%';
+      if (messages[Math.min(step, messages.length - 1)]) {
+        status.textContent = messages[Math.min(step, messages.length - 1)];
+      }
+    }, 400);
+    return () => { clearInterval(interval); fill.style.width = '100%'; };
+  }
+
+  // ==================== ANCHOR ====================
+  let anchorFile = null;
+  let lastAnchorData = null;
+
+  setupDrop('anchor-drop', 'anchor-file', f => { anchorFile = f; showPreview('anchor', f); document.getElementById('anchor-btn').disabled = false; });
+
+  document.getElementById('anchor-btn').addEventListener('click', async () => {
+    if (!anchorFile) return;
+    const btn = document.getElementById('anchor-btn');
+    btn.disabled = true;
+    document.getElementById('anchor-result').classList.remove('visible');
+
+    const prog = document.getElementById('anchor-progress');
+    prog.classList.add('visible');
+    const done = simulateProgress('anchor-fill', 'anchor-status', [
+      'Extracting perceptual features...',
+      'Computing spatial gradients (4x4 grid)...',
+      'Running DCT frequency analysis...',
+      'Estimating optical flow vectors...',
+      'Extracting chromatic signatures...',
+      'Mapping to 48D manifold...',
+      'Computing wrapping-number spectra...',
+      'Building temporal Merkle tree...',
+      'Hashing chunk digests...',
+      'Assembling topological anchor...',
+      'Generating proof...',
+    ]);
+
+    const form = new FormData();
+    form.append('file', anchorFile);
+
+    try {
+      const res = await fetch(API + '/api/vrc48m/anchor', { method: 'POST', body: form });
+      const data = await res.json();
+      done();
+
+      if (data.ok) {
+        lastAnchorData = data.data;
+        renderAnchorResult(data.data);
+        refreshAnchorList();
+      } else {
+        alert('Error: ' + (data.error || 'Unknown'));
+      }
+    } catch (e) {
+      done();
+      alert('Network error: ' + e.message);
+    }
+
+    setTimeout(() => { prog.classList.remove('visible'); btn.disabled = false; }, 500);
+  });
+
+  function renderAnchorResult(d) {
+    const el = document.getElementById('anchor-result');
+    document.getElementById('anchor-result-sub').textContent =
+      `${d.filename} — ${d.chunks} chunks, ${d.frame_count} frames anchored in ${d.processing_time_ms}ms`;
+
+    const stats = document.getElementById('anchor-stats');
+    stats.innerHTML = `
+      <div class="stat-card"><div class="value">${d.frame_count}</div><div class="label">Frames</div></div>
+      <div class="stat-card"><div class="value">${d.chunks}</div><div class="label">Chunks</div></div>
+      <div class="stat-card"><div class="value">${d.resolution}</div><div class="label">Resolution</div></div>
+      <div class="stat-card"><div class="value">${(d.duration_ms/1000).toFixed(1)}s</div><div class="label">Duration</div></div>
+      <div class="stat-card"><div class="value">${d.processing_time_ms.toFixed(0)}ms</div><div class="label">Processing</div></div>
+    `;
+
+    // Timeline
+    if (d.chunks > 1) {
+      const ts = document.getElementById('anchor-timeline-section');
+      ts.style.display = 'block';
+      const tl = document.getElementById('anchor-timeline');
+      tl.innerHTML = '';
+      for (let i = 0; i < d.chunks; i++) {
+        const c = document.createElement('div');
+        c.className = 'chunk ok';
+        c.innerHTML = `<div class="chunk-tooltip">Chunk ${i} — Anchored</div>`;
+        tl.appendChild(c);
+      }
+    }
+
+    document.getElementById('anchor-raw').textContent = JSON.stringify(d, null, 2);
+    el.classList.add('visible');
+  }
+
+  document.getElementById('anchor-download').addEventListener('click', () => {
+    if (!lastAnchorData) return;
+    const blob = new Blob([JSON.stringify(lastAnchorData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = (lastAnchorData.anchor_id || 'anchor') + '.json';
+    a.click(); URL.revokeObjectURL(url);
+  });
+
+  document.getElementById('anchor-copy').addEventListener('click', () => {
+    if (!lastAnchorData) return;
+    navigator.clipboard.writeText(lastAnchorData.anchor_id).then(() => {
+      const btn = document.getElementById('anchor-copy');
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = 'Copy Anchor ID'; }, 1500);
+    });
+  });
+
+  // ==================== VERIFY ====================
+  let verifyFile = null;
+  let verifyAnchorId = null;
+
+  setupDrop('verify-drop', 'verify-file', f => { verifyFile = f; showPreview('verify', f); checkVerifyReady(); });
+  setupDrop('verify-anchor-drop', 'verify-anchor-file', f => {
+    showPreview('verify-anchor', f);
+    // Read JSON to get anchor_id
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const json = JSON.parse(reader.result);
+        if (json.anchor_id) { verifyAnchorId = json.anchor_id; checkVerifyReady(); }
+      } catch(e) { /* ignore */ }
+    };
+    reader.readAsText(f);
+  });
+
+  document.getElementById('verify-anchor-select').addEventListener('change', e => {
+    verifyAnchorId = e.target.value || null;
+    checkVerifyReady();
+  });
+
+  function checkVerifyReady() {
+    document.getElementById('verify-btn').disabled = !(verifyFile && verifyAnchorId);
+  }
+
+  document.getElementById('verify-btn').addEventListener('click', async () => {
+    if (!verifyFile || !verifyAnchorId) return;
+    const btn = document.getElementById('verify-btn');
+    btn.disabled = true;
+    document.getElementById('verify-result').classList.remove('visible');
+
+    const prog = document.getElementById('verify-progress');
+    prog.classList.add('visible');
+    const done = simulateProgress('verify-fill', 'verify-status', [
+      'Re-extracting topological features...',
+      'Computing wrapping-number spectra...',
+      'Comparing against anchor...',
+      'Checking Merkle proof...',
+      'Classifying divergences...',
+      'Building tamper report...',
+    ]);
+
+    const form = new FormData();
+    form.append('file', verifyFile);
+    form.append('anchor_id', verifyAnchorId);
+    form.append('quick', document.getElementById('verify-quick').checked ? 'true' : 'false');
+
+    try {
+      const res = await fetch(API + '/api/vrc48m/verify', { method: 'POST', body: form });
+      const data = await res.json();
+      done();
+
+      if (data.ok) {
+        renderVerifyResult(data.data, 'verify-result');
+      } else {
+        alert('Error: ' + (data.error || 'Unknown'));
+      }
+    } catch (e) {
+      done(); alert('Network error: ' + e.message);
+    }
+
+    setTimeout(() => { prog.classList.remove('visible'); btn.disabled = false; }, 500);
+  });
+
+  function renderVerifyResult(d, containerId) {
+    const el = document.getElementById(containerId);
+    const isOk = d.status === 'authentic' || d.status === 'likely_authentic';
+    const isTampered = d.status === 'tampered' || d.status === 'likely_tampered';
+
+    let html = `
+      <div class="result-banner ${isOk ? 'authentic' : 'tampered'}">
+        <div class="result-icon">${isOk ? '&#x2705;' : '&#x1f6a8;'}</div>
+        <div>
+          <div class="result-title">${isOk ? 'Authentic' : 'Tampering Detected'}</div>
+          <div class="result-subtitle">${d.matching_chunks}/${d.total_chunks} chunks match — ${(d.confidence * 100).toFixed(1)}% confidence — ${d.processing_time_ms.toFixed(0)}ms</div>
+        </div>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="value" style="color:${isOk ? 'var(--green)' : 'var(--red)'}">${d.status.replace('_',' ')}</div><div class="label">Verdict</div></div>
+        <div class="stat-card"><div class="value">${(d.confidence * 100).toFixed(1)}%</div><div class="label">Confidence</div></div>
+        <div class="stat-card"><div class="value">${d.merkle_match ? 'Yes' : 'No'}</div><div class="label">Merkle Match</div></div>
+        <div class="stat-card"><div class="value">${d.matching_chunks}/${d.total_chunks}</div><div class="label">Chunks OK</div></div>
+      </div>
+    `;
+
+    // Timeline
+    if (d.total_chunks > 1) {
+      const tamperedSet = new Set(d.tampered_chunks.map(t => t.chunk_index));
+      html += `<div class="timeline-section"><h4>Chunk Integrity Timeline</h4><div class="timeline">`;
+      for (let i = 0; i < d.total_chunks; i++) {
+        const t = d.tampered_chunks.find(tc => tc.chunk_index === i);
+        if (t) {
+          html += `<div class="chunk tampered"><div class="chunk-tooltip">Chunk ${i}: ${t.classification}<br>${t.time_start_s}s — ${t.time_end_s}s<br>Distance: ${t.spectral_distance.toFixed(4)}</div></div>`;
+        } else {
+          html += `<div class="chunk ok"><div class="chunk-tooltip">Chunk ${i}: Authentic</div></div>`;
+        }
+      }
+      html += `</div><div class="timeline-legend">
+        <span><div class="legend-dot" style="background:var(--green)"></div> Authentic</span>
+        <span><div class="legend-dot" style="background:var(--red)"></div> Tampered</span>
+      </div></div>`;
+    }
+
+    // Tampered chunks detail
+    if (d.tampered_chunks.length > 0) {
+      html += `<div class="tampered-list"><h4 style="font-size:.85rem;color:var(--red);margin-bottom:.75rem">Tampered Regions</h4>`;
+      d.tampered_chunks.forEach(tc => {
+        html += `<div class="tampered-item">
+          <span class="badge">${tc.classification}</span>
+          <span>Chunk ${tc.chunk_index} &mdash; ${tc.time_start_s}s to ${tc.time_end_s}s</span>
+          <span style="color:var(--muted);font-size:.8rem;margin-left:auto">distance: ${tc.spectral_distance.toFixed(4)}</span>
+        </div>`;
+      });
+      html += `</div>`;
+    }
+
+    el.innerHTML = html;
+    el.classList.add('visible');
+  }
+
+  // ==================== COMPARE ====================
+  let compareOrig = null, compareSusp = null;
+
+  setupDrop('compare-orig-drop', 'compare-orig-file', f => { compareOrig = f; showPreview('compare-orig', f); checkCompareReady(); });
+  setupDrop('compare-susp-drop', 'compare-susp-file', f => { compareSusp = f; showPreview('compare-susp', f); checkCompareReady(); });
+
+  function checkCompareReady() {
+    document.getElementById('compare-btn').disabled = !(compareOrig && compareSusp);
+  }
+
+  document.getElementById('compare-btn').addEventListener('click', async () => {
+    if (!compareOrig || !compareSusp) return;
+    const btn = document.getElementById('compare-btn');
+    btn.disabled = true;
+    document.getElementById('compare-result').classList.remove('visible');
+
+    const prog = document.getElementById('compare-progress');
+    prog.classList.add('visible');
+    const done = simulateProgress('compare-fill', 'compare-status', [
+      'Analyzing original file...',
+      'Analyzing suspect file...',
+      'Computing topological diff...',
+      'Classifying divergences...',
+      'Building comparison report...',
+    ]);
+
+    const form = new FormData();
+    form.append('original', compareOrig);
+    form.append('suspect', compareSusp);
+
+    try {
+      const res = await fetch(API + '/api/vrc48m/compare', { method: 'POST', body: form });
+      const data = await res.json();
+      done();
+
+      if (data.ok) {
+        renderVerifyResult(data.data, 'compare-result');
+      } else {
+        alert('Error: ' + (data.error || 'Unknown'));
+      }
+    } catch (e) {
+      done(); alert('Network error: ' + e.message);
+    }
+
+    setTimeout(() => { prog.classList.remove('visible'); btn.disabled = false; }, 500);
+  });
+
+  // ==================== Anchor list ====================
+  async function refreshAnchorList() {
+    try {
+      const res = await fetch(API + '/api/vrc48m/anchors');
+      const data = await res.json();
+      if (data.ok) {
+        const sel = document.getElementById('verify-anchor-select');
+        sel.innerHTML = '<option value="">-- Select a recent anchor --</option>';
+        (data.data || []).forEach(a => {
+          sel.innerHTML += `<option value="${a.anchor_id}">${a.filename} (${a.chunks} chunks, ${a.merkle_root})</option>`;
+        });
+      }
+    } catch(e) { /* ignore */ }
+  }
+  refreshAnchorList();
+
+})();
+</script>
+</body>
+</html>
