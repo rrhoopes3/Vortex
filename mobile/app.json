@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "VRC-48M Camera",
+    "slug": "vrc48m-camera",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "vrc48m",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.vortexchain.vrc48m",
+      "infoPlist": {
+        "NSCameraUsageDescription": "VRC-48M needs camera access to anchor media at the moment of capture, creating tamper-proof topological proofs."
+      }
+    },
+    "plugins": [
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "VRC-48M needs camera access to anchor media at capture."
+        }
+      ],
+      "react-native-reanimated"
+    ],
+    "extra": {
+      "defaultServerUrl": "http://localhost:5000"
+    }
+  }
+}

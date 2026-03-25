@@ -6,13 +6,24 @@ Run with: python -m forge.vortexchain.server
 
 from __future__ import annotations
 
+import logging
 import os
+import struct
 import tempfile
 import time
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_file, Response
+from flask_socketio import SocketIO, emit
 from werkzeug.utils import secure_filename
+
+from forge.vortexchain.streaming_sessions import (
+    SessionConfig,
+    SessionManager,
+    SessionState,
+)
+
+logger = logging.getLogger(__name__)
 
 from forge.vortexchain import (
     VortexChain,
@@ -38,6 +49,14 @@ from forge.vortexchain import (
 )
 
 app = Flask(__name__)
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode="threading",
+    max_http_buffer_size=2 * 1024 * 1024,  # 2MB per message
+    ping_timeout=30,
+    ping_interval=15,
+)
 
 
 @app.after_request
@@ -52,6 +71,8 @@ def add_cors(response):
 # ---------------------------------------------------------------------------
 # State — all in-memory for the dev server
 # ---------------------------------------------------------------------------
+
+session_manager = SessionManager()
 
 chain = VortexChain()
 wallets: dict[str, TOACKeypair] = {}
@@ -600,17 +621,181 @@ def vrc48m_download_anchor(anchor_id: str):
 
 
 # ---------------------------------------------------------------------------
+# Routes — WebSocket streaming for VRC-48M live capture
+# ---------------------------------------------------------------------------
+
+FRAME_ACK_INTERVAL = 10  # ACK every Nth frame to reduce chatter
+
+
+@socketio.on("vrc48m:init")
+def handle_vrc48m_init(data):
+    """Start a new streaming session."""
+    try:
+        config = SessionConfig(
+            fps=float(data.get("fps", 30.0)),
+            width=int(data.get("width", 1280)),
+            height=int(data.get("height", 720)),
+            chunk_size=int(data.get("chunk_size", 10)),
+            frame_skip=int(data.get("frame_skip", 3)),
+            source_fps=float(data.get("source_fps", data.get("fps", 30.0))),
+        )
+        session = session_manager.create_session(request.sid, config)
+        emit("vrc48m:session_created", {
+            "session_id": session.session_id,
+            "config": config.to_dict(),
+        })
+        logger.info("WS session created: %s for socket %s", session.session_id, request.sid)
+    except Exception as e:
+        emit("vrc48m:error", {"code": "INIT_FAILED", "message": str(e)})
+
+
+@socketio.on("vrc48m:frame")
+def handle_vrc48m_frame(data):
+    """Process a binary frame message.
+
+    Binary layout: [36B session_id ASCII][4B seq uint32 BE][JPEG bytes]
+    """
+    try:
+        if not isinstance(data, (bytes, bytearray)):
+            emit("vrc48m:error", {"code": "INVALID_FRAME", "message": "Expected binary data"})
+            return
+
+        if len(data) < 41:  # 36 + 4 + at least 1 byte JPEG
+            emit("vrc48m:error", {"code": "INVALID_FRAME", "message": "Frame too short"})
+            return
+
+        session_id = data[:36].decode("ascii").strip()
+        frame_seq = struct.unpack(">I", data[36:40])[0]
+        jpeg_data = bytes(data[40:])
+
+        session = session_manager.get_session(session_id)
+        if session is None:
+            emit("vrc48m:error", {
+                "code": "UNKNOWN_SESSION",
+                "message": f"No session: {session_id}",
+                "session_id": session_id,
+            })
+            return
+
+        chunk_result = session.process_frame(jpeg_data)
+
+        # ACK every Nth frame
+        if session.frame_count % FRAME_ACK_INTERVAL == 0:
+            emit("vrc48m:frame_ack", {
+                "session_id": session_id,
+                "frame_index": session.frame_count,
+            })
+
+        # Emit chunk result if boundary was reached
+        if chunk_result is not None:
+            emit("vrc48m:chunk_complete", chunk_result)
+
+    except ValueError as e:
+        emit("vrc48m:error", {"code": "DECODE_FAILED", "message": str(e)})
+    except RuntimeError as e:
+        emit("vrc48m:error", {"code": "SESSION_ERROR", "message": str(e)})
+    except Exception as e:
+        logger.exception("Unexpected error in frame handler")
+        emit("vrc48m:error", {"code": "INTERNAL_ERROR", "message": str(e)})
+
+
+@socketio.on("vrc48m:finalize")
+def handle_vrc48m_finalize(data):
+    """Finalize a streaming session and return the anchor."""
+    try:
+        session_id = data.get("session_id", "")
+        session = session_manager.get_session(session_id)
+        if session is None:
+            emit("vrc48m:error", {
+                "code": "UNKNOWN_SESSION",
+                "message": f"No session: {session_id}",
+            })
+            return
+
+        result = session.finalize()
+
+        # Also store in the REST-accessible media_anchors dict
+        anchor_id = f"vrc48m_live_{int(time.time())}_{session_id[:8]}"
+        # Create a minimal anchor-like object for the REST endpoints
+        from types import SimpleNamespace
+        anchor_ns = SimpleNamespace(**result["anchor"])
+        anchor_ns.chunk_spectra = result["anchor"]["chunk_spectra"]
+        anchor_ns.chunk_digests = result["anchor"]["chunk_digests"]
+        anchor_ns.sample_spectra = result["anchor"]["sample_spectra"]
+        media_anchors[anchor_id] = {
+            "anchor": anchor_ns,
+            "filepath": "<live-stream>",
+            "created": time.time(),
+        }
+        result["anchor_id"] = anchor_id
+
+        emit("vrc48m:anchor_complete", result)
+        logger.info("WS session %s anchor complete: %s", session_id, anchor_id)
+
+    except Exception as e:
+        emit("vrc48m:error", {"code": "FINALIZE_FAILED", "message": str(e)})
+
+
+@socketio.on("vrc48m:abort")
+def handle_vrc48m_abort(data):
+    """Abort a streaming session."""
+    try:
+        session_id = data.get("session_id", "")
+        session = session_manager.get_session(session_id)
+        if session:
+            session.abort()
+            emit("vrc48m:error", {
+                "code": "ABORTED",
+                "message": "Session aborted",
+                "session_id": session_id,
+            })
+            session_manager.remove_session(session_id)
+        else:
+            emit("vrc48m:error", {
+                "code": "UNKNOWN_SESSION",
+                "message": f"No session: {session_id}",
+            })
+    except Exception as e:
+        emit("vrc48m:error", {"code": "ABORT_ERROR", "message": str(e)})
+
+
+@socketio.on("disconnect")
+def handle_disconnect():
+    """Clean up sessions on socket disconnect."""
+    session_manager.cleanup_socket(request.sid)
+    logger.info("Socket disconnected: %s", request.sid)
+
+
+@socketio.on("connect")
+def handle_connect():
+    """Log new connections."""
+    logger.info("Socket connected: %s", request.sid)
+
+
+# Background session reaper
+def _reaper_loop():
+    """Periodically clean up stale sessions."""
+    while True:
+        socketio.sleep(30)
+        reaped = session_manager.reap_stale()
+        if reaped:
+            logger.info("Reaped %d stale session(s)", reaped)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     print("\n  +--------------------------------------------------+")
-    print("  |         VortexChain Dev Server v0.2.0            |")
+    print("  |         VortexChain Dev Server v0.3.0            |")
     print("  |     Topological OAM Cryptography Protocol        |")
     print("  +--------------------------------------------------+")
     print("  |  Dashboard:     http://localhost:5000             |")
     print("  |  VRC-48M Demo:  http://localhost:5000/demo       |")
     print("  |  VRC-48M Dev:   http://localhost:5000/vrc48m     |")
     print("  |  API:           http://localhost:5000/api/chain  |")
+    print("  |  WebSocket:     ws://localhost:5000 (VRC-48M)    |")
     print("  +--------------------------------------------------+\n")
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    socketio.start_background_task(_reaper_loop)
+    socketio.run(app, host="0.0.0.0", port=5000, debug=True, allow_unsafe_werkzeug=True)
