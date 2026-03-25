@@ -27,8 +27,9 @@ reviewed and filed with the United States Patent and Trademark Office (USPTO).**
 ## TITLE OF THE INVENTION
 
 **Systems and Methods for Topological Cryptographic Hashing, Consensus,
-Non-Fungible Token Composition, and Dimensional Gas Pricing on a
-Blockchain Network Using Higher-Dimensional Manifold Invariants**
+Non-Fungible Token Composition, Dimensional Gas Pricing, and
+Deepfake-Resistant Media Provenance on a Blockchain Network Using
+Higher-Dimensional Manifold Invariants**
 
 ---
 
@@ -36,12 +37,15 @@ Blockchain Network Using Higher-Dimensional Manifold Invariants**
 
 The present invention relates generally to distributed ledger technology,
 cryptographic hash functions, blockchain consensus mechanisms, non-fungible
-token standards, and virtual machine architectures for smart contract execution.
+token standards, virtual machine architectures for smart contract execution,
+and media content authentication for deepfake prevention.
 More specifically, the invention relates to methods and systems that exploit
 topological invariants of higher-dimensional manifolds -- particularly
 wrapping-number spectra derived from 48-dimensional topological structures --
 to provide cryptographic security, consensus validation, token composition,
-and computational resource metering in a blockchain network.
+computational resource metering, and tamper-evident media provenance that is
+resilient to transcoding while sensitive to structural content manipulation
+in a blockchain network.
 
 ---
 
@@ -76,7 +80,22 @@ in terms of simple opcode costs operating on fixed-width integers (typically
 256 bits). No existing VM prices operations based on the dimensionality or
 topological complexity of the operands.
 
-### E. The Forbes et al. Discovery
+### E. Prior Art in Media Authentication and Deepfake Prevention
+
+Current media provenance approaches include metadata-based standards (C2PA /
+Content Credentials) that embed signed assertions in file containers, and
+blockchain-based registries (Numbers Protocol) that store conventional
+cryptographic hashes. Metadata-based provenance is trivially stripped by
+re-encoding the media file. Conventional hash-based approaches break under
+any transcoding (lossy compression, resolution change). AI-based deepfake
+detection relies on learned classifiers locked in an adversarial arms race
+with improving generators. No existing system provides content authentication
+that simultaneously (a) survives legitimate signal transformations such as
+transcoding and compression, (b) detects structural content manipulation such
+as face swaps and scene regeneration, and (c) anchors provenance on-chain
+independent of the media file itself.
+
+### F. The Forbes et al. Discovery
 
 In 2025, Forbes et al. published findings in Nature Communications describing
 the experimental observation of 48-dimensional topological structures arising
@@ -88,7 +107,7 @@ blockchain applications.
 
 ## III. SUMMARY OF THE INVENTION
 
-The present invention provides four interrelated systems and methods:
+The present invention provides five interrelated systems and methods:
 
 1. **Topological Hashing Using Wrapping-Number Spectra** -- A novel
    cryptographic hash function that maps arbitrary input data to points on a
@@ -111,6 +130,15 @@ The present invention provides four interrelated systems and methods:
    computational resource metering model for smart contract execution wherein
    gas costs scale with the dimensionality and topological complexity of
    operations performed on 48-dimensional manifold points.
+
+5. **Topological Media Provenance (VRC-48M)** -- A method for authenticating
+   media content (video, audio, images) against deepfake manipulation by
+   extracting perceptual features, mapping them to points on a 48-dimensional
+   topological manifold, computing wrapping-number spectra that are invariant
+   under continuous signal transformations (compression, rescaling) but change
+   under discrete structural modifications (face swaps, scene regeneration),
+   and anchoring the topological fingerprint on-chain as a non-fungible
+   provenance token.
 
 ---
 
@@ -275,6 +303,106 @@ access control grounded in topology rather than signatures.
 
 ---
 
+### Claim Area 5: Topological Media Provenance (VRC-48M)
+
+#### 5.1 Overview
+
+A method for generating tamper-evident, transcoding-resilient provenance
+fingerprints for media content, comprising: extracting perceptual features
+from media frames, mapping features to a 48-dimensional topological manifold,
+computing wrapping-number spectra, assembling frame-group fingerprints into
+a temporal Merkle tree, and anchoring the Merkle root on a blockchain as a
+non-fungible provenance token.
+
+#### 5.2 Perceptual Feature Extraction (Structural Feature Pyramid)
+
+For each media frame, a 48-element Structural Feature Pyramid (SFP) is
+extracted comprising:
+
+- **Spatial Structure (16 values)**: Luminance gradient magnitude and
+  dominant orientation across a 4x4 spatial grid.
+- **Frequency Domain (16 values)**: Lowest 16 non-DC 2D DCT coefficients
+  of the luminance channel in zigzag order.
+- **Temporal Coherence (8 values)**: Optical flow statistics (magnitude,
+  variance, direction histogram, temporal gradient energy) between adjacent
+  frames in the chunk.
+- **Chromatic Signature (8 values)**: Color histogram statistics in
+  perceptually uniform Lab* space across a 2x2 spatial grid.
+
+The 48-element SFP vector maps directly to 48 coordinates in the
+topological manifold T^{48}.
+
+#### 5.3 Topological Perceptual Binding
+
+The key property exploited is **Topological Perceptual Binding (TPB)**:
+
+Continuous signal transformations (lossy compression, gamma correction,
+resolution scaling, color grading) produce continuous movements in manifold
+space. Because wrapping numbers are topological invariants, they cannot
+change under continuous deformations. The fingerprint survives transcoding.
+
+Discrete structural modifications (face replacement, scene regeneration,
+temporal splicing, object insertion/removal) move the manifold point across
+a topological boundary, causing at least one wrapping number to change.
+The fingerprint detects manipulation.
+
+#### 5.4 Frame Chunk Hashing
+
+Media is processed in chunks of N frames (default N=30):
+
+1. Extract SFP for each frame in the chunk.
+2. Compute element-wise median across all N frames (robust to compression
+   artifacts).
+3. The median SFP vector is the chunk's manifold coordinate input.
+4. Compute wrapping-number spectrum: TMH_chunk = (w_1, ..., w_24), 48 bytes.
+
+#### 5.5 Temporal Merkle Tree
+
+Chunk hashes are assembled into a binary Merkle tree where interior nodes
+use the standard TOAC topological hash. The Merkle root is the Media
+Provenance Anchor (MPA).
+
+Audio content is processed independently with an analogous 48-element
+feature vector comprising MFCCs, spectral features, chroma features, and
+temporal modulation spectrum. A separate audio Merkle tree is constructed.
+Both roots are included in the on-chain anchor.
+
+#### 5.6 On-Chain Provenance Token (VRC-48M NFT)
+
+Each authenticated media asset is represented as a VRC-48M non-fungible
+token containing: video Merkle root, audio Merkle root, device attestation
+(hardware-bound public key and signature), capture timestamp, frame count,
+chunk size, verification parameters, and sample wrapping spectra for quick
+verification.
+
+#### 5.7 Provenance Chain for Legitimate Edits
+
+Legitimate post-production creates a child VRC-48M token referencing the
+parent, with edit type metadata and the editor's signing key. This creates
+a directed acyclic provenance graph on-chain.
+
+#### 5.8 Verification Protocol
+
+Given any copy of the media (potentially re-encoded) and its VRC-48M token
+ID: re-extract perceptual features, recompute topological hashes, rebuild
+Merkle tree, and compare with the on-chain anchor. If roots match, content
+is authentic. If roots differ, binary search on Merkle tree identifies
+the divergent chunks with frame-level precision. The spectral distance
+(count of changed wrapping numbers per chunk) classifies the severity
+and nature of the modification.
+
+#### 5.9 Non-Differentiability Defense Against Generative AI
+
+The topological degree function producing wrapping numbers is integer-valued,
+piecewise-constant, with zero gradient almost everywhere and undefined
+gradient at boundaries. Generative models optimizing continuous loss
+functions via gradient descent cannot learn to preserve wrapping-number
+spectra because the loss landscape provides no useful gradient signal.
+This provides a mathematical (not heuristic) defense against AI-generated
+content, immune to the adversarial arms race affecting AI-based detection.
+
+---
+
 ## V. CLAIMS
 
 **What is claimed is:**
@@ -348,31 +476,96 @@ access control grounded in topology rather than signatures.
 14. The system of claim 12, wherein the instruction set comprises 18 opcodes
     operating on 48-dimensional manifold points and 24-element spectra.
 
-15. A blockchain network comprising:
+15. A computer-implemented method for authenticating media content, the
+    method comprising:
+    (a) receiving media content comprising a plurality of frames;
+    (b) for each frame, extracting a perceptual feature vector comprising
+        spatial structure values, frequency domain values, temporal
+        coherence values, and chromatic signature values, totaling 48
+        feature values;
+    (c) grouping frames into chunks of N consecutive frames and computing
+        an element-wise median feature vector for each chunk;
+    (d) mapping each median feature vector to a point on a 48-dimensional
+        topological manifold;
+    (e) computing a wrapping-number spectrum comprising 24 independent
+        integer values for each chunk;
+    (f) assembling the chunk wrapping-number spectra into a Merkle tree;
+        and
+    (g) recording the Merkle root on a distributed ledger as a provenance
+        anchor associated with the media content.
+
+16. The method of claim 15, wherein the perceptual feature vector comprises:
+    16 spatial structure values derived from luminance gradient statistics
+    on a 4x4 grid, 16 frequency domain values from 2D DCT coefficients,
+    8 temporal coherence values from optical flow statistics, and
+    8 chromatic signature values from Lab* color space statistics.
+
+17. The method of claim 15, wherein the wrapping-number spectrum of each
+    chunk is invariant under continuous signal transformations including
+    lossy compression, resolution scaling, gamma correction, and color
+    grading, but changes under discrete structural modifications including
+    face replacement, scene regeneration, and temporal splicing.
+
+18. The method of claim 15, further comprising:
+    (a) receiving a second copy of the media content, potentially
+        transcoded to a different encoding or resolution;
+    (b) re-extracting perceptual feature vectors from the second copy;
+    (c) recomputing wrapping-number spectra and Merkle tree;
+    (d) comparing the recomputed Merkle root with the recorded provenance
+        anchor; and
+    (e) if the roots differ, identifying divergent chunks by traversing
+        the Merkle tree and classifying the modification based on the
+        count of changed wrapping numbers per chunk.
+
+19. The method of claim 15, further comprising recording a device
+    attestation signature from a hardware-bound key of a capture device,
+    the signature covering the Merkle root and a capture timestamp.
+
+20. The method of claim 15, further comprising:
+    when a legitimate edit is performed on the media content, minting a
+    child provenance token referencing a parent provenance token, the
+    child token containing a new Merkle root, edit type metadata, and
+    editor identity, thereby creating a directed acyclic provenance graph.
+
+21. The method of claim 15, wherein the defense against AI-generated
+    synthetic media arises from the non-differentiability of the
+    topological degree function, which is integer-valued and
+    piecewise-constant with zero gradient almost everywhere, preventing
+    generative models from optimizing content to preserve wrapping-number
+    spectra via gradient descent.
+
+22. A blockchain network comprising:
     (a) nodes computing topological hash digests per claim 1;
     (b) consensus per claim 6;
-    (c) NFT standard per claim 9; and
-    (d) virtual machine per claim 12.
+    (c) NFT standard per claim 9;
+    (d) virtual machine per claim 12; and
+    (e) media provenance per claim 15.
 
-16. A non-transitory computer-readable medium storing instructions that,
-    when executed, perform the method of any one of claims 1 through 11.
+23. A non-transitory computer-readable medium storing instructions that,
+    when executed, perform the method of any one of claims 1 through 21.
 
 ---
 
 ## VI. ABSTRACT
 
 A system and method for cryptographic hashing, blockchain consensus,
-non-fungible token composition, and smart contract execution resource metering
-based on topological invariants of a 48-dimensional manifold. Input data is
-mapped to a point on the manifold and a wrapping-number spectrum of 24
-independent integers is computed from embedded 2-spheres, yielding a 48-byte
-digest with collision resistance of approximately 2^{239}. A hybrid
-Proof-of-Topology consensus mechanism combines token staking with topological
-challenge-solving, with optional quantum capability weighting. Non-fungible
-tokens are fused by geometric interpolation of manifold coordinates and modular
-addition of wrapping numbers, producing provably unique child tokens. A virtual
-machine prices smart contract operations based on the dimensionality and
-topological complexity of manifold operands.
+non-fungible token composition, smart contract execution resource metering,
+and deepfake-resistant media content authentication based on topological
+invariants of a 48-dimensional manifold. Input data is mapped to a point on
+the manifold and a wrapping-number spectrum of 24 independent integers is
+computed from embedded 2-spheres, yielding a 48-byte digest with collision
+resistance of approximately 2^{239}. A hybrid Proof-of-Topology consensus
+mechanism combines token staking with topological challenge-solving, with
+optional quantum capability weighting. Non-fungible tokens are fused by
+geometric interpolation of manifold coordinates and modular addition of
+wrapping numbers, producing provably unique child tokens. A virtual machine
+prices smart contract operations based on the dimensionality and topological
+complexity of manifold operands. A media provenance system extracts perceptual
+features from video, audio, and image content, maps them to the 48-dimensional
+manifold, and computes wrapping-number spectra that are invariant under
+continuous signal transformations (compression, rescaling) but change under
+discrete structural modifications (face swaps, scene regeneration), enabling
+tamper-evident content authentication anchored on-chain.
 
 ---
 
@@ -380,7 +573,8 @@ topological complexity of manifold operands.
 
 1. **Prior Art Search**: Conduct thorough search in topological cryptography,
    higher-dimensional hash functions, hybrid consensus, NFT composition,
-   and Forbes et al. 2025 Nature Communications.
+   media provenance (C2PA, Numbers Protocol, perceptual hashing),
+   deepfake detection/prevention, and Forbes et al. 2025 Nature Communications.
 
 2. **Public Disclosure**: Code was briefly public on GitHub March 24, 2026.
    US grace period: 1 year. International rights may be compromised (most
@@ -391,7 +585,9 @@ topological complexity of manifold operands.
    fallback positions.
 
 4. **Drawings Needed**: Topological hashing pipeline, PoT consensus flowchart,
-   VRC-48 fusion diagram, QVM architecture, 48D manifold conceptual schematic.
+   VRC-48 fusion diagram, QVM architecture, 48D manifold conceptual schematic,
+   VRC-48M media provenance pipeline, perceptual feature pyramid diagram,
+   temporal Merkle tree structure, provenance chain/DAG illustration.
 
 5. **Inventor Declaration**: Inventor(s) must be identified and sign declarations.
 
