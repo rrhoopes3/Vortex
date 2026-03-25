@@ -620,6 +620,112 @@ def vrc48m_download_anchor(anchor_id: str):
     return err("Anchor file not found on disk", 404)
 
 
+@app.route("/api/vrc48m/anchor/<anchor_id>/publish", methods=["POST"])
+def vrc48m_publish_anchor(anchor_id: str):
+    """Publish an existing anchor's Merkle root to Solana."""
+    from vortexchain.solana_anchor import SolanaAnchorPublisher
+
+    if anchor_id not in media_anchors:
+        return err(f"Unknown anchor: {anchor_id}", 404)
+
+    body = request.get_json(silent=True) or {}
+    rpc_url = body.get("rpc_url", "https://api.devnet.solana.com")
+    keypair_path = body.get("keypair_path")
+    memo = body.get("memo", "")
+
+    anchor = media_anchors[anchor_id]["anchor"]
+
+    try:
+        publisher = SolanaAnchorPublisher(
+            rpc_url=rpc_url,
+            keypair_path=keypair_path,
+        )
+
+        import asyncio
+        loop = asyncio.new_event_loop()
+        try:
+            tx = loop.run_until_complete(
+                publisher.publish_anchor(anchor, memo)
+            )
+        finally:
+            loop.run_until_complete(publisher.close())
+            loop.close()
+
+        # Store the chain record alongside the anchor
+        media_anchors[anchor_id]["solana_tx"] = tx.to_dict()
+
+        return ok({
+            "anchor_id": anchor_id,
+            "signature": tx.signature,
+            "slot": tx.slot,
+            "block_time": tx.block_time,
+            "explorer_url": tx.explorer_url,
+            "memo_data": tx.memo_data,
+        })
+    except RuntimeError as e:
+        return err(f"Solana publish failed: {str(e)}")
+    except Exception as e:
+        return err(f"Unexpected error: {str(e)}")
+
+
+@app.route("/api/vrc48m/anchor/<anchor_id>/chain")
+def vrc48m_chain_status(anchor_id: str):
+    """Check on-chain status for a published anchor."""
+    if anchor_id not in media_anchors:
+        return err(f"Unknown anchor: {anchor_id}", 404)
+
+    info = media_anchors[anchor_id]
+    solana_tx = info.get("solana_tx")
+
+    if solana_tx is None:
+        return ok({
+            "anchor_id": anchor_id,
+            "on_chain": False,
+            "message": "Anchor has not been published to Solana yet.",
+        })
+
+    # Optionally re-verify on chain
+    verified = None
+    verify_param = request.args.get("verify", "false")
+    if verify_param.lower() == "true":
+        try:
+            from vortexchain.solana_anchor import SolanaAnchorPublisher
+
+            rpc_url = request.args.get(
+                "rpc_url", "https://api.devnet.solana.com"
+            )
+            publisher = SolanaAnchorPublisher(rpc_url=rpc_url)
+
+            import asyncio
+            loop = asyncio.new_event_loop()
+            try:
+                verified = loop.run_until_complete(
+                    publisher.verify_on_chain(
+                        info["anchor"], solana_tx["signature"]
+                    )
+                )
+            finally:
+                loop.run_until_complete(publisher.close())
+                loop.close()
+        except Exception as e:
+            verified = None
+            logger.warning("On-chain verify failed: %s", e)
+
+    result = {
+        "anchor_id": anchor_id,
+        "on_chain": True,
+        "signature": solana_tx["signature"],
+        "slot": solana_tx["slot"],
+        "block_time": solana_tx["block_time"],
+        "explorer_url": solana_tx["explorer_url"],
+        "memo_data": solana_tx["memo_data"],
+    }
+    if verified is not None:
+        result["verified"] = verified
+
+    return ok(result)
+
+
 # ---------------------------------------------------------------------------
 # Routes — WebSocket streaming for VRC-48M live capture
 # ---------------------------------------------------------------------------
