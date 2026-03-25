@@ -1,0 +1,12 @@
+{
+  "name": "VortexChain",
+  "symbol": "VORTEX",
+  "description": "Kill deepfakes with topology. VRC-48M anchors media at capture with 48D topological invariants that survive re-encoding but break under manipulation.",
+  "image": "https://vortex.arc-relay.com/token-logo.png",
+  "external_url": "https://vortex.arc-relay.com",
+  "attributes": [],
+  "properties": {
+    "category": "utility",
+    "creators": []
+  }
+}
