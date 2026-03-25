@@ -10,9 +10,8 @@ dist/
 build/
 .pytest_cache/
 
-# Runtime data (keep dir structure via .gitkeep)
-data/*
-!data/**/.gitkeep
+# Virtual environment
+.venv/
 
 # IDE / editor
 .vscode/
