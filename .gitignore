@@ -28,3 +28,11 @@ Thumbs.db
 # Large binary files
 *.pdf
 *.mp4
+
+# Proprietary — do not publish
+docs/whitepaper.md
+docs/provisional_patent_draft.md
+vortexchain/manifold.py
+vortexchain/toac.py
+vortexchain/qkd.py
+vortexchain/consensus.py

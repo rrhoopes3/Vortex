@@ -1,47 +1,31 @@
-# VortexChain
+# $VORTEX
 
-**The first blockchain protocol natively designed around high-dimensional topological quantum states.**
+**SPL utility token for on-chain media provenance verification on Solana.**
 
-Built on the December 2025 discovery that entangled photons carrying orbital angular momentum (OAM) hide **48-dimensional topological structures** with over 17,000 distinct invariants.
+$VORTEX powers a verification network that proves photos and videos are authentic, unaltered, and traceable. Provenance is bound to the content itself — not strippable metadata — and anchored on-chain.
 
-VortexChain turns these topological invariants into cryptographic primitives. The result: a blockchain whose security comes from literal physics.
+## Token
 
-```
-                    +-----------------------------+
-                    |     48D TOPOLOGICAL MANIFOLD |
-                    |  [S^2_1] [S^2_2] ... [S^2_24]|
-                    |   w=42   w=718       w=551   |
-                    |   Wrapping Numbers (Invariants)|
-                    +-------------|----------------+
-                                  |
-              +-------------------+-------------------+
-              |                   |                    |
-        +-----v-----+      +-----v------+      +-----v------+
-        |   TOAC     |      |  Consensus |      |   QVM      |
-        |   Crypto   |      |  PoS + PoT |      |  Contracts |
-        +------------+      +------------+      +------------+
-```
+| | |
+|---|---|
+| **Symbol** | $VORTEX |
+| **Network** | Solana (SPL) |
+| **Supply** | 48,000,000 |
+| **Decimals** | 9 |
+| **Mint** | `5joN44mSAdo7DbGgsKnXWagLKc8kEkFfKiTW2szTFASA` |
 
-## Quick Start
+[View on Solscan](https://solscan.io/token/5joN44mSAdo7DbGgsKnXWagLKc8kEkFfKiTW2szTFASA) | [Trade on Jupiter](https://jup.ag/swap/SOL-5joN44mSAdo7DbGgsKnXWagLKc8kEkFfKiTW2szTFASA)
 
-```bash
-pip install -e ".[dev]"
-pytest -v                        # 157 tests
-python vortexchain/demo.py       # interactive mini testnet
-```
+## What $VORTEX does
 
-## Why VortexChain
+- **Media verification** — Verify that media hasn't been tampered with. Proofs survive compression and re-encoding.
+- **On-chain anchoring** — Verification proofs are published to Solana. Immutable, public, timestamped.
+- **Verification rewards** — Nodes that verify media proofs earn $VORTEX.
+- **Governance** — Token holders vote on protocol upgrades.
 
-Current post-quantum crypto (Kyber/Dilithium) relies on mathematical assumptions. TOAC uses the physical topology of entangled light:
+## VRC-48M — Media Provenance
 
-- **Private keys** = wrapping numbers in a 48D manifold
-- **Public keys** = low-dim projections (forging requires ~2^239 work)
-- **Topological hashing** = embedded spheres in 48D space
-- **Noise resilience** = topology survives decoherence by definition
-
-## VRC-48M — Kill Deepfakes With Topology
-
-Media provenance that survives re-encoding but breaks under manipulation. Anchors video at the moment of capture with topological invariants that generative AI literally cannot optimize against (wrapping numbers are non-differentiable).
+Anchor media at the point of capture. Verification that survives re-encoding but breaks under manipulation.
 
 ```bash
 # Anchor a video
@@ -54,58 +38,33 @@ python -m vortexchain.vrc48m verify video.mp4 anchor.json
 python -m vortexchain.vrc48m compare original.mp4 suspect.mp4
 
 # Web demo
-python -m vortexchain.server    # → http://localhost:5000/demo
+python -m vortexchain.server    # http://localhost:5000/demo
 ```
 
-### Mobile Camera SDK
-
-iOS camera app that anchors media in real-time during recording. See [`mobile/README.md`](mobile/README.md).
+## Quick Start
 
 ```bash
-cd mobile && npm install && npx expo run:ios
+pip install -e ".[dev]"
+pytest -v
 ```
 
-## Modules
-
-| Module | What it does |
-|--------|-------------|
-| `vrc48m.py` | VRC-48M deepfake shield: perceptual features, topological hashing, streaming engine, tamper detection |
-| `manifold.py` | 48D topological manifold simulation, OAM qudits (d=7), wrapping numbers |
-| `toac.py` | Topological OAM Crypto: key generation, ZK signatures, topological hashing |
-| `chain.py` | Blockchain core: blocks with topological hashes, transaction signing |
-| `consensus.py` | Hybrid PoS + Proof-of-Topology with quantum hardware bonus |
-| `tokenomics.py` | $VORTEX token (48M supply), gas pricing, governance |
-| `contracts.py` | Qudit Virtual Machine: 18 opcodes on manifold points, topological guards |
-| `qkd.py` | Topological Quantum Key Distribution: high-dim BB84 for OAM qudits |
-| `oracle.py` | Quantum entropy oracle: commit-reveal randomness, reputation/slashing |
-| `network.py` | P2P gossip network: TTL propagation, peer discovery, simulation mode |
-| `nft.py` | VRC-48 Topological NFTs: 48D fingerprints, rarity scoring, NFT fusion |
-| `server.py` | Flask API + WebSocket streaming + demo UI |
-
-## Architecture
-
-Classical simulation nodes and quantum hardware nodes coexist on the same chain. Quantum nodes get 1.5x consensus weight. No hard fork needed as hardware matures.
-
-## $VORTEX Tokenomics
+## Distribution
 
 | Category | % | Amount |
-|----------|---|--------|
+|---|---|---|
 | Ecosystem & Community | 30% | 14,400,000 |
 | Staking Rewards | 25% | 12,000,000 |
 | Team & Advisors | 15% | 7,200,000 |
 | Development Fund | 15% | 7,200,000 |
 | Liquidity | 10% | 4,800,000 |
 | Quantum Research Grant | 5% | 2,400,000 |
-| **Total** | **100%** | **48,000,000** |
 
-## Tests
+## Links
 
-```
-157 tests | 0.30s | 100% passing
-```
+- [Website](https://vortex.arc-relay.com)
+- [ARC-Relay](https://arc-relay.com)
+- [Solscan](https://solscan.io/token/5joN44mSAdo7DbGgsKnXWagLKc8kEkFfKiTW2szTFASA)
 
 ## License
 
 MIT
-
-*The blockchain whose security comes from literal twisted light.*

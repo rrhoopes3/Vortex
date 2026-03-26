@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NFT Forge — $VORTEX</title>
+<meta name="description" content="Mint and fuse unique NFTs on the $VORTEX network. Each NFT carries an unforgeable identity derived from cryptographic proofs.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌀</text></svg>">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+  :root{--bg:#050507;--card:#0c0c12;--accent:#00f0ff;--purple:#c026d3;--green:#22ff88;--red:#ff4466;--text:#e0e0ff;--muted:#8899aa;--border:#1a1a2e}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh}
+  nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:1rem 2rem;display:flex;justify-content:space-between;align-items:center;background:rgba(5,5,7,.9);backdrop-filter:blur(20px);border-bottom:1px solid var(--border)}
+  .nav-logo{font-family:'Space Grotesk',sans-serif;font-size:1.4rem;font-weight:700;color:white;text-decoration:none}
+  .nav-logo span{color:var(--accent)}
+  .nav-back{color:var(--muted);text-decoration:none;font-size:.9rem;transition:color .2s}
+  .nav-back:hover{color:var(--accent)}
+  .container{max-width:1100px;margin:0 auto;padding:6rem 2rem 3rem}
+  h1{font-family:'Space Grotesk',sans-serif;font-size:2.4rem;font-weight:700;margin-bottom:.5rem}
+  .gradient{background:linear-gradient(90deg,#00f0ff,#c026d3,#22ff88);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+  .subtitle{color:var(--muted);font-size:1rem;margin-bottom:2.5rem}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:2rem;margin-bottom:2rem}
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:2rem}
+  .panel h2{font-family:'Space Grotesk',sans-serif;font-size:1.3rem;font-weight:700;margin-bottom:1rem}
+  .panel p{color:var(--muted);font-size:.85rem;margin-bottom:1.5rem}
+  label{display:block;font-size:.8rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.4rem}
+  input,select{width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Inter',sans-serif;font-size:.9rem;margin-bottom:1rem;outline:none;transition:border-color .2s}
+  input:focus,select:focus{border-color:var(--accent)}
+  select option{background:var(--bg)}
+  .btn{padding:12px 24px;border-radius:10px;font-weight:600;font-size:.9rem;border:none;cursor:pointer;transition:all .2s;font-family:inherit;display:inline-flex;align-items:center;gap:8px}
+  .btn-mint{background:linear-gradient(135deg,var(--accent),var(--purple));color:#000;width:100%}
+  .btn-fuse{background:linear-gradient(135deg,var(--purple),var(--green));color:#000;width:100%}
+  .btn:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,240,255,.2)}
+  .btn:disabled{opacity:.5;transform:none;cursor:not-allowed}
+  .collection{margin-top:2rem}
+  .collection h2{font-family:'Space Grotesk',sans-serif;font-size:1.3rem;font-weight:700;margin-bottom:1rem}
+  .stats-row{display:flex;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap}
+  .stat-chip{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.75rem 1.25rem;font-size:.85rem}
+  .stat-chip .val{font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--accent)}
+  .nft-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem}
+  .nft-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.25rem;transition:all .3s;cursor:pointer;position:relative}
+  .nft-card:hover{border-color:var(--accent);transform:translateY(-4px);box-shadow:0 12px 32px rgba(0,240,255,.1)}
+  .nft-card.selected{border-color:var(--purple);box-shadow:0 0 0 2px var(--purple)}
+  .nft-card .name{font-weight:600;font-size:.95rem;margin-bottom:.5rem}
+  .nft-card .id{font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--muted);word-break:break-all;margin-bottom:.5rem}
+  .nft-card .meta{display:flex;justify-content:space-between;font-size:.8rem}
+  .nft-card .rarity{color:var(--purple);font-weight:600}
+  .nft-card .state{color:var(--green);font-size:.7rem;text-transform:uppercase;font-weight:600}
+  .nft-card .owner{font-size:.7rem;color:var(--muted);margin-top:.25rem}
+  .nft-card .fused-badge{position:absolute;top:.75rem;right:.75rem;font-size:.65rem;padding:2px 8px;border-radius:4px;background:rgba(192,38,211,.15);color:var(--purple);font-weight:600;text-transform:uppercase}
+  .rarity-bar{height:4px;background:var(--border);border-radius:2px;margin-top:.5rem;overflow:hidden}
+  .rarity-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent),var(--purple))}
+  .toast{position:fixed;bottom:2rem;right:2rem;padding:1rem 1.5rem;border-radius:12px;font-size:.9rem;font-weight:500;z-index:200;opacity:0;transform:translateY(10px);transition:all .3s}
+  .toast.show{opacity:1;transform:translateY(0)}
+  .toast.success{background:rgba(34,255,136,.15);border:1px solid var(--green);color:var(--green)}
+  .toast.error{background:rgba(255,68,102,.15);border:1px solid var(--red);color:var(--red)}
+  .fuse-selection{background:rgba(192,38,211,.05);border:1px solid rgba(192,38,211,.2);border-radius:10px;padding:1rem;margin-bottom:1rem;min-height:60px}
+  .fuse-selection .hint{color:var(--muted);font-size:.8rem;font-style:italic}
+  .fuse-pair{display:flex;gap:.75rem;align-items:center;font-size:.85rem}
+  .fuse-pair .plus{color:var(--purple);font-weight:700;font-size:1.2rem}
+  .fuse-pair .token{font-family:'JetBrains Mono',monospace;font-size:.75rem;color:var(--accent)}
+  .clear-btn{background:none;border:none;color:var(--muted);font-size:.75rem;cursor:pointer;text-decoration:underline;margin-top:.5rem}
+  .clear-btn:hover{color:var(--text)}
+  @media(max-width:768px){.grid{grid-template-columns:1fr}.nft-grid{grid-template-columns:1fr 1fr}}
+  @media(max-width:480px){.nft-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+  <nav>
+    <a href="/" class="nav-logo"><span>$</span>VORTEX</a>
+    <a href="/" class="nav-back">&larr; Back to home</a>
+  </nav>
+
+  <div class="container">
+    <h1>NFT <span class="gradient">Forge</span></h1>
+    <p class="subtitle">Mint unique NFTs with cryptographic identity. Fuse two together to create something new.</p>
+
+    <div class="grid">
+      <div class="panel">
+        <h2>Mint</h2>
+        <p>Create a new NFT with a unique, unforgeable identity. Each mint produces a one-of-a-kind token.</p>
+        <label>Creator</label>
+        <select id="mint-creator">
+          <option value="alice">Alice</option>
+          <option value="bob">Bob</option>
+          <option value="charlie">Charlie</option>
+        </select>
+        <label>Name</label>
+        <input type="text" id="mint-name" placeholder="My Vortex NFT" maxlength="64">
+        <button class="btn btn-mint" id="btn-mint" onclick="mintNFT()">Mint NFT</button>
+      </div>
+
+      <div class="panel">
+        <h2>Fuse</h2>
+        <p>Select two NFTs from the collection below to combine them into a new token with merged properties.</p>
+        <label>Selected Pair</label>
+        <div class="fuse-selection" id="fuse-selection">
+          <div class="hint">Click two NFTs below to select them for fusion</div>
+        </div>
+        <label>Owner</label>
+        <select id="fuse-owner">
+          <option value="alice">Alice</option>
+          <option value="bob">Bob</option>
+          <option value="charlie">Charlie</option>
+        </select>
+        <button class="btn btn-fuse" id="btn-fuse" onclick="fuseNFTs()" disabled>Fuse NFTs</button>
+      </div>
+    </div>
+
+    <div class="collection">
+      <h2>Collection</h2>
+      <div class="stats-row" id="stats-row"></div>
+      <div class="nft-grid" id="nft-grid"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const API = '/api/nft';
+    let selectedForFuse = [];
+    let nfts = [];
+
+    function showToast(msg, type = 'success') {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'toast ' + type + ' show';
+      setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    function updateFuseSelection() {
+      const el = document.getElementById('fuse-selection');
+      const btn = document.getElementById('btn-fuse');
+      if (selectedForFuse.length === 0) {
+        el.innerHTML = '<div class="hint">Click two NFTs below to select them for fusion</div>';
+        btn.disabled = true;
+      } else if (selectedForFuse.length === 1) {
+        el.innerHTML = '<div class="fuse-pair"><span class="token">' + selectedForFuse[0].slice(0, 24) + '...</span><span class="plus">+</span><span class="hint">select one more</span></div>';
+        btn.disabled = true;
+      } else {
+        el.innerHTML = '<div class="fuse-pair"><span class="token">' + selectedForFuse[0].slice(0, 20) + '...</span><span class="plus">+</span><span class="token">' + selectedForFuse[1].slice(0, 20) + '...</span></div><button class="clear-btn" onclick="clearFuseSelection()">Clear selection</button>';
+        btn.disabled = false;
+      }
+    }
+
+    function clearFuseSelection() {
+      selectedForFuse = [];
+      document.querySelectorAll('.nft-card.selected').forEach(c => c.classList.remove('selected'));
+      updateFuseSelection();
+    }
+
+    function toggleSelect(tokenId, cardEl) {
+      const idx = selectedForFuse.indexOf(tokenId);
+      if (idx >= 0) {
+        selectedForFuse.splice(idx, 1);
+        cardEl.classList.remove('selected');
+      } else if (selectedForFuse.length < 2) {
+        selectedForFuse.push(tokenId);
+        cardEl.classList.add('selected');
+      }
+      updateFuseSelection();
+    }
+
+    function renderCollection(data) {
+      const statsEl = document.getElementById('stats-row');
+      const s = data.stats;
+      statsEl.innerHTML =
+        '<div class="stat-chip">Minted: <span class="val">' + s.total_minted + '</span></div>' +
+        '<div class="stat-chip">Active: <span class="val">' + s.active_supply + '</span></div>' +
+        '<div class="stat-chip">Owners: <span class="val">' + s.unique_owners + '</span></div>' +
+        '<div class="stat-chip">Avg Rarity: <span class="val">' + (s.avg_rarity * 100).toFixed(1) + '%</span></div>';
+
+      const gridEl = document.getElementById('nft-grid');
+      nfts = data.tokens.filter(t => t.state === 'ACTIVE');
+      gridEl.innerHTML = nfts.map(t => {
+        const isFused = t.metadata && t.metadata.fusion_type;
+        const sel = selectedForFuse.includes(t.token_id) ? ' selected' : '';
+        return '<div class="nft-card' + sel + '" onclick="toggleSelect(\'' + t.token_id + '\', this)">' +
+          (isFused ? '<div class="fused-badge">Fused</div>' : '') +
+          '<div class="name">' + (t.metadata?.name || 'Unnamed') + '</div>' +
+          '<div class="id">' + t.token_id + '</div>' +
+          '<div class="meta"><span class="rarity">Rarity: ' + (t.rarity * 100).toFixed(1) + '%</span><span class="state">' + t.state + '</span></div>' +
+          '<div class="owner">Owner: ' + t.owner + '</div>' +
+          '<div class="rarity-bar"><div class="rarity-fill" style="width:' + (t.rarity * 100) + '%"></div></div>' +
+          '</div>';
+      }).join('');
+    }
+
+    async function loadCollection() {
+      try {
+        const res = await fetch(API + '/collection');
+        const json = await res.json();
+        if (json.ok) renderCollection(json.data);
+      } catch (e) {
+        showToast('Failed to load collection', 'error');
+      }
+    }
+
+    async function mintNFT() {
+      const btn = document.getElementById('btn-mint');
+      btn.disabled = true;
+      try {
+        const creator = document.getElementById('mint-creator').value;
+        const name = document.getElementById('mint-name').value || 'Unnamed Vortex';
+        const res = await fetch(API + '/mint', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ creator, name }),
+        });
+        const json = await res.json();
+        if (json.ok) {
+          showToast('Minted! Rarity: ' + (json.data.rarity * 100).toFixed(1) + '%');
+          document.getElementById('mint-name').value = '';
+          loadCollection();
+        } else {
+          showToast(json.error || 'Mint failed', 'error');
+        }
+      } catch (e) {
+        showToast('Mint failed', 'error');
+      }
+      btn.disabled = false;
+    }
+
+    async function fuseNFTs() {
+      if (selectedForFuse.length !== 2) return;
+      const btn = document.getElementById('btn-fuse');
+      btn.disabled = true;
+      try {
+        const owner = document.getElementById('fuse-owner').value;
+        const res = await fetch(API + '/fuse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token_a: selectedForFuse[0], token_b: selectedForFuse[1], owner }),
+        });
+        const json = await res.json();
+        if (json.ok) {
+          showToast('Fused! New rarity: ' + (json.data.child_rarity * 100).toFixed(1) + '%');
+          clearFuseSelection();
+          loadCollection();
+        } else {
+          showToast(json.error || 'Fusion failed', 'error');
+        }
+      } catch (e) {
+        showToast('Fusion failed', 'error');
+      }
+      btn.disabled = false;
+    }
+
+    loadCollection();
+  </script>
+</body>
+</html>
