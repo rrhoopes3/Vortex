@@ -29,10 +29,19 @@ Thumbs.db
 *.pdf
 *.mp4
 
-# Proprietary — do not publish
-docs/whitepaper.md
+# Node
+node_modules/
+
+# Proprietary — do not publish (patent pending)
 docs/provisional_patent_draft.md
 vortexchain/manifold.py
 vortexchain/toac.py
 vortexchain/qkd.py
 vortexchain/consensus.py
+vortexchain/vrc48m.py
+vortexchain/vrc48m_ui.html
+mobile/src/sdk/VRC48MClient.ts
+mobile/src/sdk/frameEncoder.ts
+mobile/src/hooks/useVRC48M.ts
+tests/test_vrc48m.py
+tests/test_vrc48m_robustness.py

@@ -250,7 +250,7 @@ def submit_tx():
 def get_nft_collection():
     stats = nft_collection.collection_stats()
     tokens = []
-    for nft in nft_collection._tokens.values():
+    for nft in nft_collection.tokens.values():
         tokens.append({
             "token_id": nft.token_id,
             "owner": nft.owner[:16] + "...",
@@ -277,7 +277,6 @@ def mint_nft():
     return ok({
         "token_id": nft.token_id,
         "rarity": round(nft.rarity_score, 4),
-        "fingerprint_spectrum": list(nft.fingerprint.spectrum[:6]),
         "creator": creator_name,
     })
 
