@@ -1,7 +1,7 @@
 {
   "name": "VortexChain",
   "symbol": "VORTEX",
-  "description": "Kill deepfakes with topology. VRC-48M anchors media at capture with 48D topological invariants that survive re-encoding but break under manipulation.",
+  "description": "$VORTEX is the SPL utility token powering on-chain media provenance verification on Solana. 48M supply.",
   "image": "https://vortex.arc-relay.com/token-logo.png",
   "external_url": "https://vortex.arc-relay.com",
   "attributes": [],

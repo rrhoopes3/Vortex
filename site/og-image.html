@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  /* Render at 1200x630 and screenshot to og-image.png */
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1200px; height: 630px;
+    background: #050507;
+    font-family: 'Space Grotesk', sans-serif;
+    color: #e0e0ff;
+    display: flex;
+    overflow: hidden;
+    position: relative;
+  }
+  /* Subtle grid background */
+  body::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,240,255,.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,240,255,.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+  /* Glow accents */
+  .glow-tl {
+    position: absolute; top: -120px; left: -80px;
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(0,240,255,.12), transparent 70%);
+  }
+  .glow-br {
+    position: absolute; bottom: -100px; right: -60px;
+    width: 350px; height: 350px;
+    background: radial-gradient(circle, rgba(192,38,211,.1), transparent 70%);
+  }
+  .left {
+    flex: 1; padding: 72px 64px; display: flex; flex-direction: column;
+    justify-content: center; position: relative; z-index: 1;
+  }
+  .badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 18px; border: 1px solid #00f0ff; border-radius: 9999px;
+    font-size: 13px; font-weight: 600; letter-spacing: .12em;
+    text-transform: uppercase; color: #00f0ff;
+    background: rgba(0,240,255,.06); width: fit-content; margin-bottom: 28px;
+  }
+  .badge .dot { width: 8px; height: 8px; border-radius: 50%; background: #22ff88; }
+  h1 {
+    font-size: 72px; font-weight: 700; line-height: 1.05; margin-bottom: 20px;
+  }
+  .gradient {
+    background: linear-gradient(90deg, #00f0ff, #c026d3, #22ff88);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .sub {
+    font-family: 'Inter', sans-serif; font-size: 20px;
+    color: #8899aa; line-height: 1.6; max-width: 480px;
+  }
+  .right {
+    width: 400px; display: flex; flex-direction: column;
+    justify-content: center; align-items: flex-end;
+    padding: 72px 64px 72px 0; position: relative; z-index: 1;
+  }
+  .stat-card {
+    background: rgba(12,12,18,.85); border: 1px solid #1a1a2e;
+    border-radius: 14px; padding: 18px 28px; width: 300px;
+    margin-bottom: 12px; display: flex; align-items: center; gap: 16px;
+  }
+  .stat-value {
+    font-size: 36px; font-weight: 700; font-family: 'Space Grotesk', sans-serif;
+  }
+  .stat-value.cyan { color: #00f0ff; }
+  .stat-value.purple { color: #c026d3; }
+  .stat-value.green { color: #22ff88; }
+  .stat-label {
+    font-family: 'Inter', sans-serif; font-size: 16px;
+    color: #8899aa; text-transform: uppercase; letter-spacing: .05em;
+  }
+  .footer-url {
+    position: absolute; bottom: 28px; left: 64px;
+    font-family: 'Inter', sans-serif; font-size: 15px;
+    color: #556677; letter-spacing: .02em;
+  }
+</style>
+</head>
+<body>
+  <div class="glow-tl"></div>
+  <div class="glow-br"></div>
+
+  <div class="left">
+    <div class="badge"><div class="dot"></div> Live on Solana Mainnet</div>
+    <h1>Prove it's<br><span class="gradient">real.</span></h1>
+    <p class="sub">$VORTEX is the utility token for on-chain media provenance verification. 48M supply on Solana.</p>
+  </div>
+
+  <div class="right">
+    <div class="stat-card">
+      <div class="stat-value cyan">48M</div>
+      <div class="stat-label">Total Supply</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value purple">Solana</div>
+      <div class="stat-label">Network</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value green">SPL</div>
+      <div class="stat-label">Token Standard</div>
+    </div>
+  </div>
+
+  <div class="footer-url">vortex.arc-relay.com</div>
+</body>
+</html>
