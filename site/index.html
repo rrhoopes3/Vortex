@@ -46,6 +46,11 @@
     .nav-links{display:flex;gap:2.2rem;list-style:none}
     .nav-links a{color:var(--muted);text-decoration:none;font-weight:500;transition:color .3s}
     .nav-links a:hover{color:var(--accent)}
+    .hamburger{display:none;background:none;border:none;cursor:pointer;padding:4px}
+    .hamburger span{display:block;width:24px;height:2px;background:var(--text);margin:5px 0;transition:all .3s}
+    .hamburger.active span:nth-child(1){transform:rotate(45deg) translate(5px,5px)}
+    .hamburger.active span:nth-child(2){opacity:0}
+    .hamburger.active span:nth-child(3){transform:rotate(-45deg) translate(5px,-5px)}
     section{padding:7rem 2rem;max-width:1240px;margin:0 auto}
     .section-label{font-size:.78rem;font-weight:600;letter-spacing:.18em;color:var(--accent);text-transform:uppercase;margin-bottom:.8rem}
     h2{font-family:'Space Grotesk',sans-serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:700;line-height:1.15;margin-bottom:1.2rem}
@@ -89,19 +94,34 @@
     footer a{color:var(--accent);text-decoration:none}
     .copy-btn{display:inline-block;margin-top:.5rem;padding:6px 14px;font-size:.75rem;font-weight:600;border:1px solid var(--accent);border-radius:8px;background:rgba(0,240,255,.08);color:var(--accent);cursor:pointer;transition:all .2s}
     .copy-btn:hover{background:rgba(0,240,255,.2)}
-    @media(max-width:768px){nav{padding:1rem 1.5rem}.nav-links{display:none}.token-grid{grid-template-columns:1fr}.phase{grid-template-columns:1fr}section{padding:5rem 1.5rem}}
+    @media(max-width:768px){
+      nav{padding:1rem 1.5rem}
+      .hamburger{display:block}
+      .nav-links{display:none;position:absolute;top:100%;left:0;right:0;flex-direction:column;gap:0;background:rgba(5,5,7,.95);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:1rem 0}
+      .nav-links.open{display:flex}
+      .nav-links li{padding:.6rem 1.5rem}
+      .token-grid{grid-template-columns:1fr}
+      .phase{grid-template-columns:1fr}
+      section{padding:5rem 1.5rem}
+    }
   </style>
 </head>
 <body>
   <nav>
     <a href="#" class="nav-logo"><span>$</span>VORTEX</a>
+    <button class="hamburger" onclick="this.classList.toggle('active');document.querySelector('.nav-links').classList.toggle('open')">
+      <span></span><span></span><span></span>
+    </button>
     <ul class="nav-links">
       <li><a href="#about">About</a></li>
       <li><a href="#features">Features</a></li>
       <li><a href="#token">Token</a></li>
       <li><a href="#roadmap">Roadmap</a></li>
+      <li><a href="/anchor.html" style="color:var(--accent)">Anchor Studio</a></li>
       <li><a href="/nft.html">NFT Forge</a></li>
+      <li><a href="/blog.html">Blog</a></li>
       <li><a href="https://jup.ag/swap/SOL-5joN44mSAdo7DbGgsKnXWagLKc8kEkFfKiTW2szTFASA" target="_blank" style="color:var(--green)">Trade</a></li>
+      <li><a href="https://arc-relay.com" target="_blank" style="color:var(--accent)">ARC-Relay</a></li>
       <li><a href="https://github.com/rrhoopes3/Vortex" target="_blank">GitHub</a></li>
     </ul>
   </nav>
@@ -149,7 +169,7 @@
       <div class="feature-card">
         <div class="feature-icon">&#x1f6e1;</div>
         <h3>Media Verification</h3>
-        <p>Verify that photos and videos haven't been tampered with. Provenance is bound to the content itself &mdash; not strippable metadata.</p>
+        <p>Upload, edit, seal, and anchor photos and videos. Provenance is bound to the content itself &mdash; not strippable metadata. <a href="/anchor.html" style="color:var(--accent);text-decoration:none;font-weight:600">Try Anchor Studio &rarr;</a></p>
         <span class="feature-tag tag-live">Live</span>
       </div>
       <div class="feature-card">
@@ -177,10 +197,16 @@
         <span class="feature-tag tag-soon">Coming Soon</span>
       </div>
       <div class="feature-card">
+        <div class="feature-icon">&#x2709;&#xfe0f;</div>
+        <h3>Email Relay Services</h3>
+        <p>$VORTEX is the payment token for <a href="https://arc-relay.com" target="_blank" style="color:var(--accent);text-decoration:none;">ARC-Relay</a> — a professional email relay and MCP server platform. Pay for email forwarding, API calls, and agent invocations with $VORTEX.</p>
+        <span class="feature-tag tag-live">Live</span>
+      </div>
+      <div class="feature-card">
         <div class="feature-icon">&#x1f310;</div>
-        <h3>ARC-Relay Integration</h3>
-        <p>Part of the ARC-Relay ecosystem. AI agents can verify media provenance as part of automated workflows.</p>
-        <span class="feature-tag tag-novel">Planned</span>
+        <h3>ARC-Relay MCP Server</h3>
+        <p>$VORTEX powers access to the ARC-Relay MCP server economy. AI agents pay per tool call and invocation, creating real token demand through automated workflows.</p>
+        <span class="feature-tag tag-live">Live</span>
       </div>
     </div>
   </section>
@@ -212,6 +238,7 @@
             <li style="color:var(--muted);font-size:.9rem;"><span style="color:var(--accent);">&#9656;</span> Pay for media verification proofs</li>
             <li style="color:var(--muted);font-size:.9rem;"><span style="color:var(--accent);">&#9656;</span> Earn rewards for running verification nodes</li>
             <li style="color:var(--muted);font-size:.9rem;"><span style="color:var(--accent);">&#9656;</span> Governance votes on protocol upgrades</li>
+            <li style="color:var(--muted);font-size:.9rem;"><span style="color:var(--accent);">&#9656;</span> Pay for <a href="https://arc-relay.com" target="_blank" style="color:var(--accent);">ARC-Relay</a> email relay &amp; MCP server services</li>
             <li style="color:var(--muted);font-size:.9rem;"><span style="color:var(--accent);">&#9656;</span> ARC-Relay agent economy integration</li>
           </ul>
         </div>
@@ -244,7 +271,7 @@
     </div>
   </div>
 
-  <footer><p>$VORTEX &copy; 2026. Powered by <a href="https://arc-relay.com" target="_blank">ARC-Relay</a>.</p></footer>
+  <footer><p>$VORTEX &copy; 2026. Powered by <a href="https://arc-relay.com" target="_blank">ARC-Relay</a>. &nbsp;|&nbsp; <a href="mailto:admin@arc-relay.ai">admin@arc-relay.ai</a></p></footer>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>

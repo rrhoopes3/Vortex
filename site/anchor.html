@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anchor Studio — $VORTEX</title>
+<meta name="description" content="Upload, edit, seal, and anchor your media with VRC-48M topological provenance. Powered by $VORTEX on Solana.">
+<meta property="og:title" content="Anchor Studio — $VORTEX">
+<meta property="og:description" content="Upload, edit, and anchor media with on-chain provenance proofs.">
+<meta property="og:image" content="https://vortex.arc-relay.com/og-image.png">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x1F300;</text></svg>">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+:root{--bg:#050507;--card:#0c0c12;--accent:#00f0ff;--purple:#c026d3;--green:#22ff88;--red:#ff4466;--text:#e0e0ff;--muted:#8899aa;--border:#1a1a2e}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.6}
+
+/* Nav */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:1.2rem 3rem;display:flex;justify-content:space-between;align-items:center;background:rgba(5,5,7,.92);backdrop-filter:blur(20px);border-bottom:1px solid var(--border)}
+.nav-logo{font-family:'Space Grotesk',sans-serif;font-size:1.55rem;font-weight:700;color:white;text-decoration:none}
+.nav-logo span{color:var(--accent)}
+.nav-links{display:flex;gap:2.2rem;list-style:none}
+.nav-links a{color:var(--muted);text-decoration:none;font-weight:500;transition:color .3s;font-size:.95rem}
+.nav-links a:hover{color:var(--accent)}
+.hamburger{display:none;background:none;border:none;cursor:pointer;padding:4px}
+.hamburger span{display:block;width:24px;height:2px;background:var(--text);margin:5px 0;transition:all .3s}
+.hamburger.active span:nth-child(1){transform:rotate(45deg) translate(5px,5px)}
+.hamburger.active span:nth-child(2){opacity:0}
+.hamburger.active span:nth-child(3){transform:rotate(-45deg) translate(5px,-5px)}
+
+/* Main */
+.main{max-width:1000px;margin:0 auto;padding:6rem 2rem 4rem}
+.page-header{text-align:center;margin-bottom:2.5rem}
+.page-header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(2rem,5vw,2.8rem);font-weight:700;margin-bottom:.5rem}
+.gradient{background:linear-gradient(90deg,#00f0ff,#c026d3,#22ff88);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.page-header p{color:var(--muted);font-size:1rem;max-width:560px;margin:0 auto}
+
+/* Steps indicator */
+.steps{display:flex;justify-content:center;gap:.5rem;margin-bottom:3rem;flex-wrap:wrap}
+.step-pill{display:flex;align-items:center;gap:6px;padding:8px 18px;border-radius:9999px;font-size:.78rem;font-weight:600;letter-spacing:.04em;border:1px solid var(--border);color:var(--muted);background:var(--card);transition:all .3s;cursor:default}
+.step-pill.active{border-color:var(--accent);color:var(--accent);background:rgba(0,240,255,.08)}
+.step-pill.done{border-color:var(--green);color:var(--green);background:rgba(34,255,136,.06)}
+.step-num{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;background:var(--border);color:var(--muted)}
+.step-pill.active .step-num{background:var(--accent);color:#000}
+.step-pill.done .step-num{background:var(--green);color:#000}
+.step-arrow{color:var(--border);font-size:.8rem;display:flex;align-items:center;padding:0 .25rem}
+
+/* Panels */
+.panel{display:none}
+.panel.active{display:block;animation:fadeIn .3s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* Upload */
+.dropzone{border:2px dashed var(--border);border-radius:20px;padding:4rem 2rem;text-align:center;cursor:pointer;transition:all .3s;background:var(--card)}
+.dropzone:hover,.dropzone.dragover{border-color:var(--accent);background:rgba(0,240,255,.03)}
+.dropzone-icon{font-size:3.5rem;margin-bottom:1rem}
+.dropzone h3{font-size:1.15rem;font-weight:700;margin-bottom:.4rem}
+.dropzone p{color:var(--muted);font-size:.88rem}
+.dropzone input{display:none}
+.file-info{display:none;margin-top:1.5rem;padding:1rem 1.5rem;background:rgba(0,240,255,.06);border:1px solid rgba(0,240,255,.15);border-radius:12px;text-align:left}
+.file-info.visible{display:flex;align-items:center;gap:1rem}
+.file-info .fname{font-weight:600;color:var(--accent);font-size:.9rem}
+.file-info .fmeta{color:var(--muted);font-size:.8rem}
+.file-info .fremove{margin-left:auto;background:none;border:1px solid var(--border);color:var(--muted);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:.75rem;transition:.2s}
+.file-info .fremove:hover{border-color:var(--red);color:var(--red)}
+
+/* Buttons */
+.btn{padding:14px 28px;border:none;border-radius:12px;cursor:pointer;font-size:.95rem;font-weight:600;transition:all .25s;display:inline-flex;align-items:center;gap:8px;font-family:inherit}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--purple));color:#000;box-shadow:0 8px 30px rgba(0,240,255,.2)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 14px 40px rgba(0,240,255,.35)}
+.btn-primary:disabled{opacity:.35;cursor:not-allowed;transform:none;box-shadow:none}
+.btn-secondary{background:var(--card);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm{padding:10px 18px;font-size:.82rem;border-radius:8px}
+.btn-row{display:flex;gap:1rem;margin-top:2rem;flex-wrap:wrap}
+.btn-row.right{justify-content:flex-end}
+.btn-row.between{justify-content:space-between}
+
+/* Editor */
+.editor{display:grid;gap:1.5rem}
+.toolbar{display:flex;gap:6px;flex-wrap:wrap;padding:12px 16px;background:var(--card);border:1px solid var(--border);border-radius:12px}
+.tool-btn{padding:8px 14px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer;font-size:.78rem;font-weight:600;transition:.2s;font-family:inherit;display:flex;align-items:center;gap:5px}
+.tool-btn:hover{border-color:var(--accent);color:var(--accent)}
+.tool-btn.active{background:rgba(0,240,255,.1);border-color:var(--accent);color:var(--accent)}
+.tool-btn.danger{color:var(--red);border-color:transparent}
+.tool-btn.danger:hover{border-color:var(--red)}
+.tool-sep{width:1px;background:var(--border);margin:0 4px}
+.canvas-wrap{position:relative;background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;display:flex;align-items:center;justify-content:center;min-height:400px;max-height:600px}
+.canvas-wrap canvas{display:block;max-width:100%;max-height:580px;cursor:crosshair}
+.canvas-wrap video{display:block;max-width:100%;max-height:580px;border-radius:12px}
+.adjustments{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;padding:16px;background:var(--card);border:1px solid var(--border);border-radius:12px}
+.slider-group label{display:flex;justify-content:space-between;font-size:.78rem;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
+.slider-group label span{color:var(--accent);font-family:'JetBrains Mono',monospace}
+.slider-group input[type=range]{width:100%;-webkit-appearance:none;height:4px;background:var(--border);border-radius:2px;outline:none}
+.slider-group input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 8px rgba(0,240,255,.4)}
+.video-info{padding:1rem;background:var(--card);border:1px solid var(--border);border-radius:12px;font-size:.85rem;color:var(--muted)}
+.video-info strong{color:var(--text)}
+
+/* Seal config */
+.seal-config{display:grid;grid-template-columns:1fr 1fr;gap:2rem;align-items:start}
+.seal-options{display:grid;gap:1rem}
+.seal-type-row{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+.seal-type{padding:1rem;background:var(--card);border:2px solid var(--border);border-radius:12px;cursor:pointer;text-align:center;transition:.2s}
+.seal-type:hover{border-color:var(--accent)}
+.seal-type.selected{border-color:var(--accent);background:rgba(0,240,255,.06)}
+.seal-type .st-icon{font-size:1.5rem;margin-bottom:.4rem}
+.seal-type .st-label{font-size:.82rem;font-weight:600}
+.seal-type .st-desc{font-size:.72rem;color:var(--muted);margin-top:.2rem}
+.seal-field label{display:block;font-size:.78rem;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
+.seal-field select,.seal-field input[type=range]{width:100%;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:.85rem}
+.seal-field select{cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238899aa'%3E%3Cpath d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+.seal-preview-wrap{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;display:flex;align-items:center;justify-content:center;min-height:320px;position:relative}
+.seal-preview-wrap canvas{max-width:100%;max-height:400px}
+.brand-upload{border:2px dashed var(--border);border-radius:10px;padding:1.5rem;text-align:center;cursor:pointer;transition:.2s;font-size:.82rem;color:var(--muted)}
+.brand-upload:hover{border-color:var(--purple);color:var(--purple)}
+.brand-upload input{display:none}
+.brand-preview{display:none;align-items:center;gap:10px;margin-top:.5rem}
+.brand-preview.visible{display:flex}
+.brand-preview img{width:36px;height:36px;object-fit:contain;border-radius:4px;background:rgba(255,255,255,.05);padding:2px}
+.brand-preview .bp-name{font-size:.8rem;color:var(--accent)}
+.brand-preview .bp-remove{background:none;border:none;color:var(--red);cursor:pointer;font-size:.8rem;margin-left:auto}
+
+/* Processing */
+.processing{text-align:center;padding:4rem 2rem}
+.spinner{width:80px;height:80px;margin:0 auto 2rem;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.processing h3{font-size:1.3rem;font-weight:700;margin-bottom:.5rem}
+.processing p{color:var(--muted);font-size:.9rem}
+.proc-steps{list-style:none;margin-top:1.5rem;text-align:left;max-width:360px;margin-left:auto;margin-right:auto}
+.proc-steps li{padding:8px 0;font-size:.85rem;color:var(--muted);display:flex;align-items:center;gap:8px}
+.proc-steps li.done{color:var(--green)}
+.proc-steps li.active{color:var(--accent)}
+
+/* Results */
+.result-banner{padding:1.5rem 2rem;border-radius:14px;display:flex;align-items:center;gap:1rem;margin-bottom:2rem}
+.result-banner.success{background:rgba(0,240,255,.08);border:1px solid rgba(0,240,255,.25)}
+.result-banner.error{background:rgba(255,68,102,.08);border:1px solid rgba(255,68,102,.25)}
+.rb-icon{font-size:2.2rem}
+.rb-title{font-size:1.2rem;font-weight:700}
+.rb-sub{font-size:.85rem;color:var(--muted)}
+.result-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;margin-bottom:2rem}
+.result-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem;text-align:center}
+.result-stat .rs-val{font-family:'JetBrains Mono',monospace;font-size:1.3rem;font-weight:700;color:var(--accent)}
+.result-stat .rs-label{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:4px}
+.merkle-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.25rem;margin-bottom:2rem}
+.merkle-box .mb-label{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.5rem}
+.merkle-box .mb-hash{font-family:'JetBrains Mono',monospace;font-size:.78rem;color:var(--accent);word-break:break-all;line-height:1.6}
+.merkle-box .copy-btn{display:inline-block;margin-top:.5rem;padding:5px 12px;font-size:.72rem;font-weight:600;border:1px solid var(--accent);border-radius:6px;background:rgba(0,240,255,.08);color:var(--accent);cursor:pointer;transition:.2s}
+.merkle-box .copy-btn:hover{background:rgba(0,240,255,.2)}
+.spectrum-wrap{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.25rem;margin-bottom:2rem}
+.spectrum-wrap h4{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:1rem}
+.spectrum-wrap canvas{width:100%;height:120px;border-radius:8px}
+.result-media{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:2rem;display:flex;align-items:center;justify-content:center;padding:1rem}
+.result-media canvas,.result-media img{max-width:100%;max-height:400px;border-radius:8px}
+.download-row{display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:2rem}
+
+/* Error */
+.error-box{background:rgba(255,68,102,.06);border:1px solid rgba(255,68,102,.2);border-radius:12px;padding:1.5rem;margin-top:1rem;color:var(--red);font-size:.9rem}
+
+/* Toast */
+.toast{position:fixed;bottom:2rem;right:2rem;padding:14px 24px;border-radius:12px;font-size:.88rem;font-weight:600;z-index:200;transform:translateY(100px);opacity:0;transition:all .3s;pointer-events:none}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.success{background:rgba(34,255,136,.15);border:1px solid rgba(34,255,136,.3);color:var(--green)}
+.toast.error{background:rgba(255,68,102,.15);border:1px solid rgba(255,68,102,.3);color:var(--red)}
+
+/* Responsive */
+@media(max-width:768px){
+  nav{padding:1rem 1.5rem}
+  .hamburger{display:block}
+  .nav-links{display:none;position:absolute;top:100%;left:0;right:0;flex-direction:column;gap:0;background:rgba(5,5,7,.95);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:1rem 0}
+  .nav-links.open{display:flex}
+  .nav-links li{padding:.6rem 1.5rem}
+  .main{padding:5rem 1rem 3rem}
+  .seal-config{grid-template-columns:1fr}
+  .canvas-wrap{min-height:260px}
+  .toolbar{gap:4px;padding:8px 10px}
+  .tool-btn{padding:6px 10px;font-size:.72rem}
+  .steps{gap:.3rem}
+  .step-pill{padding:6px 12px;font-size:.7rem}
+  .step-arrow{display:none}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-logo"><span>$</span>VORTEX</a>
+  <button class="hamburger" onclick="this.classList.toggle('active');document.querySelector('.nav-links').classList.toggle('open')">
+    <span></span><span></span><span></span>
+  </button>
+  <ul class="nav-links">
+    <li><a href="/">Home</a></li>
+    <li><a href="/nft.html">NFT Forge</a></li>
+    <li><a href="/blog.html">Blog</a></li>
+    <li><a href="https://jup.ag/swap/SOL-5joN44mSAdo7DbGgsKnXWagLKc8kEkFfKiTW2szTFASA" target="_blank" style="color:var(--green)">Trade</a></li>
+    <li><a href="https://github.com/rrhoopes3/Vortex" target="_blank">GitHub</a></li>
+  </ul>
+</nav>
+
+<div class="main">
+  <div class="page-header">
+    <h1>Anchor <span class="gradient">Studio</span></h1>
+    <p>Upload, edit, seal, and anchor your media with VRC-48M topological provenance.</p>
+  </div>
+
+  <div class="steps" id="steps">
+    <div class="step-pill active" data-step="0"><div class="step-num">1</div> Upload</div>
+    <div class="step-arrow">&#9656;</div>
+    <div class="step-pill" data-step="1"><div class="step-num">2</div> Edit</div>
+    <div class="step-arrow">&#9656;</div>
+    <div class="step-pill" data-step="2"><div class="step-num">3</div> Seal</div>
+    <div class="step-arrow">&#9656;</div>
+    <div class="step-pill" data-step="3"><div class="step-num">4</div> Anchor</div>
+    <div class="step-arrow">&#9656;</div>
+    <div class="step-pill" data-step="4"><div class="step-num">5</div> Results</div>
+  </div>
+
+  <!-- STEP 0: Upload -->
+  <div class="panel active" id="panel-upload">
+    <div class="dropzone" id="dropzone">
+      <div class="dropzone-icon">&#x1F4F7;</div>
+      <h3>Drop media here or click to upload</h3>
+      <p>Image (JPG, PNG, WebP) or Video (MP4, MOV, WebM) &mdash; up to 100 MB</p>
+      <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm">
+    </div>
+    <div class="file-info" id="file-info">
+      <div>
+        <div class="fname" id="fname"></div>
+        <div class="fmeta" id="fmeta"></div>
+      </div>
+      <button class="fremove" id="fremove">Remove</button>
+    </div>
+    <div class="btn-row right">
+      <button class="btn btn-primary" id="btn-to-edit" disabled>Next: Edit Media &#9656;</button>
+    </div>
+  </div>
+
+  <!-- STEP 1: Edit -->
+  <div class="panel" id="panel-edit">
+    <div class="editor">
+      <!-- Image editor -->
+      <div id="image-editor" style="display:none">
+        <div class="toolbar" id="toolbar">
+          <button class="tool-btn" id="t-crop" title="Crop">&#x2702; Crop</button>
+          <button class="tool-btn" id="t-crop-apply" style="display:none" title="Apply crop">&#x2713; Apply</button>
+          <button class="tool-btn" id="t-crop-cancel" style="display:none" title="Cancel crop">&#x2717; Cancel</button>
+          <div class="tool-sep"></div>
+          <button class="tool-btn" id="t-rcw" title="Rotate clockwise">&#x21BB; Rotate</button>
+          <button class="tool-btn" id="t-rccw" title="Rotate counter-clockwise">&#x21BA;</button>
+          <div class="tool-sep"></div>
+          <button class="tool-btn" id="t-fliph" title="Flip horizontal">&#x21C4; Flip H</button>
+          <button class="tool-btn" id="t-flipv" title="Flip vertical">&#x21C5; Flip V</button>
+          <div class="tool-sep"></div>
+          <button class="tool-btn danger" id="t-reset" title="Reset all edits">Reset</button>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="edit-canvas"></canvas>
+        </div>
+        <div class="adjustments">
+          <div class="slider-group">
+            <label>Brightness <span id="v-bright">100%</span></label>
+            <input type="range" id="s-bright" min="30" max="200" value="100">
+          </div>
+          <div class="slider-group">
+            <label>Contrast <span id="v-contrast">100%</span></label>
+            <input type="range" id="s-contrast" min="30" max="200" value="100">
+          </div>
+          <div class="slider-group">
+            <label>Saturation <span id="v-sat">100%</span></label>
+            <input type="range" id="s-sat" min="0" max="200" value="100">
+          </div>
+        </div>
+      </div>
+      <!-- Video handler -->
+      <div id="video-editor" style="display:none">
+        <div class="canvas-wrap">
+          <video id="edit-video" controls></video>
+        </div>
+        <div class="video-info" id="video-meta"></div>
+      </div>
+    </div>
+    <div class="btn-row between">
+      <button class="btn btn-secondary btn-sm" id="btn-back-upload">&#9666; Back</button>
+      <button class="btn btn-primary" id="btn-to-seal">Next: Add Seal &#9656;</button>
+    </div>
+  </div>
+
+  <!-- STEP 2: Seal -->
+  <div class="panel" id="panel-seal">
+    <div class="seal-config">
+      <div class="seal-options">
+        <div class="seal-field">
+          <label>Seal Type</label>
+          <div class="seal-type-row">
+            <div class="seal-type selected" id="st-official" onclick="setSealType('official')">
+              <div class="st-icon">&#x1F6E1;</div>
+              <div class="st-label">VRC-48M Official</div>
+              <div class="st-desc">Verified Authentic seal</div>
+            </div>
+            <div class="seal-type" id="st-brand" onclick="setSealType('brand')">
+              <div class="st-icon">&#x1F3F7;</div>
+              <div class="st-label">Custom Brand</div>
+              <div class="st-desc">Your logo + VRC-48M</div>
+            </div>
+          </div>
+        </div>
+        <div id="brand-section" style="display:none">
+          <div class="seal-field">
+            <label>Brand Logo</label>
+            <div class="brand-upload" id="brand-drop">
+              Click or drop your logo (PNG with transparency recommended)
+              <input type="file" id="brand-input" accept="image/png,image/jpeg,image/webp,image/svg+xml">
+            </div>
+            <div class="brand-preview" id="brand-preview">
+              <img id="brand-img-preview" src="" alt="logo">
+              <span class="bp-name" id="brand-name"></span>
+              <button class="bp-remove" onclick="removeBrand()">Remove</button>
+            </div>
+          </div>
+        </div>
+        <div class="seal-field">
+          <label>Position</label>
+          <select id="seal-pos">
+            <option value="br">Bottom Right</option>
+            <option value="bl">Bottom Left</option>
+            <option value="tr">Top Right</option>
+            <option value="tl">Top Left</option>
+          </select>
+        </div>
+        <div class="seal-field">
+          <label>Size</label>
+          <select id="seal-size">
+            <option value="sm">Small</option>
+            <option value="md" selected>Medium</option>
+            <option value="lg">Large</option>
+          </select>
+        </div>
+        <div class="seal-field slider-group">
+          <label>Opacity <span id="v-opacity">70%</span></label>
+          <input type="range" id="s-opacity" min="20" max="100" value="70">
+        </div>
+      </div>
+      <div>
+        <div class="seal-field"><label>Preview</label></div>
+        <div class="seal-preview-wrap">
+          <canvas id="seal-canvas"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="btn-row between">
+      <button class="btn btn-secondary btn-sm" id="btn-back-edit">&#9666; Back</button>
+      <button class="btn btn-primary" id="btn-anchor">Anchor This Media &#x26d3;</button>
+    </div>
+  </div>
+
+  <!-- STEP 3: Processing -->
+  <div class="panel" id="panel-processing">
+    <div class="processing">
+      <div class="spinner"></div>
+      <h3>Anchoring your media...</h3>
+      <p>Extracting topological features and building your proof.</p>
+      <ul class="proc-steps" id="proc-steps">
+        <li class="active" id="ps-upload">&#x25CB; Uploading media file...</li>
+        <li id="ps-features">&#x25CB; Extracting 48-dimensional features...</li>
+        <li id="ps-manifold">&#x25CB; Mapping to topological manifold...</li>
+        <li id="ps-merkle">&#x25CB; Building Merkle proof tree...</li>
+        <li id="ps-done">&#x25CB; Generating anchor certificate...</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- STEP 4: Results -->
+  <div class="panel" id="panel-results">
+    <div class="result-banner success" id="result-banner">
+      <div class="rb-icon">&#x26d3;</div>
+      <div>
+        <div class="rb-title">Media Anchored Successfully</div>
+        <div class="rb-sub" id="result-sub"></div>
+      </div>
+    </div>
+    <div class="result-media" id="result-media"></div>
+    <div class="result-grid" id="result-stats"></div>
+    <div class="merkle-box">
+      <div class="mb-label">Merkle Root</div>
+      <div class="mb-hash" id="result-merkle"></div>
+      <button class="copy-btn" onclick="copyMerkle()">Copy Hash</button>
+    </div>
+    <div class="merkle-box">
+      <div class="mb-label">Anchor ID</div>
+      <div class="mb-hash" id="result-anchor-id"></div>
+      <button class="copy-btn" onclick="copyAnchorId()">Copy ID</button>
+    </div>
+    <div class="spectrum-wrap" id="spectrum-section" style="display:none">
+      <h4>Wrapping Spectrum (Sample)</h4>
+      <canvas id="spectrum-canvas" height="120"></canvas>
+    </div>
+    <div class="download-row" id="download-row">
+      <button class="btn btn-primary btn-sm" id="dl-sealed">Download Sealed Media</button>
+      <button class="btn btn-secondary btn-sm" id="dl-json">Download Anchor JSON</button>
+      <button class="btn btn-secondary btn-sm" id="dl-cert">Download Certificate</button>
+    </div>
+    <div class="btn-row between">
+      <button class="btn btn-secondary btn-sm" onclick="startOver()">&#x21BB; Start Over</button>
+      <a href="/verify.html" class="btn btn-secondary btn-sm">Verify Media &#9656;</a>
+    </div>
+  </div>
+
+  <div class="error-box" id="error-box" style="display:none"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================
+   STATE
+   ============================================ */
+let currentStep = 0;
+let uploadedFile = null;
+let isImage = false;
+let originalImage = null;    // HTMLImageElement (original)
+let sourceCanvas = null;     // offscreen canvas (after geometric ops)
+let sourceCtx = null;
+let cropMode = false;
+let cropRect = null;
+let cropDrag = null;         // {type, startX, startY, origRect}
+let adjustments = { brightness: 100, contrast: 100, saturation: 100 };
+let sealType = 'official';
+let brandImage = null;
+let sealPosition = 'br';
+let sealSizeName = 'md';
+let sealOpacity = 0.7;
+let anchorResult = null;
+let finalBlob = null;
+
+const displayCanvas = document.getElementById('edit-canvas');
+const displayCtx = displayCanvas.getContext('2d');
+const sealCanvas = document.getElementById('seal-canvas');
+const sealCtx = sealCanvas.getContext('2d');
+
+/* ============================================
+   STEP NAVIGATION
+   ============================================ */
+const panels = ['panel-upload','panel-edit','panel-seal','panel-processing','panel-results'];
+
+function goToStep(n) {
+  currentStep = n;
+  panels.forEach((id, i) => {
+    const el = document.getElementById(id);
+    el.classList.toggle('active', i === n);
+  });
+  document.querySelectorAll('.step-pill').forEach((pill, i) => {
+    pill.classList.remove('active','done');
+    if (i === n) pill.classList.add('active');
+    else if (i < n) pill.classList.add('done');
+  });
+  // Update step-num content for done steps
+  document.querySelectorAll('.step-pill').forEach((pill, i) => {
+    const num = pill.querySelector('.step-num');
+    if (i < n) num.textContent = '\u2713';
+    else num.textContent = i + 1;
+  });
+  if (n === 1) initEditor();
+  if (n === 2) renderSealPreview();
+}
+
+/* ============================================
+   FILE UPLOAD
+   ============================================ */
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('file-input');
+const fileInfo = document.getElementById('file-info');
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFile(fileInput.files[0]); });
+
+function handleFile(f) {
+  if (f.size > 100 * 1024 * 1024) { toast('File too large (max 100 MB)', 'error'); return; }
+  uploadedFile = f;
+  isImage = f.type.startsWith('image/');
+  document.getElementById('fname').textContent = f.name;
+  document.getElementById('fmeta').textContent = `${(f.size / 1024 / 1024).toFixed(1)} MB \u2014 ${isImage ? 'Image' : 'Video'}`;
+  fileInfo.classList.add('visible');
+  document.getElementById('btn-to-edit').disabled = false;
+}
+
+document.getElementById('fremove').addEventListener('click', () => {
+  uploadedFile = null;
+  fileInfo.classList.remove('visible');
+  document.getElementById('btn-to-edit').disabled = true;
+  fileInput.value = '';
+});
+
+document.getElementById('btn-to-edit').addEventListener('click', () => goToStep(1));
+document.getElementById('btn-back-upload').addEventListener('click', () => goToStep(0));
+document.getElementById('btn-to-seal').addEventListener('click', () => { exitCropMode(); goToStep(2); });
+document.getElementById('btn-back-edit').addEventListener('click', () => goToStep(1));
+
+/* ============================================
+   IMAGE EDITOR
+   ============================================ */
+function initEditor() {
+  if (isImage) {
+    document.getElementById('image-editor').style.display = '';
+    document.getElementById('video-editor').style.display = 'none';
+    loadImage();
+  } else {
+    document.getElementById('image-editor').style.display = 'none';
+    document.getElementById('video-editor').style.display = '';
+    loadVideo();
+  }
+}
+
+function loadImage() {
+  const url = URL.createObjectURL(uploadedFile);
+  const img = new Image();
+  img.onload = () => {
+    originalImage = img;
+    sourceCanvas = document.createElement('canvas');
+    sourceCanvas.width = img.width;
+    sourceCanvas.height = img.height;
+    sourceCtx = sourceCanvas.getContext('2d');
+    sourceCtx.drawImage(img, 0, 0);
+    adjustments = { brightness: 100, contrast: 100, saturation: 100 };
+    document.getElementById('s-bright').value = 100;
+    document.getElementById('s-contrast').value = 100;
+    document.getElementById('s-sat').value = 100;
+    document.getElementById('v-bright').textContent = '100%';
+    document.getElementById('v-contrast').textContent = '100%';
+    document.getElementById('v-sat').textContent = '100%';
+    renderDisplay();
+  };
+  img.src = url;
+}
+
+function renderDisplay() {
+  const wrap = displayCanvas.parentElement;
+  const maxW = wrap.clientWidth - 2;
+  const maxH = 580;
+  const scale = Math.min(maxW / sourceCanvas.width, maxH / sourceCanvas.height, 1);
+  const w = Math.round(sourceCanvas.width * scale);
+  const h = Math.round(sourceCanvas.height * scale);
+  displayCanvas.width = w;
+  displayCanvas.height = h;
+  displayCtx.filter = `brightness(${adjustments.brightness}%) contrast(${adjustments.contrast}%) saturate(${adjustments.saturation}%)`;
+  displayCtx.drawImage(sourceCanvas, 0, 0, w, h);
+  displayCtx.filter = 'none';
+  if (cropMode && cropRect) drawCropOverlay();
+}
+
+function drawCropOverlay() {
+  const c = cropRect;
+  displayCtx.save();
+  displayCtx.fillStyle = 'rgba(0,0,0,0.55)';
+  // Top
+  displayCtx.fillRect(0, 0, displayCanvas.width, c.y);
+  // Bottom
+  displayCtx.fillRect(0, c.y + c.h, displayCanvas.width, displayCanvas.height - c.y - c.h);
+  // Left
+  displayCtx.fillRect(0, c.y, c.x, c.h);
+  // Right
+  displayCtx.fillRect(c.x + c.w, c.y, displayCanvas.width - c.x - c.w, c.h);
+  // Border
+  displayCtx.strokeStyle = '#00f0ff';
+  displayCtx.lineWidth = 2;
+  displayCtx.setLineDash([6, 3]);
+  displayCtx.strokeRect(c.x, c.y, c.w, c.h);
+  displayCtx.setLineDash([]);
+  // Handles
+  const hs = 8;
+  displayCtx.fillStyle = '#00f0ff';
+  [[c.x, c.y],[c.x+c.w, c.y],[c.x, c.y+c.h],[c.x+c.w, c.y+c.h]].forEach(([hx,hy]) => {
+    displayCtx.fillRect(hx - hs/2, hy - hs/2, hs, hs);
+  });
+  displayCtx.restore();
+}
+
+// Crop tool
+document.getElementById('t-crop').addEventListener('click', () => {
+  if (cropMode) { exitCropMode(); return; }
+  cropMode = true;
+  document.getElementById('t-crop').classList.add('active');
+  document.getElementById('t-crop-apply').style.display = '';
+  document.getElementById('t-crop-cancel').style.display = '';
+  // Default selection: 80% centered
+  const m = 0.1;
+  cropRect = {
+    x: Math.round(displayCanvas.width * m),
+    y: Math.round(displayCanvas.height * m),
+    w: Math.round(displayCanvas.width * (1 - 2*m)),
+    h: Math.round(displayCanvas.height * (1 - 2*m))
+  };
+  renderDisplay();
+});
+
+document.getElementById('t-crop-cancel').addEventListener('click', exitCropMode);
+
+function exitCropMode() {
+  cropMode = false;
+  cropRect = null;
+  cropDrag = null;
+  document.getElementById('t-crop').classList.remove('active');
+  document.getElementById('t-crop-apply').style.display = 'none';
+  document.getElementById('t-crop-cancel').style.display = 'none';
+  renderDisplay();
+}
+
+document.getElementById('t-crop-apply').addEventListener('click', () => {
+  if (!cropRect) return;
+  const scaleX = sourceCanvas.width / displayCanvas.width;
+  const scaleY = sourceCanvas.height / displayCanvas.height;
+  const sx = Math.round(cropRect.x * scaleX);
+  const sy = Math.round(cropRect.y * scaleY);
+  const sw = Math.round(cropRect.w * scaleX);
+  const sh = Math.round(cropRect.h * scaleY);
+  if (sw < 10 || sh < 10) { toast('Selection too small', 'error'); return; }
+  const newCanvas = document.createElement('canvas');
+  newCanvas.width = sw;
+  newCanvas.height = sh;
+  const nctx = newCanvas.getContext('2d');
+  nctx.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+  sourceCanvas = newCanvas;
+  sourceCtx = nctx;
+  exitCropMode();
+  toast('Cropped', 'success');
+});
+
+// Canvas mouse events for crop
+displayCanvas.addEventListener('mousedown', e => {
+  if (!cropMode || !cropRect) return;
+  const rect = displayCanvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) * (displayCanvas.width / rect.width);
+  const y = (e.clientY - rect.top) * (displayCanvas.height / rect.height);
+  const handle = getCropHandle(x, y);
+  if (handle) {
+    cropDrag = { type: handle, startX: x, startY: y, origRect: {...cropRect} };
+    e.preventDefault();
+  }
+});
+
+displayCanvas.addEventListener('mousemove', e => {
+  if (!cropDrag) return;
+  const rect = displayCanvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) * (displayCanvas.width / rect.width);
+  const y = (e.clientY - rect.top) * (displayCanvas.height / rect.height);
+  const dx = x - cropDrag.startX;
+  const dy = y - cropDrag.startY;
+  const o = cropDrag.origRect;
+
+  if (cropDrag.type === 'move') {
+    cropRect.x = clamp(o.x + dx, 0, displayCanvas.width - o.w);
+    cropRect.y = clamp(o.y + dy, 0, displayCanvas.height - o.h);
+  } else {
+    let nx = o.x, ny = o.y, nw = o.w, nh = o.h;
+    if (cropDrag.type.includes('l')) { nx = o.x + dx; nw = o.w - dx; }
+    if (cropDrag.type.includes('r')) { nw = o.w + dx; }
+    if (cropDrag.type.includes('t')) { ny = o.y + dy; nh = o.h - dy; }
+    if (cropDrag.type.includes('b')) { nh = o.h + dy; }
+    if (nw > 20 && nh > 20) {
+      cropRect = { x: Math.max(0, nx), y: Math.max(0, ny), w: Math.min(nw, displayCanvas.width - Math.max(0, nx)), h: Math.min(nh, displayCanvas.height - Math.max(0, ny)) };
+    }
+  }
+  renderDisplay();
+});
+
+window.addEventListener('mouseup', () => { cropDrag = null; });
+
+// Touch events for crop (mobile)
+displayCanvas.addEventListener('touchstart', e => {
+  if (!cropMode || !cropRect || e.touches.length !== 1) return;
+  const t = e.touches[0];
+  const rect = displayCanvas.getBoundingClientRect();
+  const x = (t.clientX - rect.left) * (displayCanvas.width / rect.width);
+  const y = (t.clientY - rect.top) * (displayCanvas.height / rect.height);
+  const handle = getCropHandle(x, y);
+  if (handle) { cropDrag = { type: handle, startX: x, startY: y, origRect: {...cropRect} }; e.preventDefault(); }
+}, { passive: false });
+
+displayCanvas.addEventListener('touchmove', e => {
+  if (!cropDrag || e.touches.length !== 1) return;
+  e.preventDefault();
+  const t = e.touches[0];
+  const rect = displayCanvas.getBoundingClientRect();
+  const x = (t.clientX - rect.left) * (displayCanvas.width / rect.width);
+  const y = (t.clientY - rect.top) * (displayCanvas.height / rect.height);
+  const dx = x - cropDrag.startX;
+  const dy = y - cropDrag.startY;
+  const o = cropDrag.origRect;
+  if (cropDrag.type === 'move') {
+    cropRect.x = clamp(o.x + dx, 0, displayCanvas.width - o.w);
+    cropRect.y = clamp(o.y + dy, 0, displayCanvas.height - o.h);
+  } else {
+    let nx = o.x, ny = o.y, nw = o.w, nh = o.h;
+    if (cropDrag.type.includes('l')) { nx = o.x + dx; nw = o.w - dx; }
+    if (cropDrag.type.includes('r')) { nw = o.w + dx; }
+    if (cropDrag.type.includes('t')) { ny = o.y + dy; nh = o.h - dy; }
+    if (cropDrag.type.includes('b')) { nh = o.h + dy; }
+    if (nw > 20 && nh > 20) {
+      cropRect = { x: Math.max(0, nx), y: Math.max(0, ny), w: Math.min(nw, displayCanvas.width - Math.max(0, nx)), h: Math.min(nh, displayCanvas.height - Math.max(0, ny)) };
+    }
+  }
+  renderDisplay();
+}, { passive: false });
+
+displayCanvas.addEventListener('touchend', () => { cropDrag = null; });
+
+function getCropHandle(x, y) {
+  if (!cropRect) return null;
+  const r = cropRect;
+  const s = 14;
+  const corners = {
+    tl: [r.x, r.y], tr: [r.x + r.w, r.y],
+    bl: [r.x, r.y + r.h], br: [r.x + r.w, r.y + r.h]
+  };
+  for (const [name, [cx, cy]] of Object.entries(corners)) {
+    if (Math.abs(x - cx) < s && Math.abs(y - cy) < s) return name;
+  }
+  // Edges
+  if (x >= r.x - s && x <= r.x + s && y > r.y && y < r.y + r.h) return 'l';
+  if (x >= r.x + r.w - s && x <= r.x + r.w + s && y > r.y && y < r.y + r.h) return 'r';
+  if (y >= r.y - s && y <= r.y + s && x > r.x && x < r.x + r.w) return 't';
+  if (y >= r.y + r.h - s && y <= r.y + r.h + s && x > r.x && x < r.x + r.w) return 'b';
+  // Inside
+  if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return 'move';
+  return null;
+}
+
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+// Rotate
+document.getElementById('t-rcw').addEventListener('click', () => rotateSource(90));
+document.getElementById('t-rccw').addEventListener('click', () => rotateSource(-90));
+
+function rotateSource(deg) {
+  const rad = deg * Math.PI / 180;
+  const sw = sourceCanvas.width, sh = sourceCanvas.height;
+  const abs90 = Math.abs(deg) === 90;
+  const nw = abs90 ? sh : sw;
+  const nh = abs90 ? sw : sh;
+  const nc = document.createElement('canvas');
+  nc.width = nw; nc.height = nh;
+  const nctx = nc.getContext('2d');
+  nctx.translate(nw / 2, nh / 2);
+  nctx.rotate(rad);
+  nctx.drawImage(sourceCanvas, -sw / 2, -sh / 2);
+  sourceCanvas = nc;
+  sourceCtx = nctx;
+  exitCropMode();
+}
+
+// Flip
+document.getElementById('t-fliph').addEventListener('click', () => flipSource('h'));
+document.getElementById('t-flipv').addEventListener('click', () => flipSource('v'));
+
+function flipSource(dir) {
+  const nc = document.createElement('canvas');
+  nc.width = sourceCanvas.width; nc.height = sourceCanvas.height;
+  const nctx = nc.getContext('2d');
+  if (dir === 'h') { nctx.translate(nc.width, 0); nctx.scale(-1, 1); }
+  else { nctx.translate(0, nc.height); nctx.scale(1, -1); }
+  nctx.drawImage(sourceCanvas, 0, 0);
+  sourceCanvas = nc; sourceCtx = nctx;
+  renderDisplay();
+}
+
+// Reset
+document.getElementById('t-reset').addEventListener('click', () => {
+  if (!originalImage) return;
+  sourceCanvas = document.createElement('canvas');
+  sourceCanvas.width = originalImage.width;
+  sourceCanvas.height = originalImage.height;
+  sourceCtx = sourceCanvas.getContext('2d');
+  sourceCtx.drawImage(originalImage, 0, 0);
+  adjustments = { brightness: 100, contrast: 100, saturation: 100 };
+  document.getElementById('s-bright').value = 100;
+  document.getElementById('s-contrast').value = 100;
+  document.getElementById('s-sat').value = 100;
+  document.getElementById('v-bright').textContent = '100%';
+  document.getElementById('v-contrast').textContent = '100%';
+  document.getElementById('v-sat').textContent = '100%';
+  exitCropMode();
+});
+
+// Adjustment sliders
+['bright','contrast','sat'].forEach(key => {
+  const slider = document.getElementById('s-' + key);
+  const label = document.getElementById('v-' + key);
+  const prop = key === 'bright' ? 'brightness' : key === 'contrast' ? 'contrast' : 'saturation';
+  slider.addEventListener('input', () => {
+    adjustments[prop] = parseInt(slider.value);
+    label.textContent = slider.value + '%';
+    renderDisplay();
+  });
+});
+
+/* ============================================
+   VIDEO HANDLER
+   ============================================ */
+function loadVideo() {
+  const video = document.getElementById('edit-video');
+  const url = URL.createObjectURL(uploadedFile);
+  video.src = url;
+  video.addEventListener('loadedmetadata', () => {
+    const meta = document.getElementById('video-meta');
+    meta.innerHTML = `<strong>${uploadedFile.name}</strong> &mdash; ${video.videoWidth}x${video.videoHeight} &mdash; ${formatDuration(video.duration)} &mdash; ${(uploadedFile.size / 1024 / 1024).toFixed(1)} MB<br><span style="color:var(--accent);font-size:.8rem">Video will be anchored as-is. Image editing tools are available for photos.</span>`;
+  });
+}
+
+function formatDuration(s) {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+/* ============================================
+   SEAL CONFIG
+   ============================================ */
+function setSealType(type) {
+  sealType = type;
+  document.getElementById('st-official').classList.toggle('selected', type === 'official');
+  document.getElementById('st-brand').classList.toggle('selected', type === 'brand');
+  document.getElementById('brand-section').style.display = type === 'brand' ? '' : 'none';
+  renderSealPreview();
+}
+
+// Brand upload
+const brandDrop = document.getElementById('brand-drop');
+const brandInput = document.getElementById('brand-input');
+brandDrop.addEventListener('click', () => brandInput.click());
+brandInput.addEventListener('change', () => { if (brandInput.files.length) loadBrand(brandInput.files[0]); });
+
+function loadBrand(f) {
+  const url = URL.createObjectURL(f);
+  const img = new Image();
+  img.onload = () => {
+    brandImage = img;
+    document.getElementById('brand-img-preview').src = url;
+    document.getElementById('brand-name').textContent = f.name;
+    document.getElementById('brand-preview').classList.add('visible');
+    renderSealPreview();
+  };
+  img.src = url;
+}
+
+function removeBrand() {
+  brandImage = null;
+  document.getElementById('brand-preview').classList.remove('visible');
+  brandInput.value = '';
+  renderSealPreview();
+}
+
+document.getElementById('seal-pos').addEventListener('change', e => { sealPosition = e.target.value; renderSealPreview(); });
+document.getElementById('seal-size').addEventListener('change', e => { sealSizeName = e.target.value; renderSealPreview(); });
+document.getElementById('s-opacity').addEventListener('input', e => {
+  sealOpacity = parseInt(e.target.value) / 100;
+  document.getElementById('v-opacity').textContent = e.target.value + '%';
+  renderSealPreview();
+});
+
+function renderSealPreview() {
+  if (!isImage && !uploadedFile) return;
+  const wrap = sealCanvas.parentElement;
+  let srcW, srcH, drawSource;
+
+  if (isImage && sourceCanvas) {
+    srcW = sourceCanvas.width; srcH = sourceCanvas.height;
+    drawSource = (ctx, w, h) => {
+      ctx.filter = `brightness(${adjustments.brightness}%) contrast(${adjustments.contrast}%) saturate(${adjustments.saturation}%)`;
+      ctx.drawImage(sourceCanvas, 0, 0, w, h);
+      ctx.filter = 'none';
+    };
+  } else {
+    // For video, draw a placeholder
+    srcW = 640; srcH = 360;
+    drawSource = (ctx, w, h) => {
+      ctx.fillStyle = '#111';
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#333';
+      ctx.font = '16px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Video Preview', w/2, h/2);
+      // Try to draw from video element
+      const vid = document.getElementById('edit-video');
+      if (vid && vid.videoWidth) {
+        try { ctx.drawImage(vid, 0, 0, w, h); } catch(e) {}
+      }
+    };
+  }
+
+  const maxW = wrap.clientWidth - 2;
+  const maxH = 400;
+  const scale = Math.min(maxW / srcW, maxH / srcH, 1);
+  const w = Math.round(srcW * scale);
+  const h = Math.round(srcH * scale);
+  sealCanvas.width = w;
+  sealCanvas.height = h;
+  drawSource(sealCtx, w, h);
+  drawSealOnCanvas(sealCtx, w, h, sealOpacity);
+}
+
+function getSealRadius(canvasW, canvasH) {
+  const base = Math.min(canvasW, canvasH);
+  const sizes = { sm: 0.08, md: 0.13, lg: 0.2 };
+  return Math.max(24, base * (sizes[sealSizeName] || 0.13));
+}
+
+function getSealPosition(canvasW, canvasH, r) {
+  const pad = r * 1.4;
+  const positions = {
+    tl: [pad, pad],
+    tr: [canvasW - pad, pad],
+    bl: [pad, canvasH - pad],
+    br: [canvasW - pad, canvasH - pad]
+  };
+  return positions[sealPosition] || positions.br;
+}
+
+function drawSealOnCanvas(ctx, cw, ch, opacity) {
+  const r = getSealRadius(cw, ch);
+  const [cx, cy] = getSealPosition(cw, ch, r);
+  ctx.save();
+  ctx.globalAlpha = opacity;
+
+  if (sealType === 'official') {
+    drawOfficialSeal(ctx, cx, cy, r);
+  } else {
+    drawBrandSeal(ctx, cx, cy, r);
+  }
+  ctx.restore();
+}
+
+function drawOfficialSeal(ctx, cx, cy, r) {
+  // Outer ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = Math.max(1.5, r * 0.04);
+  ctx.stroke();
+
+  // Inner ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.85, 0, Math.PI * 2);
+  ctx.lineWidth = Math.max(1, r * 0.02);
+  ctx.stroke();
+
+  // Fill subtle
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.84, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fill();
+
+  // Arc text - top: "VERIFIED AUTHENTIC"
+  ctx.fillStyle = '#fff';
+  const fontSize = Math.max(6, r * 0.18);
+  ctx.font = `700 ${fontSize}px 'Space Grotesk', sans-serif`;
+  drawArcText(ctx, 'VERIFIED AUTHENTIC', cx, cy, r * 0.92, -Math.PI * 0.75, -Math.PI * 0.25, false);
+
+  // Arc text - bottom: "VRC-48M PROTOCOL"
+  ctx.font = `600 ${fontSize * 0.85}px 'Space Grotesk', sans-serif`;
+  drawArcText(ctx, 'VRC-48M PROTOCOL', cx, cy, r * 0.92, Math.PI * 0.25, Math.PI * 0.75, true);
+
+  // Star decorators
+  const starSize = Math.max(2, r * 0.06);
+  [[-Math.PI * 0.22], [-Math.PI * 0.78], [Math.PI * 0.22], [Math.PI * 0.78]].forEach(([angle]) => {
+    const sx = cx + Math.cos(angle) * r * 0.92;
+    const sy = cy + Math.sin(angle) * r * 0.92;
+    drawStar(ctx, sx, sy, starSize);
+  });
+
+  // Center vortex spiral
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = Math.max(1, r * 0.03);
+  ctx.beginPath();
+  const spiralTurns = 3;
+  for (let t = 0; t < spiralTurns * Math.PI * 2; t += 0.08) {
+    const sr = (t / (spiralTurns * Math.PI * 2)) * r * 0.4;
+    const sx = cx + sr * Math.cos(t);
+    const sy = cy + sr * Math.sin(t);
+    if (t === 0) ctx.moveTo(sx, sy);
+    else ctx.lineTo(sx, sy);
+  }
+  ctx.stroke();
+
+  // Small label below spiral
+  const smallFont = Math.max(4, r * 0.12);
+  ctx.font = `500 ${smallFont}px 'JetBrains Mono', monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.fillText('ON-CHAIN', cx, cy + r * 0.6);
+}
+
+function drawBrandSeal(ctx, cx, cy, r) {
+  // Outer ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = Math.max(1.5, r * 0.04);
+  ctx.stroke();
+
+  // Fill
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.96, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fill();
+
+  // Brand image in center
+  if (brandImage) {
+    const maxDim = r * 1.1;
+    const imgScale = Math.min(maxDim / brandImage.width, maxDim / brandImage.height);
+    const iw = brandImage.width * imgScale;
+    const ih = brandImage.height * imgScale;
+    ctx.drawImage(brandImage, cx - iw/2, cy - ih/2 - r * 0.1, iw, ih);
+  } else {
+    ctx.fillStyle = '#fff';
+    const fs = Math.max(6, r * 0.22);
+    ctx.font = `700 ${fs}px 'Space Grotesk', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('YOUR BRAND', cx, cy);
+  }
+
+  // Bottom arc text
+  const fontSize = Math.max(5, r * 0.14);
+  ctx.fillStyle = '#fff';
+  ctx.font = `600 ${fontSize}px 'Space Grotesk', sans-serif`;
+  drawArcText(ctx, 'ANCHORED BY VRC-48M', cx, cy, r * 0.92, Math.PI * 0.2, Math.PI * 0.8, true);
+}
+
+function drawArcText(ctx, text, cx, cy, radius, startAngle, endAngle, flipText) {
+  const chars = text.split('');
+  const totalAngle = endAngle - startAngle;
+  const step = totalAngle / (chars.length + 1);
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  chars.forEach((ch, i) => {
+    const angle = startAngle + step * (i + 1);
+    const x = cx + Math.cos(angle) * radius;
+    const y = cy + Math.sin(angle) * radius;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle + (flipText ? -Math.PI / 2 : Math.PI / 2));
+    ctx.fillText(ch, 0, 0);
+    ctx.restore();
+  });
+  ctx.restore();
+}
+
+function drawStar(ctx, x, y, size) {
+  ctx.save();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  for (let i = 0; i < 5; i++) {
+    const angle = (i * 4 * Math.PI / 5) - Math.PI / 2;
+    const px = x + Math.cos(angle) * size;
+    const py = y + Math.sin(angle) * size;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+/* ============================================
+   EXPORT (create final blob with seal)
+   ============================================ */
+function exportFinalCanvas() {
+  const fc = document.createElement('canvas');
+  if (isImage) {
+    fc.width = sourceCanvas.width;
+    fc.height = sourceCanvas.height;
+    const fctx = fc.getContext('2d');
+    fctx.filter = `brightness(${adjustments.brightness}%) contrast(${adjustments.contrast}%) saturate(${adjustments.saturation}%)`;
+    fctx.drawImage(sourceCanvas, 0, 0);
+    fctx.filter = 'none';
+    drawSealOnCanvas(fctx, fc.width, fc.height, sealOpacity);
+    return fc;
+  }
+  return null;
+}
+
+function exportToBlob() {
+  return new Promise(resolve => {
+    if (isImage) {
+      const fc = exportFinalCanvas();
+      fc.toBlob(blob => resolve(blob), 'image/png', 0.95);
+    } else {
+      // For video, send original file
+      resolve(uploadedFile);
+    }
+  });
+}
+
+/* ============================================
+   ANCHOR (API call)
+   ============================================ */
+document.getElementById('btn-anchor').addEventListener('click', async () => {
+  goToStep(3);
+  const steps = ['ps-upload','ps-features','ps-manifold','ps-merkle','ps-done'];
+  let stepIdx = 0;
+
+  function advanceProc() {
+    if (stepIdx > 0) {
+      const prev = document.getElementById(steps[stepIdx - 1]);
+      prev.classList.remove('active');
+      prev.classList.add('done');
+      prev.innerHTML = '\u2713 ' + prev.textContent.replace(/^[\u25CB\u2713]\s*/, '');
+    }
+    if (stepIdx < steps.length) {
+      const curr = document.getElementById(steps[stepIdx]);
+      curr.classList.add('active');
+      curr.innerHTML = '\u25CF ' + curr.textContent.replace(/^[\u25CB\u25CF\u2713]\s*/, '');
+    }
+    stepIdx++;
+  }
+
+  // Reset proc steps
+  steps.forEach(id => {
+    const el = document.getElementById(id);
+    el.classList.remove('done', 'active');
+    el.innerHTML = '\u25CB ' + el.textContent.replace(/^[\u25CB\u25CF\u2713]\s*/, '');
+  });
+  advanceProc();
+
+  try {
+    const blob = await exportToBlob();
+    finalBlob = blob;
+
+    const timer = setInterval(() => {
+      if (stepIdx < steps.length) advanceProc();
+      else clearInterval(timer);
+    }, 800);
+
+    const formData = new FormData();
+    const ext = isImage ? 'png' : uploadedFile.name.split('.').pop();
+    formData.append('file', blob, `anchored.${ext}`);
+
+    const resp = await fetch('/api/vrc48m/anchor', { method: 'POST', body: formData });
+    clearInterval(timer);
+
+    // Mark all done
+    steps.forEach(id => {
+      const el = document.getElementById(id);
+      el.classList.remove('active');
+      el.classList.add('done');
+      el.innerHTML = '\u2713 ' + el.textContent.replace(/^[\u25CB\u25CF\u2713]\s*/, '');
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`Server error (${resp.status}): ${text}`);
+    }
+
+    const json = await resp.json();
+    if (!json.ok) throw new Error(json.error || 'Anchor failed');
+
+    anchorResult = json.data;
+
+    setTimeout(() => {
+      goToStep(4);
+      showResults();
+    }, 600);
+
+  } catch (e) {
+    goToStep(2);
+    showError('Anchor failed: ' + e.message);
+    toast('Anchor failed', 'error');
+  }
+});
+
+/* ============================================
+   RESULTS DISPLAY
+   ============================================ */
+function showResults() {
+  const d = anchorResult;
+  document.getElementById('result-sub').textContent =
+    `${d.filename} \u2014 ${d.resolution} \u2014 ${d.chunks} chunk${d.chunks !== 1 ? 's' : ''} \u2014 ${d.processing_time_ms}ms`;
+  document.getElementById('result-anchor-id').textContent = d.anchor_id;
+  document.getElementById('result-merkle').textContent = d.merkle_root;
+
+  // Stats grid
+  const statsEl = document.getElementById('result-stats');
+  const stats = [
+    { val: d.frame_count, label: 'Frames' },
+    { val: d.chunks, label: 'Chunks' },
+    { val: d.resolution, label: 'Resolution' },
+    { val: d.processing_time_ms + 'ms', label: 'Processing' },
+  ];
+  if (d.duration_ms > 0) stats.splice(1, 0, { val: formatDuration(d.duration_ms / 1000), label: 'Duration' });
+  statsEl.innerHTML = stats.map(s =>
+    `<div class="result-stat"><div class="rs-val">${s.val}</div><div class="rs-label">${s.label}</div></div>`
+  ).join('');
+
+  // Media preview
+  const mediaEl = document.getElementById('result-media');
+  if (isImage) {
+    const fc = exportFinalCanvas();
+    mediaEl.innerHTML = '';
+    mediaEl.appendChild(fc);
+  } else {
+    mediaEl.innerHTML = `<video controls style="max-width:100%;max-height:400px;border-radius:8px"><source src="${URL.createObjectURL(uploadedFile)}"></video>`;
+  }
+
+  // Spectrum
+  if (d.sample_spectra && Object.keys(d.sample_spectra).length > 0) {
+    document.getElementById('spectrum-section').style.display = '';
+    drawSpectrum(d.sample_spectra);
+  }
+
+  // Downloads
+  document.getElementById('dl-sealed').onclick = downloadSealed;
+  document.getElementById('dl-json').onclick = downloadJSON;
+  document.getElementById('dl-cert').onclick = downloadCert;
+}
+
+function drawSpectrum(spectra) {
+  const canvas = document.getElementById('spectrum-canvas');
+  const ctx = canvas.getContext('2d');
+  const wrap = canvas.parentElement;
+  canvas.width = wrap.clientWidth - 32;
+  canvas.height = 120;
+
+  // Flatten all spectra values
+  const keys = Object.keys(spectra);
+  const colors = ['#00f0ff', '#c026d3', '#22ff88', '#ff8800'];
+  const barWidth = Math.max(2, (canvas.width - 20) / (keys.length * 24 + keys.length - 1));
+
+  let xOff = 10;
+  keys.forEach((key, ki) => {
+    const vals = spectra[key];
+    if (!Array.isArray(vals)) return;
+    const maxVal = Math.max(...vals, 1);
+    const color = colors[ki % colors.length];
+    vals.forEach((v, i) => {
+      const h = (v / 997) * (canvas.height - 20);
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.7;
+      ctx.fillRect(xOff, canvas.height - h - 10, barWidth, h);
+      xOff += barWidth;
+    });
+    xOff += barWidth;
+  });
+
+  // Legend
+  ctx.globalAlpha = 1;
+  ctx.font = '10px JetBrains Mono';
+  ctx.fillStyle = '#8899aa';
+  keys.forEach((key, ki) => {
+    ctx.fillStyle = colors[ki % colors.length];
+    ctx.fillRect(10 + ki * 80, 4, 8, 8);
+    ctx.fillStyle = '#8899aa';
+    ctx.fillText(key, 22 + ki * 80, 12);
+  });
+}
+
+/* ============================================
+   DOWNLOADS
+   ============================================ */
+function downloadSealed() {
+  if (isImage) {
+    const fc = exportFinalCanvas();
+    fc.toBlob(blob => downloadBlob(blob, 'sealed_' + (uploadedFile?.name || 'media.png')), 'image/png');
+  } else {
+    downloadBlob(uploadedFile, 'anchored_' + (uploadedFile?.name || 'video.mp4'));
+  }
+}
+
+function downloadJSON() {
+  if (!anchorResult) return;
+  const blob = new Blob([JSON.stringify(anchorResult, null, 2)], { type: 'application/json' });
+  downloadBlob(blob, anchorResult.anchor_id + '.json');
+}
+
+function downloadCert() {
+  if (!anchorResult) return;
+  const cc = document.createElement('canvas');
+  cc.width = 800; cc.height = 500;
+  const ctx = cc.getContext('2d');
+
+  // Background
+  ctx.fillStyle = '#0c0c12';
+  ctx.fillRect(0, 0, 800, 500);
+  ctx.strokeStyle = '#1a1a2e';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(20, 20, 760, 460);
+  ctx.strokeRect(24, 24, 752, 452);
+
+  // Title
+  ctx.fillStyle = '#00f0ff';
+  ctx.font = "700 28px 'Space Grotesk', sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText('CERTIFICATE OF AUTHENTICITY', 400, 72);
+
+  // Seal
+  ctx.globalAlpha = 0.9;
+  drawOfficialSeal(ctx, 400, 175, 65);
+  ctx.globalAlpha = 1;
+
+  // Info
+  ctx.font = "600 14px 'Inter', sans-serif";
+  ctx.fillStyle = '#8899aa';
+  ctx.textAlign = 'left';
+  const lines = [
+    ['Anchor ID', anchorResult.anchor_id],
+    ['File', anchorResult.filename],
+    ['Resolution', anchorResult.resolution],
+    ['Chunks', String(anchorResult.chunks)],
+    ['Merkle Root', anchorResult.merkle_root],
+    ['Date', new Date().toISOString().split('T')[0]],
+  ];
+
+  let yy = 270;
+  lines.forEach(([label, value]) => {
+    ctx.fillStyle = '#8899aa';
+    ctx.font = "600 11px 'Inter', sans-serif";
+    ctx.fillText(label.toUpperCase(), 80, yy);
+    ctx.fillStyle = '#e0e0ff';
+    ctx.font = "500 13px 'JetBrains Mono', monospace";
+    const displayVal = value.length > 60 ? value.substring(0, 57) + '...' : value;
+    ctx.fillText(displayVal, 80, yy + 16);
+    yy += 38;
+  });
+
+  // Footer
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#333';
+  ctx.font = "500 11px 'Inter', sans-serif";
+  ctx.fillText('Verified by VRC-48M Protocol \u2014 Anchored on Solana \u2014 Powered by $VORTEX', 400, 470);
+
+  cc.toBlob(blob => downloadBlob(blob, 'certificate_' + anchorResult.anchor_id + '.png'), 'image/png');
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* ============================================
+   COPY / TOAST / ERROR
+   ============================================ */
+function copyMerkle() {
+  if (!anchorResult) return;
+  navigator.clipboard.writeText(anchorResult.merkle_root);
+  toast('Merkle root copied', 'success');
+}
+
+function copyAnchorId() {
+  if (!anchorResult) return;
+  navigator.clipboard.writeText(anchorResult.anchor_id);
+  toast('Anchor ID copied', 'success');
+}
+
+function toast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast ' + type + ' show';
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-box');
+  el.style.display = '';
+  el.textContent = msg;
+  setTimeout(() => { el.style.display = 'none'; }, 8000);
+}
+
+function startOver() {
+  uploadedFile = null;
+  originalImage = null;
+  sourceCanvas = null;
+  anchorResult = null;
+  finalBlob = null;
+  brandImage = null;
+  cropMode = false;
+  cropRect = null;
+  adjustments = { brightness: 100, contrast: 100, saturation: 100 };
+  document.getElementById('file-info').classList.remove('visible');
+  document.getElementById('btn-to-edit').disabled = true;
+  document.getElementById('error-box').style.display = 'none';
+  goToStep(0);
+}
+
+/* ============================================
+   WINDOW RESIZE
+   ============================================ */
+window.addEventListener('resize', () => {
+  if (currentStep === 1 && isImage && sourceCanvas) renderDisplay();
+  if (currentStep === 2) renderSealPreview();
+});
+</script>
+</body>
+</html>
